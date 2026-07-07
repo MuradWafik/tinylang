@@ -19,7 +19,11 @@ int main(int argc, char** argv)
     }
 
     Lexer lexer{};
-    auto e = lexer.Lex(FileOpenResult.value());
+    auto LexResult = lexer.Lex(FileOpenResult.value());
 
+    if(!LexResult)
+    {
+        std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);
+    }
     return 0;
 }

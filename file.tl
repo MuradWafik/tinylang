@@ -2,6 +2,7 @@ fn Main(args: String[]) -> int
 {
     var x: int = 42;
     var y: int = 10;
+    var z: float = 3.14;
     var name: String = "TinyLang";
     var flag: bool = true;
 
@@ -20,5 +21,6 @@ fn Main(args: String[]) -> int
         x = x - 1;
     }
 
+    var errorString: String = "dsadsa"
     return 0;
 }
