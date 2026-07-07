@@ -1,0 +1,91 @@
+#pragma once
+#include <string>
+#include <cstdint>
+#include <unordered_map>
+
+
+enum class TokenType
+{
+    // Literals
+    Identifier,
+    Integer,
+    Float,
+    String,
+
+    // Keywords
+    Fn,
+    Var,
+    If,
+    Else,
+    While,
+    Return,
+    True,
+    False,
+
+    // Types (if built into the language)
+    Int,
+    FloatType,
+    Bool,
+    StringType,
+    Void,
+
+    // Operators
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Assign,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Bang,
+    AndAnd,
+    OrOr,
+
+    // Delimiters
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    LeftBracket,
+    RightBracket,
+    Colon,
+    Semicolon,
+    Comma,
+    Arrow,
+
+    EndOfFile
+};
+
+struct SourceLocation
+{
+    uint32_t line_number;
+    uint32_t column;
+};
+
+struct Token {
+    TokenType type;
+    std::string lexeme;
+    SourceLocation source_location;
+
+private:
+    static inline const std::unordered_map<std::string, TokenType> keywords =
+    {
+        {"fn", TokenType::Fn},
+        {"var", TokenType::Var},
+        {"if", TokenType::If},
+        {"else", TokenType::Else},
+        {"while", TokenType::While},
+        {"return", TokenType::Return},
+        {"true", TokenType::True},
+        {"false", TokenType::False},
+        {"int", TokenType::Int},
+        {"float", TokenType::FloatType},
+        {"bool", TokenType::Bool},
+        {"String", TokenType::StringType},
+        {"void", TokenType::Void},
+    };
+};

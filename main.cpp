@@ -1,0 +1,25 @@
+#include <iostream>
+#include <print>
+
+#include "FileReader.h"
+#include "Lexer.h"
+
+int main(int argc, char** argv)
+{
+    if(argc < 2)
+    {
+        std::println(std::cerr, "No File Path provided");
+    }
+
+
+    auto FileOpenResult = FileReader::Read(argv[1]);
+    if(!FileOpenResult.has_value())
+    {
+        std::println(std::cerr, "{}", FileOpenResult.error());
+    }
+
+    Lexer lexer{};
+    auto e = lexer.Lex(FileOpenResult.value());
+
+    return 0;
+}
