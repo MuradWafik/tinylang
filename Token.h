@@ -22,7 +22,7 @@ enum class TokenType
     True,
     False,
 
-    // Types (if built into the language)
+    // Types
     Int,
     FloatType,
     Bool,
@@ -36,13 +36,16 @@ enum class TokenType
     Slash,
     Assign,
     Equal,
+    Negate,
     NotEqual,
     Less,
     LessEqual,
     Greater,
     GreaterEqual,
-    Bang,
+    DoubleSlash,
+    BitAnd,
     AndAnd,
+    BitOr,
     OrOr,
 
     // Delimiters
@@ -71,7 +74,6 @@ struct Token {
     std::string lexeme;
     SourceLocation source_location;
 
-private:
     static inline const std::unordered_map<std::string, TokenType> keywords =
     {
         {"fn", TokenType::Fn},

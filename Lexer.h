@@ -32,6 +32,22 @@ private:
     std::expected<Token, LexerError> LexString();
     std::expected<Token, LexerError> LexSymbol();
 
+    [[nodiscard]] Token CheckSymbolForNext(
+        char before,
+        char target_next,
+        TokenType on_success,
+        TokenType on_fail);
+
+    [[nodiscard]] Token CheckSymbolForNext(
+        const char before_and_after,
+        const TokenType on_success,
+        const TokenType on_fail)
+    {
+        return CheckSymbolForNext(before_and_after, before_and_after, on_success, on_fail);
+    }
+
+    [[nodiscard]] Token ReturnSingleCharSymbol(TokenType token_type);
+
 private:
     int char_index{0};
     std::string_view source;
