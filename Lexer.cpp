@@ -26,7 +26,7 @@ std::expected<Token, LexerError>  Lexer::LexIdentifier()
     {
         const char c = Peek();
         // identifiers have to start with letter or _, but can contain numbers afterwards
-        if(!std::isalnum(c) && c != '_')
+        if(!std::isalnum(static_cast<unsigned char>(c)) && c != '_')
         {
             break;
         }
@@ -54,7 +54,7 @@ std::expected<Token, LexerError>  Lexer::LexNumber()
     const SourceLocation start_source = {line, column};
     char c = Peek();
     bool seen_dot = false;
-    while(!IsAtEnd() && (std::isdigit(c) || c == '.'))
+    while(!IsAtEnd() && (std::isdigit(static_cast<unsigned char>(c)) || c == '.'))
     {
         if(c == '.')
         {
@@ -90,9 +90,11 @@ std::expected<Token, LexerError>  Lexer::LexNumber()
 std::expected<Token, LexerError>  Lexer::LexString()
 {
     std::string lexeme = "";
-    const SourceLocation startSource = {line, column};
+    const SourceLocation start_source = {line, column};
     char c = Peek();
     assert(c == '"');
+
+    // Consume the starting quote to not be included
     Consume();
 
     while(!IsAtEnd())
@@ -102,21 +104,69 @@ std::expected<Token, LexerError>  Lexer::LexString()
         {
             break;
         }
+        else if(c == '\\')
+        {
+            // user wrote an escape sequence
+            Consume();
+            c = Peek();
+            if(IsAtEnd())
+            {
+                return std::unexpected<LexerError>{{"File end met parsing string", start_source}};
+            }
+
+            switch(c)
+            {
+                case 'n':
+                {
+                    lexeme += '\n';
+                    break;
+                }
+                case 't':
+                {
+                    lexeme += '\t';
+                    break;
+                }
+                case 'r':
+                {
+                    lexeme += '\r';
+                    break;
+                }
+                case '"':
+                {
+                    lexeme += '"';
+                    break;
+                }
+                case '\\':
+                {
+                    lexeme += '\\';
+                    break;
+                }
+                default:
+                    return std::unexpected<LexerError>{
+                        {
+                            std::format("Unexpected escape character: {}", c),
+                            start_source
+                        }
+                    };
+            }
+
+        }
         else if(c == '\n')
         {
-            return std::unexpected<LexerError>{"Found newline, expecting closing quote to string"};
+            return std::unexpected<LexerError>{{"Found newline, expecting closing quote to string", start_source}};
         }
 
         lexeme += c;
         Consume();
     }
 
-    if(IsAtEnd() || (!IsAtEnd() && Peek() != '"'))
+    if(IsAtEnd() ||  Peek() != '"')
     {
-        return std::unexpected<LexerError>("Missing closing quote to string");
+        return std::unexpected<LexerError>{{"Missing closing quote to string", start_source}};
     }
+
     Consume(); // consume the extra quotation mark
-    return Token{TokenType::String, lexeme, startSource};
+    return Token{TokenType::String, lexeme, start_source};
 }
 
 std::expected<Token, LexerError>  Lexer::LexSymbol()
@@ -273,7 +323,7 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
         }
 
         const char cur = Peek();
-        if(std::isalpha(cur) || cur == '_')
+        if(std::isalpha(static_cast<unsigned char>(cur)) || cur == '_')
         {
             auto result = LexIdentifier();
             if(!result)
@@ -287,7 +337,7 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
             std::println(std::runtime_format(fmt), result->lexeme);
             tokens.push_back(result.value());
         }
-        else if(std::isdigit(cur))
+        else if(std::isdigit(static_cast<unsigned char>(cur)))
         {
             auto result = LexNumber();
             if (!result)
