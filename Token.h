@@ -42,7 +42,6 @@ enum class TokenType
     LessEqual,
     Greater,
     GreaterEqual,
-    DoubleSlash,
     BitAnd,
     AndAnd,
     BitOr,

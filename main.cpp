@@ -24,6 +24,7 @@ int main(int argc, char** argv)
     if(!LexResult)
     {
         std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);
+        std::println(std::cerr, "Line {}, Column {}", LexResult.error().location.line_number, LexResult.error().location.column);
     }
     return 0;
 }

@@ -22,8 +22,8 @@ public:
 private:
     [[nodiscard]] bool IsAtEnd() const;
     [[nodiscard]] char Peek() const;
-    [[nodiscard]] char PeekNext() const;
-    int Consume();
+    [[nodiscard]] std::optional<char> PeekNext() const;
+    char Consume();
 
     void SkipWhitespace();
 
@@ -48,8 +48,12 @@ private:
 
     [[nodiscard]] Token ReturnSingleCharSymbol(TokenType token_type);
 
+    bool TrySkipComments();
+
 private:
-    int char_index{0};
+    std::size_t index = 0;
+    std::uint32_t line = 1;
+    std::uint32_t column = 1;
     std::string_view source;
 };
 

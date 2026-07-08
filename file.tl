@@ -4,8 +4,8 @@ fn Main(args: String[]) -> int
     var y: int = 10;
     var z: float = 3.14;
     var name: String = "TinyLang";
-    var flag: bool = true;
-
+    var flag1: bool = true;
+    // this is a single comment that should be ignored // "dsdhak"
     if (x > y && flag)
     {
         Print(name);
