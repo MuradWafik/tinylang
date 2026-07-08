@@ -23,9 +23,9 @@ enum class TokenType
     False,
 
     // Types
-    Int,
+    IntType,
     FloatType,
-    Bool,
+    BoolType,
     StringType,
     Void,
 
@@ -83,10 +83,11 @@ struct Token {
         {"return", TokenType::Return},
         {"true", TokenType::True},
         {"false", TokenType::False},
-        {"int", TokenType::Int},
+        {"int", TokenType::IntType},
         {"float", TokenType::FloatType},
-        {"bool", TokenType::Bool},
+        {"bool", TokenType::BoolType},
         {"String", TokenType::StringType},
         {"void", TokenType::Void},
     };
+    static std::string TypeToString(TokenType token_type);
 };

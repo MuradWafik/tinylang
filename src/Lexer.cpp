@@ -50,46 +50,47 @@ std::expected<Token, LexerError>  Lexer::LexIdentifier()
 std::expected<Token, LexerError>  Lexer::LexNumber()
 {
     std::string number_string = "";
-    TokenType token_type{TokenType::Int};
+    TokenType token_type{TokenType::Integer};
     const SourceLocation start_source = {line, column};
-    char c = Peek();
     bool seen_dot = false;
-    while(!IsAtEnd() && (std::isdigit(static_cast<unsigned char>(c)) || c == '.'))
+    while (!IsAtEnd())
     {
-        if(c == '.')
+        char c = Peek();
+
+        if(std::isdigit(static_cast<unsigned char>(c)))
+        {
+            number_string += c;
+            Consume();
+        }
+        else if(c == '.')
         {
             if(seen_dot)
             {
                 return std::unexpected<LexerError>
                 {
                     {
-                        std::format("Multiple dots found in float {}", number_string + c),
-                        start_source
+                            std::format("Multiple dots found in float {}", number_string + c),
+                            start_source
                     }
                 };
             }
-            else
-            {
-                token_type = TokenType::Float;
-                seen_dot = true;
-            }
-        }
 
-        number_string += c;
-        const auto next = PeekNext();
-        if(!next.has_value())
-        {
-            return Token{token_type, number_string, start_source};
+            seen_dot = true;
+            token_type = TokenType::Float;
+            number_string += c;
+            Consume();
         }
-        c = next.value();
-        Consume();
+        else
+        {
+            break;
+        }
     }
     return Token{token_type, number_string, start_source};
 }
 
 std::expected<Token, LexerError>  Lexer::LexString()
 {
-    std::string lexeme = "";
+    std::string lexeme;
     const SourceLocation start_source = {line, column};
     char c = Peek();
     assert(c == '"');
@@ -102,45 +103,32 @@ std::expected<Token, LexerError>  Lexer::LexString()
         c = Peek();
         if(c == '"')
         {
-            break;
+            Consume(); // consume the extra quotation mark
+            return Token{TokenType::String, lexeme, start_source};
         }
-        else if(c == '\\')
+        if(c == '\n')
+        {
+            return std::unexpected<LexerError>{{"Found newline, expecting closing quote to string", start_source}};
+        }
+
+        if(c == '\\')
         {
             // user wrote an escape sequence
             Consume();
-            c = Peek();
             if(IsAtEnd())
             {
                 return std::unexpected<LexerError>{{"File end met parsing string", start_source}};
             }
+            c = Peek();
 
             switch(c)
             {
-                case 'n':
-                {
-                    lexeme += '\n';
-                    break;
-                }
-                case 't':
-                {
-                    lexeme += '\t';
-                    break;
-                }
-                case 'r':
-                {
-                    lexeme += '\r';
-                    break;
-                }
-                case '"':
-                {
-                    lexeme += '"';
-                    break;
-                }
-                case '\\':
-                {
-                    lexeme += '\\';
-                    break;
-                }
+                case 'n':  lexeme += '\n'; break;
+                case 't':  lexeme += '\t'; break;
+                case 'r':  lexeme += '\r'; break;
+                case '"':  lexeme += '"';  break;
+                case '\\': lexeme += '\\'; break;
+
                 default:
                     return std::unexpected<LexerError>{
                         {
@@ -149,24 +137,15 @@ std::expected<Token, LexerError>  Lexer::LexString()
                         }
                     };
             }
-
-        }
-        else if(c == '\n')
-        {
-            return std::unexpected<LexerError>{{"Found newline, expecting closing quote to string", start_source}};
+            Consume();
+            continue;
         }
 
         lexeme += c;
         Consume();
     }
 
-    if(IsAtEnd() ||  Peek() != '"')
-    {
-        return std::unexpected<LexerError>{{"Missing closing quote to string", start_source}};
-    }
-
-    Consume(); // consume the extra quotation mark
-    return Token{TokenType::String, lexeme, start_source};
+    return std::unexpected<LexerError>{{"Missing closing quote to string", start_source}};
 }
 
 std::expected<Token, LexerError>  Lexer::LexSymbol()
@@ -198,19 +177,19 @@ std::expected<Token, LexerError>  Lexer::LexSymbol()
         }
         case '&':
         {
-            return CheckSymbolForNext('&', TokenType::BitAnd, TokenType::AndAnd);
+            return CheckSymbolForNext('&', TokenType::AndAnd, TokenType::BitAnd);
         }
         case '|':
         {
-            return CheckSymbolForNext('|', TokenType::BitOr, TokenType::OrOr);
+            return CheckSymbolForNext('|', TokenType::OrOr, TokenType::BitOr);
         }
         case '!':
         {
-            return CheckSymbolForNext('!', '=', TokenType::Negate, TokenType::NotEqual);
+            return CheckSymbolForNext('!', '=', TokenType::NotEqual, TokenType::Negate);
         }
         case '-':
         {
-            return CheckSymbolForNext('-', '>', TokenType::Minus, TokenType::Arrow);
+            return CheckSymbolForNext('-', '>', TokenType::Arrow, TokenType::Minus);
         }
         case '/':
         {
@@ -306,6 +285,9 @@ char Lexer::Consume()
 
 std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view source)
 {
+    this->index = 0;
+    this->line = 1;
+    this->column = 1;
     this->source = source;
 
     std::vector<Token> tokens;
@@ -331,10 +313,6 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
                 return std::unexpected(result.error());
             }
 
-            std::string fmt = Token::keywords.contains(result->lexeme) ?
-                "Got keyword: {}" :
-                "Got identifier: {}";
-            std::println(std::runtime_format(fmt), result->lexeme);
             tokens.push_back(result.value());
         }
         else if(std::isdigit(static_cast<unsigned char>(cur)))
@@ -345,7 +323,6 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
                 return std::unexpected(result.error());
             }
 
-            std::println("Got number {}", result->lexeme);
             tokens.push_back(result.value());
         }
         else if (cur == '"')
@@ -356,7 +333,6 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
                 return std::unexpected(result.error());
             }
 
-            std::println("Got string '{}'", result->lexeme);
             tokens.push_back(result.value());
         }
         else
@@ -366,13 +342,11 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
             {
                 return std::unexpected(result.error());
             }
-
-            std::println("Got symbol: {}", result->lexeme);
             tokens.push_back(result.value());
         }
     }
 
-    tokens.push_back(Token(TokenType::EndOfFile));
+    tokens.push_back(Token(TokenType::EndOfFile, "", {line, column}));
 
     return tokens;
 }
@@ -382,8 +356,10 @@ Token Lexer::ReturnSingleCharSymbol(const TokenType token_type)
 {
     const SourceLocation startSource = {line, column};
     const char c = Peek();
+
+    const auto s = std::string(1, c);
     Consume();
-    return Token{token_type, std::string{1, c}, startSource};
+    return Token{token_type, s, startSource};
 }
 
 Token Lexer::CheckSymbolForNext(
@@ -397,10 +373,11 @@ Token Lexer::CheckSymbolForNext(
     if(!IsAtEnd() && Peek() == target_next)
     {
         Consume();
-        return {on_success, std::string{1, before} + target_next, startSource};
+        // HAVE TO USE BRACES INITIALIZER FOR STRING OTHERWISE IT USES INITIALIZER LIST CONSTRUCTOR AND PLACES A 0x01 in index 0
+        return {on_success, std::string(1, before) + target_next, startSource};
     }
 
-    return {on_fail, std::string{1, before}, startSource};
+    return {on_fail, std::string(1, before), startSource};
 }
 
 bool Lexer::TrySkipComments()

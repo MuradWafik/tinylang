@@ -1,9 +1,9 @@
-#include "FileReader.h"
+#include "../include/FileReader.h"
 #include <format>
 #include <fstream>
 
 
-std::expected<std::string, std::string> FileReader::Read(std::filesystem::path file_path)
+std::expected<std::string, std::string> FileReader::Read(const std::filesystem::path& file_path)
 {
     using FailType = std::unexpected<std::string>;
     if(file_path.empty())

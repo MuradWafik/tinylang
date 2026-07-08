@@ -26,5 +26,13 @@ int main(int argc, char** argv)
         std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);
         std::println(std::cerr, "Line {}, Column {}", LexResult.error().location.line_number, LexResult.error().location.column);
     }
+    else
+    {
+        for(const auto& token: LexResult.value())
+        {
+            std::println("Type: {} Value: {}", Token::TypeToString(token.type), token.lexeme);
+        }
+    }
+
     return 0;
 }

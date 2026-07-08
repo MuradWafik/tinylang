@@ -13,7 +13,8 @@ fn Main(args: String[]) -> int
     }
     else
     {
-        Print("x is not greater than y");
+        // Print("x is \"not greater than y");
+        Print("hello\"world");
     }
 
     while (x > 0)
