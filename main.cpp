@@ -3,6 +3,7 @@
 
 #include "FileReader.h"
 #include "Lexer.h"
+#include "Parser.h"
 
 int main(int argc, char** argv)
 {
@@ -24,7 +25,7 @@ int main(int argc, char** argv)
     if(!LexResult)
     {
         std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);
-        std::println(std::cerr, "Line {}, Column {}", LexResult.error().location.line_number, LexResult.error().location.column);
+        std::println(std::cerr, "{}", LexResult.error().location);
     }
     else
     {
@@ -32,6 +33,18 @@ int main(int argc, char** argv)
         {
             std::println("Type: {} Value: {}", Token::TypeToString(token.type), token.lexeme);
         }
+    }
+
+    Parser parser{LexResult.value()};
+    auto parse_result = parser.ParseProgram();
+
+    if(!parse_result)
+    {
+        std::println(std::cerr, "Error Parsing: {}", parse_result.error());
+    }
+    else
+    {
+        // for()
     }
 
     return 0;

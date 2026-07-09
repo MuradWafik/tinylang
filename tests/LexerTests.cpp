@@ -149,7 +149,7 @@ TEST_CASE("Integer literal")
     CheckTokens(
         Lex("42"),
         {
-            {TokenType::Integer, "42"},
+            {TokenType::IntLiteral, "42"},
         });
 }
 
@@ -158,7 +158,7 @@ TEST_CASE("Float literal")
     CheckTokens(
         Lex("3.14159"),
         {
-            {TokenType::Float, "3.14159"},
+            {TokenType::FloatLiteral, "3.14159"},
         });
 }
 
@@ -174,7 +174,7 @@ TEST_CASE("String literal")
     CheckTokens(
         Lex("\"hello\""),
         {
-            {TokenType::String, "hello"},
+            {TokenType::StringLiteral, "hello"},
         });
 }
 
@@ -183,7 +183,7 @@ TEST_CASE("Empty string")
     CheckTokens(
         Lex("\"\""),
         {
-            {TokenType::String, ""},
+            {TokenType::StringLiteral, ""},
         });
 }
 
@@ -192,7 +192,7 @@ TEST_CASE("String with spaces")
     CheckTokens(
         Lex("\"hello world\""),
         {
-            {TokenType::String, "hello world"},
+            {TokenType::StringLiteral, "hello world"},
         });
 }
 
@@ -215,7 +215,7 @@ TEST_CASE("Escaped newline")
     CheckTokens(
         Lex(R"("a\nb")"),
         {
-            {TokenType::String, "a\nb"},
+            {TokenType::StringLiteral, "a\nb"},
         });
 }
 
@@ -224,7 +224,7 @@ TEST_CASE("Escaped tab")
     CheckTokens(
         Lex(R"("a\tb")"),
         {
-            {TokenType::String, "a\tb"},
+            {TokenType::StringLiteral, "a\tb"},
         });
 }
 
@@ -233,7 +233,7 @@ TEST_CASE("Escaped quote")
     CheckTokens(
         Lex(R"("hello\"world")"),
         {
-            {TokenType::String, "hello\"world"},
+            {TokenType::StringLiteral, "hello\"world"},
         });
 }
 
@@ -242,7 +242,7 @@ TEST_CASE("Escaped backslash")
     CheckTokens(
         Lex(R"("C:\\Temp")"),
         {
-            {TokenType::String, R"(C:\Temp)"},
+            {TokenType::StringLiteral, R"(C:\Temp)"},
         });
 }
 
@@ -317,14 +317,14 @@ TEST_CASE("Comments are ignored")
             {TokenType::Colon, ":"},
             {TokenType::IntType, "int"},
             {TokenType::Assign, "="},
-            {TokenType::Integer, "5"},
+            {TokenType::IntLiteral, "5"},
             {TokenType::Semicolon, ";"},
             {TokenType::Var, "var"},
             {TokenType::Identifier, "y"},
             {TokenType::Colon, ":"},
             {TokenType::IntType, "int"},
             {TokenType::Assign, "="},
-            {TokenType::Integer, "10"},
+            {TokenType::IntLiteral, "10"},
             {TokenType::Semicolon, ";"},
         });
 }
@@ -346,7 +346,7 @@ TEST_CASE("Simple variable declaration")
             {TokenType::Colon, ":"},
             {TokenType::IntType, "int"},
             {TokenType::Assign, "="},
-            {TokenType::Integer, "42"},
+            {TokenType::IntLiteral, "42"},
             {TokenType::Semicolon, ";"},
         });
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <format>
 #include <unordered_map>
 
 
@@ -8,9 +9,9 @@ enum class TokenType
 {
     // Literals
     Identifier,
-    Integer,
-    Float,
-    String,
+    IntLiteral,
+    FloatLiteral,
+    StringLiteral,
 
     // Keywords
     Fn,
@@ -62,10 +63,24 @@ enum class TokenType
     EndOfFile
 };
 
+
+
 struct SourceLocation
 {
     uint32_t line_number;
     uint32_t column;
+};
+
+template <>
+struct std::formatter<SourceLocation> : std::formatter<std::string> {
+    template <typename FormatContext>
+    auto format(const SourceLocation& sl, FormatContext& ctx) const {
+        // Construct the string representation
+        std::string s = std::format("Line: {} Column {}", sl.line_number, sl.column);
+
+        // Delegate parsing and padding logic to the base string formatter
+        return std::formatter<std::string>::format(s, ctx);
+    }
 };
 
 struct Token {

@@ -50,7 +50,7 @@ std::expected<Token, LexerError>  Lexer::LexIdentifier()
 std::expected<Token, LexerError>  Lexer::LexNumber()
 {
     std::string number_string = "";
-    TokenType token_type{TokenType::Integer};
+    TokenType token_type{TokenType::IntLiteral};
     const SourceLocation start_source = {line, column};
     bool seen_dot = false;
     while (!IsAtEnd())
@@ -76,7 +76,7 @@ std::expected<Token, LexerError>  Lexer::LexNumber()
             }
 
             seen_dot = true;
-            token_type = TokenType::Float;
+            token_type = TokenType::FloatLiteral;
             number_string += c;
             Consume();
         }
@@ -104,7 +104,7 @@ std::expected<Token, LexerError>  Lexer::LexString()
         if(c == '"')
         {
             Consume(); // consume the extra quotation mark
-            return Token{TokenType::String, lexeme, start_source};
+            return Token{TokenType::StringLiteral, lexeme, start_source};
         }
         if(c == '\n')
         {

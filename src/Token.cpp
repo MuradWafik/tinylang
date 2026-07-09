@@ -6,9 +6,9 @@ std::string Token::TypeToString(const TokenType token_type)
     switch (token_type)
     {
         case TokenType::Identifier:   return "Identifier";
-        case TokenType::Integer:      return "Integer";
-        case TokenType::Float:        return "Float";
-        case TokenType::String:       return "String";
+        case TokenType::IntLiteral:      return "Integer";
+        case TokenType::FloatLiteral:        return "Float";
+        case TokenType::StringLiteral:       return "String";
 
         case TokenType::Fn:           return "Fn";
         case TokenType::Var:          return "Var";

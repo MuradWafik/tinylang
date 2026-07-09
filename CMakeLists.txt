@@ -7,6 +7,7 @@ add_library(tinylang_lib
         src/Lexer.cpp
         src/Token.cpp
         src/FileReader.cpp
+        src/Parser.cpp
 )
 
 target_include_directories(tinylang_lib PUBLIC

@@ -13,7 +13,7 @@ std::expected<std::string, std::string> FileReader::Read(const std::filesystem::
     else if(file_path.extension() != ".tl")
     {
         return FailType{
-            std::format("Invalid file type, please provide a .tl file\nFile provided: {}", file_path.c_str())
+            std::format("Invalid file type, please provide a .tl file\nFile provided: '{}'", file_path.c_str())
         };
     }
     else if(!exists(file_path))
@@ -26,7 +26,7 @@ std::expected<std::string, std::string> FileReader::Read(const std::filesystem::
     std::ifstream file(file_path);
     if (!file.is_open()) {
         return FailType{
-            std::format("Unable to open file {}", file_path.c_str())
+            std::format("Unable to open file '{}'", file_path.c_str())
         };
     }
 
