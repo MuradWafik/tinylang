@@ -8,6 +8,7 @@ add_library(tinylang_lib
         src/Token.cpp
         src/FileReader.cpp
         src/Parser.cpp
+        src/SemanticAnalyzer.cpp
 )
 
 target_include_directories(tinylang_lib PUBLIC

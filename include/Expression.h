@@ -4,42 +4,45 @@
 
 #include "ASTNode.h"
 #include "Token.h"
+#include "Type.h"
 
 // Something that has a value
 // even something like x + 5 is an expression since that yields a value
 // According to AI, something like foo(10) is *usually* an expression
 struct Expression : ASTNode
-{};
+{
+    std::unique_ptr<Type> type_info = nullptr;
+};
 
-struct IntegerLiteral : Expression
+struct IntegerLiteral final : Expression
 {
     int value;
     explicit IntegerLiteral(const int val) : value(val) {}
     [[nodiscard]] std::string GetTypeString() const override { return std::format("IntegerLiteral({})", value); }
 };
 
-struct FloatLiteral : Expression
+struct FloatLiteral final : Expression
 {
     float value;
     explicit FloatLiteral(const float val) : value(val) {}
     [[nodiscard]] std::string GetTypeString() const override { return std::format("FloatLiteral({})", value); }
 };
 
-struct StringLiteral : Expression
+struct StringLiteral final : Expression
 {
     std::string value;
     explicit StringLiteral(std::string val) : value(std::move(val)) {}
     [[nodiscard]] std::string GetTypeString() const override { return std::format("StringLiteral(\"{}\")", value); }
 };
 
-struct BoolLiteral : Expression
+struct BoolLiteral final : Expression
 {
     bool value;
     explicit BoolLiteral(const bool val) : value(val) {}
     [[nodiscard]] std::string GetTypeString() const override { return std::format("BoolLiteral({})", value); }
 };
 
-struct BinaryExpression : Expression
+struct BinaryExpression final : Expression
 {
     const Token& operator_token;
     std::unique_ptr<Expression> left;
@@ -56,7 +59,7 @@ struct BinaryExpression : Expression
     }
 };
 
-struct UnaryExpression : Expression
+struct UnaryExpression final : Expression
 {
     const Token& operator_token;
     std::unique_ptr<Expression> right;
@@ -72,7 +75,7 @@ struct UnaryExpression : Expression
     }
 };
 
-struct CallExpression : Expression
+struct CallExpression final : Expression
 {
     std::string function_name;
     std::vector<std::unique_ptr<Expression>> arguments;
@@ -92,7 +95,7 @@ struct CallExpression : Expression
     }
 };
 
-struct IdentifierExpression : Expression
+struct IdentifierExpression final : Expression
 {
     std::string name;
     explicit IdentifierExpression(std::string name) : name(std::move(name)) {}
@@ -103,7 +106,7 @@ struct IdentifierExpression : Expression
     }
 };
 
-struct AssignmentExpression : Expression
+struct AssignmentExpression final : Expression
 {
     std::string name;
     std::unique_ptr<Expression> value;

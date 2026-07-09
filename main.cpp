@@ -4,6 +4,7 @@
 #include "FileReader.h"
 #include "Lexer.h"
 #include "Parser.h"
+#include "SemanticAnalyzer.h"
 
 int main(int argc, char** argv)
 {
@@ -49,6 +50,13 @@ int main(int argc, char** argv)
         {
             std::println("Parsed Token: {}", ast_node.get());
         }
+    }
+
+    SemanticAnalyzer semantic_analyzer{};
+    auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value());
+    if(!semantic_analysis_result)
+    {
+        std::println(std::cerr, "Error in semantic analysis: {}", semantic_analysis_result.error());
     }
 
     return 0;
