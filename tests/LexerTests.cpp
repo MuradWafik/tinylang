@@ -329,6 +329,35 @@ TEST_CASE("Comments are ignored")
         });
 }
 
+TEST_CASE("Multiple consecutive comments are ignored")
+{
+    CheckTokens(
+        Lex(R"(
+            var x: int = 5;
+            // comment 1
+            // comment 2
+            // comment 3
+            var y: int = 10;
+        )"),
+        {
+            {TokenType::Var, "var"},
+            {TokenType::Identifier, "x"},
+            {TokenType::Colon, ":"},
+            {TokenType::IntType, "int"},
+            {TokenType::Assign, "="},
+            {TokenType::IntLiteral, "5"},
+            {TokenType::Semicolon, ";"},
+            {TokenType::Var, "var"},
+            {TokenType::Identifier, "y"},
+            {TokenType::Colon, ":"},
+            {TokenType::IntType, "int"},
+            {TokenType::Assign, "="},
+            {TokenType::IntLiteral, "10"},
+            {TokenType::Semicolon, ";"},
+        });
+}
+
+
 TEST_CASE("Unexpected symbol")
 {
     auto err = LexError("@");

@@ -12,15 +12,18 @@
 template<typename T>
 using Expected = std::expected<T, std::string>;
 
-using ExpectedNode = Expected<std::unique_ptr<ASTNode>>;
-using ExpectedExpression = Expected<std::unique_ptr<Expression>>;
-using ExpectedStatement = Expected<std::unique_ptr<Statement>>;
+template<typename T>
+using ExpectedPtr = Expected<std::unique_ptr<T>>;
+
+using ExpectedNodePtr = ExpectedPtr<ASTNode>;
+using ExpectedExpressionPtr = ExpectedPtr<Expression>;
+using ExpectedStatementPtr = ExpectedPtr<Statement>;
 
 // Converts the stream of tokens to an AST
 class Parser {
 public:
     explicit Parser(const std::vector<Token>& tokens) : index{0}, tokens{tokens} {};
-    std::expected<std::vector<std::unique_ptr<ASTNode>>, std::string> ParseProgram();
+    Expected<std::vector<std::unique_ptr<ASTNode>>> ParseProgram();
 private:
     size_t index;
     const std::vector<Token>& tokens;
@@ -32,12 +35,9 @@ private:
     Expected<Token> Expect(TokenType expected, std::string_view context_message);
 
 
-
-    // std::unique_ptr<ASTNode> ParseIntegerLiteral(const Token& token);
-    ExpectedNode ParseStatement();
-    ExpectedStatement ParseVariableDeclaration();
-    ExpectedNode ParseExpressionStatement();
-    ExpectedExpression ParseExpression();
+    ExpectedNodePtr ParseStatement();
+    ExpectedNodePtr ParseExpressionStatement();
+    ExpectedExpressionPtr ParseExpression();
 
 
     /* Rough overview
@@ -50,22 +50,22 @@ private:
     *return left;
      */
     // expressions sorted from lowest to highest priority so each one calls on the one below it
-    ExpectedExpression ParseLogicalOr();
-    ExpectedExpression ParseLogicalAnd();
-    ExpectedExpression ParseEquality();
-    ExpectedExpression ParseComparison();
-    ExpectedExpression ParseAddition();
-    ExpectedExpression ParseMultiplication();
-    ExpectedExpression ParseUnary();
-    ExpectedExpression ParseFunctionCall();
-    ExpectedExpression ParsePrimary(); // literals/identifiers
+    ExpectedExpressionPtr ParseLogicalOr();
+    ExpectedExpressionPtr ParseLogicalAnd();
+    ExpectedExpressionPtr ParseEquality();
+    ExpectedExpressionPtr ParseComparison();
+    ExpectedExpressionPtr ParseAddition();
+    ExpectedExpressionPtr ParseMultiplication();
+    ExpectedExpressionPtr ParseUnary();
+    ExpectedExpressionPtr ParseFunctionCall();
+    ExpectedExpressionPtr ParsePrimary(); // literals/identifiers
     //TODO: Most have the same logic refactor, (potentially a dictionary with the tokens to match and next level)
 
 
-    ExpectedStatement ParseFunctionDeclaration();
-    std::expected<std::vector<Parameter>, std::string> ParseParameters();
-
-
-    Expected<std::unique_ptr<BodyStatement>> ParseBodyStatement();
+    ExpectedStatementPtr ParseFunctionDeclaration();
+    Expected<std::vector<Parameter>> ParseParameters();
+    ExpectedPtr<VariableDeclaration> ParseVariableDeclaration();
+    ExpectedPtr<BodyStatement> ParseBodyStatement();
+    ExpectedPtr<IfStatement> ParseIfStatement();
 
 };

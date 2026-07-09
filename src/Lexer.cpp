@@ -291,17 +291,27 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
     this->source = source;
 
     std::vector<Token> tokens;
+
     while (!IsAtEnd())
     {
-        SkipWhitespace();
+        // ensure multiple lines of spaces/comments get skipped
+        bool progress = true;
+        while (progress && !IsAtEnd())
+        {
+            progress = false;
+            size_t start_index = index;
+
+            SkipWhitespace();
+            TrySkipComments();
+
+            if (index > start_index)
+            {
+                progress = true;
+            }
+        }
         if (IsAtEnd())
         {
             break;
-        }
-
-        if(TrySkipComments())
-        {
-            SkipWhitespace();
         }
 
         const char cur = Peek();
@@ -382,6 +392,10 @@ Token Lexer::CheckSymbolForNext(
 
 bool Lexer::TrySkipComments()
 {
+    if (IsAtEnd())
+    {
+        return false;
+    }
     char c = Peek();
     const std::optional<char> next = PeekNext();
     if(c != '/' || !next.has_value() || next.value() != '/')

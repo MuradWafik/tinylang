@@ -23,6 +23,16 @@ struct VariableDeclaration : Statement
         }
         return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: nullptr))", name, type);
     }
+
+    VariableDeclaration(
+        std::string name,
+        std::string type,
+        std::unique_ptr<Expression> initializer
+        ) :
+    name(std::move(name)),
+    type(std::move(type)),
+    initializer{std::move(initializer)}
+    {}
 };
 
 struct ReturnStatement : Statement
@@ -66,6 +76,19 @@ struct WhileStatement : Statement
     }
 };
 
+struct IfStatement : Statement
+{
+    std::unique_ptr<Expression> condition;
+    std::unique_ptr<BodyStatement> body;
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("IfStatement(condition: {}, body: {})", condition.get(), body.get());
+    }
+
+    IfStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body)
+    : condition{std::move(condition)}, body{std::move(body)}
+    {}
+};
 
 struct Parameter
 {

@@ -68,13 +68,12 @@ Expected<Token> Parser::Expect(const TokenType expected, std::string_view contex
     return Consume();
 }
 
-
-std::expected<std::vector<std::unique_ptr<ASTNode>>, std::string> Parser::ParseProgram()
+Expected<std::vector<std::unique_ptr<ASTNode>>> Parser::ParseProgram()
 {
     std::vector<std::unique_ptr<ASTNode>> statements{};
     while(!IsAtEnd())
     {
-        ExpectedNode en = ParseStatement();
+        ExpectedNodePtr en = ParseStatement();
         if(!en)
         {
             return std::unexpected{en.error()};
@@ -85,7 +84,7 @@ std::expected<std::vector<std::unique_ptr<ASTNode>>, std::string> Parser::ParseP
     return statements;
 }
 
-ExpectedNode Parser::ParseStatement()
+ExpectedNodePtr Parser::ParseStatement()
 {
     switch(Peek().type)
     {
@@ -93,26 +92,73 @@ ExpectedNode Parser::ParseStatement()
         case TokenType::Fn: return ParseFunctionDeclaration();
             // case TokenType::Return: return ParseReturnStatement();
 
-            // case TokenType::While: return ParseWhileStatement();
-
-            // case TokenType::If: return ParseIfStatement();
-
-        case TokenType::LeftBrace: {
-            auto body = ParseBodyStatement();
-            if(!body) return std::unexpected{body.error()};
-            return std::move(body.value());
-        }
+        case TokenType::If: return ParseIfStatement();
+        case TokenType::LeftBrace: return ParseBodyStatement();
         default: return ParseExpressionStatement();
     }
 }
 
-ExpectedStatement Parser::ParseVariableDeclaration()
+ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
 {
-    return std::unexpected("ParseVariableDeclaration not implemented");
+    if(auto var = Expect(TokenType::Var, "Expected variable keyword"); !var)
+    {
+        return std::unexpected(var.error());
+    }
+
+    auto variable_name = Expect(TokenType::Identifier,
+        "Variable name identifier after var keyword");
+
+    if(!variable_name)
+    {
+        return std::unexpected(variable_name.error());
+    }
+
+    if(
+        auto colon = Expect(TokenType::Colon, "Expected colon after variable identifier");
+        !colon
+    )
+    {
+        return std::unexpected(colon.error());
+    }
+
+    const auto& type_name_token = Peek();
+    if(!type_name_token.IsTypeName())
+    {
+        return std::unexpected(
+            std::format("Expected typename for variable declaration got '{}'. {}'", type_name_token.type, type_name_token.source_location));
+    }
+
+    Consume();
+
+    if(auto assign = Expect(TokenType::Assign, "Expected assignment for variable");
+        !assign)
+    {
+        return std::unexpected(assign.error());
+    }
+
+    auto initializer_result = ParseExpression();
+    if (!initializer_result)
+    {
+        return std::unexpected(initializer_result.error()); // Bubble up parsing errors
+    }
+
+    if(
+        auto semicolon = Expect(TokenType::Semicolon, "Expected semicolon to end statement");
+        !semicolon
+    )
+    {
+        return std::unexpected(semicolon.error());
+    }
+
+
+    return std::make_unique<VariableDeclaration>(
+        variable_name->lexeme,
+        type_name_token.lexeme,
+        std::move(initializer_result.value()));
 }
 
 
-ExpectedNode Parser::ParseExpressionStatement()
+ExpectedNodePtr Parser::ParseExpressionStatement()
 {
     auto e = ParseExpression();
     if(!e) return std::unexpected(e.error());
@@ -124,15 +170,15 @@ ExpectedNode Parser::ParseExpressionStatement()
     return std::make_unique<ExpressionStatement>(std::move(e.value()));
 }
 
-ExpectedExpression Parser::ParseExpression()
+ExpectedExpressionPtr Parser::ParseExpression()
 {
     return ParseLogicalOr();
 }
 
 
-ExpectedExpression Parser::ParseLogicalOr()
+ExpectedExpressionPtr Parser::ParseLogicalOr()
 {
-    ExpectedExpression left = ParseLogicalAnd();
+    ExpectedExpressionPtr left = ParseLogicalAnd();
     if(!left)
     {
         return std::unexpected(left.error());
@@ -140,19 +186,20 @@ ExpectedExpression Parser::ParseLogicalOr()
 
     while(Match(TokenType::OrOr))
     {
-        ExpectedExpression right = ParseLogicalAnd();
+        const Token& op = tokens[index - 1];
+        ExpectedExpressionPtr right = ParseLogicalAnd();
         if(!right)
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(Consume(), std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
     }
     return left;
 }
 
-ExpectedExpression Parser::ParseLogicalAnd()
+ExpectedExpressionPtr Parser::ParseLogicalAnd()
 {
-    ExpectedExpression left = ParseEquality();
+    ExpectedExpressionPtr left = ParseEquality();
     if(!left)
     {
         return std::unexpected(left.error());
@@ -160,19 +207,20 @@ ExpectedExpression Parser::ParseLogicalAnd()
 
     while(Match(TokenType::AndAnd))
     {
-        ExpectedExpression right = ParseEquality();
+        const Token& op = tokens[index - 1];
+        ExpectedExpressionPtr right = ParseEquality();
         if(!right)
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(Consume(), std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
     }
     return left;
 }
 
-ExpectedExpression Parser::ParseEquality()
+ExpectedExpressionPtr Parser::ParseEquality()
 {
-    ExpectedExpression left = ParseComparison();
+    ExpectedExpressionPtr left = ParseComparison();
     if(!left)
     {
         return std::unexpected(left.error());
@@ -180,39 +228,42 @@ ExpectedExpression Parser::ParseEquality()
 
     while(Match(TokenType::Equal) || Match(TokenType::NotEqual))
     {
-        ExpectedExpression right = ParseComparison();
+        const Token& op = tokens[index - 1];
+        ExpectedExpressionPtr right = ParseComparison();
         if(!right)
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(Consume(), std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
     }
     return left;
 }
 
-ExpectedExpression Parser::ParseComparison()
+ExpectedExpressionPtr Parser::ParseComparison()
 {
-    ExpectedExpression left = ParseAddition();
+    ExpectedExpressionPtr left = ParseAddition();
     if(!left)
     {
         return std::unexpected(left.error());
     }
 
-    while(Match(TokenType::LessEqual) || Match(TokenType::GreaterEqual))
+    while(Match(TokenType::LessEqual) || Match(TokenType::GreaterEqual)
+        || Match(TokenType::Less) || Match(TokenType::Greater))
     {
-        ExpectedExpression right = ParseAddition();
+        const Token& op = tokens[index - 1];
+        ExpectedExpressionPtr right = ParseAddition();
         if(!right)
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(Consume(), std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
     }
     return left;
 }
 
-ExpectedExpression Parser::ParseAddition()
+ExpectedExpressionPtr Parser::ParseAddition()
 {
-    ExpectedExpression left = ParseMultiplication();
+    ExpectedExpressionPtr left = ParseMultiplication();
     if(!left)
     {
         return std::unexpected(left.error());
@@ -220,19 +271,20 @@ ExpectedExpression Parser::ParseAddition()
 
     while(Match(TokenType::Plus) || Match(TokenType::Minus))
     {
-        ExpectedExpression right = ParseMultiplication();
+        const Token& op = tokens[index - 1];
+        ExpectedExpressionPtr right = ParseMultiplication();
         if(!right)
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(Consume(), std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
     }
     return left;
 }
 
-ExpectedExpression Parser::ParseMultiplication()
+ExpectedExpressionPtr Parser::ParseMultiplication()
 {
-    ExpectedExpression left = ParseUnary();
+    ExpectedExpressionPtr left = ParseUnary();
     if(!left)
     {
         return std::unexpected(left.error());
@@ -240,24 +292,25 @@ ExpectedExpression Parser::ParseMultiplication()
 
     while(Match(TokenType::Star) || Match(TokenType::Slash))
     {
-        ExpectedExpression right = ParseUnary();
+        const Token& op = tokens[index - 1];
+        ExpectedExpressionPtr right = ParseUnary();
         if(!right)
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(Consume(), std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
     }
     return left;
 }
 
-ExpectedExpression Parser::ParseUnary()
+ExpectedExpressionPtr Parser::ParseUnary()
 {
     if (Peek().type == TokenType::Minus || Peek().type == TokenType::Negate)
     {
         Token op = Consume();
 
         // recersively call `ParseUnary` to allow for nested operators like `!!true`
-        ExpectedExpression right = ParseUnary();
+        ExpectedExpressionPtr right = ParseUnary();
         if (!right)
         {
             return std::unexpected(right.error());
@@ -268,7 +321,7 @@ ExpectedExpression Parser::ParseUnary()
     return ParseFunctionCall();
 }
 
-ExpectedExpression Parser::ParseFunctionCall()
+ExpectedExpressionPtr Parser::ParseFunctionCall()
 {
     const Token& cur = Peek();
     if(cur.type == TokenType::Identifier && TryPeekNext() != nullptr && TryPeekNext()->type == TokenType::LeftParen)
@@ -280,7 +333,7 @@ ExpectedExpression Parser::ParseFunctionCall()
         if (Peek().type != TokenType::RightParen)
         {
             do {
-                ExpectedExpression result = ParseExpression();
+                ExpectedExpressionPtr result = ParseExpression();
                 if(!result)
                 {
                     return std::unexpected(result.error());
@@ -305,7 +358,7 @@ ExpectedExpression Parser::ParseFunctionCall()
     return ParsePrimary();
 }
 
-ExpectedExpression Parser::ParsePrimary()
+ExpectedExpressionPtr Parser::ParsePrimary()
 {
     const auto& [type, lexeme, source_location] = Peek();
 
@@ -364,7 +417,7 @@ ExpectedExpression Parser::ParsePrimary()
     }
 }
 
-ExpectedStatement Parser::ParseFunctionDeclaration()
+ExpectedStatementPtr Parser::ParseFunctionDeclaration()
 {
     // function_declaration
     //    ::= "fn" IDENTIFIER "(" parameters? ")" ":" type block
@@ -373,7 +426,7 @@ ExpectedStatement Parser::ParseFunctionDeclaration()
     auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
     if(!function_name) return std::unexpected(function_name.error());
 
-    auto left_paren = Expect(TokenType::LeftParen, "Expected '(' after function name");
+    auto left_paren = Expect(TokenType::LeftParen, "Error after function name");
     if(!left_paren) return std::unexpected(left_paren.error());
 
     auto parameters_result = ParseParameters();
@@ -382,10 +435,10 @@ ExpectedStatement Parser::ParseFunctionDeclaration()
         return std::unexpected(parameters_result.error());
     }
 
-    auto right_paren = Expect(TokenType::RightParen, "Expected ')' after function parameters");
+    auto right_paren = Expect(TokenType::RightParen, "Error after function parameters");
     if(!right_paren) return std::unexpected(right_paren.error());
 
-    auto arrow = Expect(TokenType::Arrow, "Expected '->' after function signature");
+    auto arrow = Expect(TokenType::Arrow, "Error after function signature");
     if(!arrow) return std::unexpected(arrow.error());
 
     const Token& return_type = Peek();
@@ -414,7 +467,7 @@ ExpectedStatement Parser::ParseFunctionDeclaration()
     );
 }
 
-std::expected<std::vector<Parameter>, std::string> Parser::ParseParameters()
+Expected<std::vector<Parameter>> Parser::ParseParameters()
 {
     /*
     parameters
@@ -436,7 +489,7 @@ std::expected<std::vector<Parameter>, std::string> Parser::ParseParameters()
         auto parameter_name = Expect(TokenType::Identifier, "Expected parameter name");
         if(!parameter_name) return std::unexpected(parameter_name.error());
 
-        auto colon = Expect(TokenType::Colon, "Expected ':' after parameter name");
+        auto colon = Expect(TokenType::Colon, "Error after parameter name");
         if(!colon) return std::unexpected(colon.error());
 
         const Token& type_name = Peek();
@@ -457,7 +510,7 @@ std::expected<std::vector<Parameter>, std::string> Parser::ParseParameters()
     return parameters;
 }
 
-Expected<std::unique_ptr<BodyStatement>> Parser::ParseBodyStatement()
+ExpectedPtr<BodyStatement> Parser::ParseBodyStatement()
 {
     const Token& starter = Peek();
     if(starter.type != TokenType::LeftBrace)
@@ -469,11 +522,11 @@ Expected<std::unique_ptr<BodyStatement>> Parser::ParseBodyStatement()
     }
     Consume();
 
-    std::unique_ptr<BodyStatement> body = std::make_unique<BodyStatement>();
+    auto body = std::make_unique<BodyStatement>();
 
     while(!IsAtEnd() && Peek().type != TokenType::RightBrace)
     {
-        ExpectedNode statement = ParseStatement();
+        ExpectedNodePtr statement = ParseStatement();
         if(!statement) return std::unexpected(statement.error());
 
         body->statements.push_back(std::move(statement.value()));
@@ -491,3 +544,38 @@ Expected<std::unique_ptr<BodyStatement>> Parser::ParseBodyStatement()
     return body;
 }
 
+
+ExpectedPtr<IfStatement> Parser::ParseIfStatement()
+{
+    if(const auto if_keyword = Expect(TokenType::If, "If keyword expected");
+        !if_keyword)
+    {
+        return std::unexpected(if_keyword.error());
+    }
+
+    if(const auto left_paren = Expect(TokenType::LeftParen, "Expected '('");
+        !left_paren)
+    {
+        return std::unexpected(left_paren.error());
+    }
+
+    auto condition = ParseExpression();
+    if(!condition)
+    {
+        return std::unexpected(condition.error());
+    }
+
+    if(const auto right_paren = Expect(TokenType::RightParen, "Missing ending condition");
+    !right_paren)
+    {
+        return std::unexpected(right_paren.error());
+    }
+
+    auto body = ParseBodyStatement();
+    if(!body)
+    {
+        return std::unexpected(body.error());
+    }
+
+    return std::make_unique<IfStatement>(std::move(condition.value()), std::move(body.value()));
+}

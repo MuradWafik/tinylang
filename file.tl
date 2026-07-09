@@ -11,11 +11,11 @@ fn Main(args: String) -> int
         Print(name);
         Print("x is greater than y");
     }
-    else
-    {
+    // else
+    // {
         // Print("x is \"not greater than y");
-        Print("hello\"world");
-    }
+     //   Print("hello\"world");
+    //}
 
     while (x > 0)
     {
