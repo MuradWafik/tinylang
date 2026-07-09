@@ -13,6 +13,8 @@ statement ::=
     variable_declaration
     | function_declaration
     | return_statement
+    | break_statement
+    | continue_statement
     | while_statement
     | if_statement
     | expression_statement
@@ -46,6 +48,18 @@ function_declaration
 ```
 return_statement
     ::= "return" expression? ";"
+```
+
+### Break Statement
+```
+break_statement
+    ::= "break" ";"
+```
+
+### Continue Statement
+```
+continue_statement
+    ::= "continue" ";"
 ```
 
 ### While Statement

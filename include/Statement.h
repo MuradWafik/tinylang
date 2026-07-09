@@ -154,3 +154,17 @@ struct ExpressionStatement : Statement
         return std::format("ExpressionStatement(expr: {})", expression.get());
     }
 };
+
+struct BreakStatement : Statement
+{
+    [[nodiscard]] std::string GetTypeString() const override {
+        return "BreakStatement";
+    }
+};
+
+struct ContinueStatement : Statement
+{
+    [[nodiscard]] std::string GetTypeString() const override {
+        return "ContinueStatement";
+    }
+};

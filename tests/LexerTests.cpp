@@ -144,6 +144,20 @@ TEST_CASE("Keywords")
         });
 }
 
+TEST_CASE("Control flow keywords")
+{
+    CheckTokens(
+        Lex("if else while return break continue"),
+        {
+            {TokenType::If, "if"},
+            {TokenType::Else, "else"},
+            {TokenType::While, "while"},
+            {TokenType::Return, "return"},
+            {TokenType::Break, "break"},
+            {TokenType::Continue, "continue"},
+        });
+}
+
 TEST_CASE("Integer literal")
 {
     CheckTokens(

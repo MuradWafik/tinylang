@@ -94,6 +94,8 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::While: return ParseWhileStatement();
         case TokenType::If: return ParseIfStatement();
         case TokenType::LeftBrace: return ParseBodyStatement();
+        case TokenType::Break: return ParseBreakStatement();
+        case TokenType::Continue: return ParseContinueStatement();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -643,7 +645,7 @@ ExpectedPtr<IfStatement> Parser::ParseIfStatement()
 
 ExpectedPtr<WhileStatement> Parser::ParseWhileStatement()
 {
-    const std::string_view error_message = "Error parsing while statement";
+    constexpr std::string_view error_message = "Error parsing while statement";
     if(auto while_keyword = Expect(TokenType::While, error_message);
        !while_keyword)
     {
@@ -683,7 +685,7 @@ ExpectedPtr<WhileStatement> Parser::ParseWhileStatement()
 
 ExpectedPtr<ReturnStatement> Parser::ParseReturnStatement()
 {
-    const std::string_view error_msg = "Error parsing return statement";
+    constexpr std::string_view error_msg = "Error parsing return statement";
     if(auto return_keyword = Expect(TokenType::Return, error_msg);
         !return_keyword)
     {
@@ -707,4 +709,28 @@ ExpectedPtr<ReturnStatement> Parser::ParseReturnStatement()
         return std::unexpected(semi_colon.error());
     }
     return std::make_unique<ReturnStatement>(std::move(return_expression.value()));
+}
+
+ExpectedPtr<BreakStatement> Parser::ParseBreakStatement()
+{
+    constexpr std::string_view error_msg = "Error parsing break statement";
+    if(auto break_keyword = Expect(TokenType::Break, error_msg); !break_keyword) {
+        return std::unexpected(break_keyword.error());
+    }
+    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon) {
+        return std::unexpected(semi_colon.error());
+    }
+    return std::make_unique<BreakStatement>();
+}
+
+ExpectedPtr<ContinueStatement> Parser::ParseContinueStatement()
+{
+    constexpr std::string_view error_msg = "Error parsing continue statement";
+    if(auto continue_keyword = Expect(TokenType::Continue, error_msg); !continue_keyword) {
+        return std::unexpected(continue_keyword.error());
+    }
+    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon) {
+        return std::unexpected(semi_colon.error());
+    }
+    return std::make_unique<ContinueStatement>();
 }

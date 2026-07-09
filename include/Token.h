@@ -22,6 +22,8 @@ enum class TokenType
     Return,
     True,
     False,
+    Break,
+    Continue,
 
     // Types
     IntType,
@@ -98,6 +100,8 @@ struct Token {
         {"return", TokenType::Return},
         {"true", TokenType::True},
         {"false", TokenType::False},
+        {"break", TokenType::Break},
+        {"continue", TokenType::Continue},
         {"int", TokenType::IntType},
         {"float", TokenType::FloatType},
         {"bool", TokenType::BoolType},
