@@ -89,13 +89,23 @@ struct IfStatement : Statement
 {
     std::unique_ptr<Expression> condition;
     std::unique_ptr<BodyStatement> body;
+    std::unique_ptr<Statement> else_branch; // else if is then just a sub if branch in the else
+
     [[nodiscard]] std::string GetTypeString() const override
     {
+        if (else_branch)
+        {
+            return std::format("IfStatement(condition: {}, then: {}, else: {})",
+                               condition.get(), body.get(), else_branch.get());
+        }
         return std::format("IfStatement(condition: {}, body: {})", condition.get(), body.get());
     }
 
-    IfStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body)
-    : condition{std::move(condition)}, body{std::move(body)}
+    IfStatement(
+        std::unique_ptr<Expression> condition,
+        std::unique_ptr<BodyStatement> body,
+        std::unique_ptr<Statement> else_branch)
+    : condition{std::move(condition)}, body{std::move(body)}, else_branch{std::move(else_branch)}
     {}
 };
 

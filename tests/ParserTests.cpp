@@ -80,3 +80,23 @@ TEST_CASE("Parses simple if statement")
     REQUIRE(ast.size() == 1);
     REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Identifier, name("flag"), body: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [Identifier, name("x")]))])))ast");
 }
+
+TEST_CASE("Parses if-else statement")
+{
+    auto result = Parse("if (flag) { Print(x); } else { Print(y); }");
+    INFO("Parser Error: " << (result.has_value() ? "" : result.error()));
+    REQUIRE(result.has_value());
+    auto& ast = result.value();
+    REQUIRE(ast.size() == 1);
+    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Identifier, name("flag"), then: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [Identifier, name("x")]))]), else: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [Identifier, name("y")]))])))ast");
+}
+
+TEST_CASE("Parses if-else-if-else statement")
+{
+    auto result = Parse("if (x > 0) { Print(1); } else if (x < 0) { Print(2); } else { Print(0); }");
+    INFO("Parser Error: " << (result.has_value() ? "" : result.error()));
+    REQUIRE(result.has_value());
+    auto& ast = result.value();
+    REQUIRE(ast.size() == 1);
+    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Binary Expression, operator(>), left: Identifier, name("x"), right: IntegerLiteral(0), then: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [IntegerLiteral(1)]))]), else: IfStatement(condition: Binary Expression, operator(<), left: Identifier, name("x"), right: IntegerLiteral(0), then: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [IntegerLiteral(2)]))]), else: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [IntegerLiteral(0)]))]))))ast");
+}

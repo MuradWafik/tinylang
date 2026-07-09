@@ -610,7 +610,35 @@ ExpectedPtr<IfStatement> Parser::ParseIfStatement()
         return std::unexpected(body.error());
     }
 
-    return std::make_unique<IfStatement>(std::move(condition.value()), std::move(body.value()));
+    if(Peek().type == TokenType::Else)
+    {
+        Consume();
+        if(Peek().type == TokenType::If)
+        {
+            auto elif_branch = ParseIfStatement();
+            if(!elif_branch)
+            {
+                return std::unexpected(std::format("Error parsing else if branch, {}", elif_branch.error()));
+            }
+            return std::make_unique<IfStatement>(
+                std::move(condition.value()),
+                std::move(body.value()),
+                std::move(elif_branch.value()));
+        }
+        auto else_body = ParseBodyStatement();
+        if(!else_body)
+        {
+            return std::unexpected(std::format("Error parsing else statement, {}", else_body.error()));
+        }
+
+
+        return std::make_unique<IfStatement>(
+            std::move(condition.value()),
+            std::move(body.value()),
+            std::move(else_body.value())
+        );
+    }
+    return std::make_unique<IfStatement>(std::move(condition.value()), std::move(body.value()), nullptr);
 }
 
 ExpectedPtr<WhileStatement> Parser::ParseWhileStatement()

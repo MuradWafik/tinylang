@@ -6,16 +6,20 @@ fn Main(args: String) -> int
     var name: String = "TinyLang";
     var flag1: bool = true;
     // this is a single comment that should be ignored // "dsdhak"
-    if (x > y && flag)
+    if (x > y && flag1)
     {
         Print(name);
         Print("x is greater than y");
     }
-    // else
-    // {
-        // Print("x is \"not greater than y");
-     //   Print("hello\"world");
-    //}
+    else if(x < y)
+    {
+        Print("else if x is less than y");
+    }
+    else
+    {
+        Print("x is \"not greater than y or flag is not true");
+        // Print("hello\"world");
+    }
 
     while (x > 0)
     {

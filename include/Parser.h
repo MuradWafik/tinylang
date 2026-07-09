@@ -71,5 +71,4 @@ private:
     ExpectedPtr<IfStatement> ParseIfStatement();
     ExpectedPtr<WhileStatement> ParseWhileStatement();
     ExpectedPtr<ReturnStatement> ParseReturnStatement();
-
 };
