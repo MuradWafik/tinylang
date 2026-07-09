@@ -20,13 +20,13 @@ const Token& Parser::Peek() const
     return tokens[index];
 }
 
-std::optional<const Token&> Parser::TryPeekNext() const
+const Token* Parser::TryPeekNext() const
 {
     if(index>= tokens.size() -1 )
     {
-        return std::nullopt;
+        return nullptr;
     }
-    return std::optional<const Token&>{tokens[index+1]};
+    return &tokens[index+1];
 }
 
 
@@ -37,12 +37,35 @@ bool Parser::IsAtEnd() const
 
 bool Parser::Match(const TokenType target)
 {
+    if(IsAtEnd())
+    {
+        return false;
+    }
+
     if(Peek().type == target)
     {
         Consume();
         return true;
     }
     return false;
+}
+
+Expected<Token> Parser::Expect(const TokenType expected, std::string_view context_message)
+{
+    if (IsAtEnd() || Peek().type != expected)
+    {
+        SourceLocation loc = IsAtEnd() ? SourceLocation{0, 0} : Peek().source_location;
+        std::string got = IsAtEnd() ? "EOF" : Peek().lexeme;
+        return std::unexpected(
+            std::format("{} (Expected '{}', got '{}' at {})",
+                context_message,
+                Token::TypeToString(expected),
+                got,
+                loc
+            )
+        );
+    }
+    return Consume();
 }
 
 
@@ -67,11 +90,23 @@ ExpectedNode Parser::ParseStatement()
     switch(Peek().type)
     {
         case TokenType::Var: return ParseVariableDeclaration();
+        case TokenType::Fn: return ParseFunctionDeclaration();
+            // case TokenType::Return: return ParseReturnStatement();
+
+            // case TokenType::While: return ParseWhileStatement();
+
+            // case TokenType::If: return ParseIfStatement();
+
+        case TokenType::LeftBrace: {
+            auto body = ParseBodyStatement();
+            if(!body) return std::unexpected{body.error()};
+            return std::move(body.value());
+        }
         default: return ParseExpressionStatement();
     }
 }
 
-ExpectedNode Parser::ParseVariableDeclaration()
+ExpectedStatement Parser::ParseVariableDeclaration()
 {
     return std::unexpected("ParseVariableDeclaration not implemented");
 }
@@ -79,18 +114,14 @@ ExpectedNode Parser::ParseVariableDeclaration()
 
 ExpectedNode Parser::ParseExpressionStatement()
 {
-    auto token = Peek();
     auto e = ParseExpression();
-    if(!e)
-    {
-        return std::unexpected(e.error());
-    }
+    if(!e) return std::unexpected(e.error());
 
-    if(!Match(TokenType::Semicolon))
-    {
-        return std::unexpected(std::format("No semicolon found following expression, {}", token.source_location));
-    }
-    return std::move(e.value());
+    auto semicolon = Expect(TokenType::Semicolon, "Expected ';' after expression");
+    if(!semicolon) return std::unexpected(semicolon.error());
+
+    // Wrap the expression cleanly into a statement node
+    return std::make_unique<ExpressionStatement>(std::move(e.value()));
 }
 
 ExpectedExpression Parser::ParseExpression()
@@ -240,7 +271,7 @@ ExpectedExpression Parser::ParseUnary()
 ExpectedExpression Parser::ParseFunctionCall()
 {
     const Token& cur = Peek();
-    if(cur.type == TokenType::Identifier && TryPeekNext().has_value() && TryPeekNext()->type == TokenType::LeftParen)
+    if(cur.type == TokenType::Identifier && TryPeekNext() != nullptr && TryPeekNext()->type == TokenType::LeftParen)
     {
         Token function_name = Consume();
         Consume(); // left parenthases
@@ -332,3 +363,131 @@ ExpectedExpression Parser::ParsePrimary()
             return std::unexpected(std::format("Expected expression, found '{}' at {}", lexeme, source_location));
     }
 }
+
+ExpectedStatement Parser::ParseFunctionDeclaration()
+{
+    // function_declaration
+    //    ::= "fn" IDENTIFIER "(" parameters? ")" ":" type block
+    Consume(); // fn keyword
+
+    auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
+    if(!function_name) return std::unexpected(function_name.error());
+
+    auto left_paren = Expect(TokenType::LeftParen, "Expected '(' after function name");
+    if(!left_paren) return std::unexpected(left_paren.error());
+
+    auto parameters_result = ParseParameters();
+    if(!parameters_result)
+    {
+        return std::unexpected(parameters_result.error());
+    }
+
+    auto right_paren = Expect(TokenType::RightParen, "Expected ')' after function parameters");
+    if(!right_paren) return std::unexpected(right_paren.error());
+
+    auto arrow = Expect(TokenType::Arrow, "Expected '->' after function signature");
+    if(!arrow) return std::unexpected(arrow.error());
+
+    const Token& return_type = Peek();
+    if(!return_type.IsTypeName())
+    {
+        return std::unexpected(
+            std::format("Expected type name after '->', got '{}' at {}",
+                return_type.lexeme,
+                return_type.source_location
+            )
+        );
+    }
+    Consume();
+
+    Expected<std::unique_ptr<BodyStatement>> body = ParseBodyStatement();
+    if(!body)
+    {
+        return std::unexpected(body.error());
+    }
+
+    return std::make_unique<FunctionDeclaration>(
+        function_name->lexeme,
+        std::move(parameters_result.value()),
+        return_type.lexeme,
+        std::move(body.value())
+    );
+}
+
+std::expected<std::vector<Parameter>, std::string> Parser::ParseParameters()
+{
+    /*
+    parameters
+        ::= parameter ( "," parameter )*
+    parameter
+        ::= IDENTIFIER ":" type
+     */
+
+    std::vector<Parameter> parameters{};
+
+    // Since parameters are optional, check if there is no parameter list
+    if (Peek().type == TokenType::RightParen)
+    {
+        return parameters;
+    }
+
+    do
+    {
+        auto parameter_name = Expect(TokenType::Identifier, "Expected parameter name");
+        if(!parameter_name) return std::unexpected(parameter_name.error());
+
+        auto colon = Expect(TokenType::Colon, "Expected ':' after parameter name");
+        if(!colon) return std::unexpected(colon.error());
+
+        const Token& type_name = Peek();
+        if(!type_name.IsTypeName())
+        {
+            return std::unexpected(
+                std::format("Expected type name for parameter '{}', got '{}' at {}",
+                    parameter_name->lexeme,
+                    type_name.lexeme,
+                    type_name.source_location)
+            );
+        }
+        Consume();
+
+        parameters.emplace_back(parameter_name->lexeme, type_name.lexeme);
+    } while(Match(TokenType::Comma));
+
+    return parameters;
+}
+
+Expected<std::unique_ptr<BodyStatement>> Parser::ParseBodyStatement()
+{
+    const Token& starter = Peek();
+    if(starter.type != TokenType::LeftBrace)
+    {
+        return std::unexpected(
+            std::format("Expected '{}' to start body statement, got '{}'. {}",
+                TokenType::LeftBrace, starter.type, starter.source_location)
+        );
+    }
+    Consume();
+
+    std::unique_ptr<BodyStatement> body = std::make_unique<BodyStatement>();
+
+    while(!IsAtEnd() && Peek().type != TokenType::RightBrace)
+    {
+        ExpectedNode statement = ParseStatement();
+        if(!statement) return std::unexpected(statement.error());
+
+        body->statements.push_back(std::move(statement.value()));
+    }
+
+    if (!Match(TokenType::RightBrace))
+    {
+        return std::unexpected(
+            std::format("Unterminated block statement. Expected '{}' to match the opening brace at {}.",
+                Token::TypeToString(TokenType::RightBrace),
+                starter.source_location)
+        );
+    }
+
+    return body;
+}
+

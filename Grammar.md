@@ -11,6 +11,7 @@ program
 ```
 statement ::=
     variable_declaration
+    | function_declaration
     | return_statement
     | while_statement
     | if_statement
@@ -28,6 +29,19 @@ variable_declaration
     ::= "var" IDENTIFIER ":" type ("=" expression)? ";"
 ```
 
+### Function Declaration
+```
+function_declaration
+    ::= "fn" IDENTIFIER "(" parameters? ")" ":" type block
+```
+
+> 
+> ```
+> parameters
+>     ::= parameter ( "," parameter )*
+> parameter
+>     ::= IDENTIFIER ":" type
+> ```
 ### Return Statement
 ```
 return_statement

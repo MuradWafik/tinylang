@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <numeric>
 
 #include "Expression.h"
 
@@ -15,21 +16,99 @@ struct VariableDeclaration : Statement
     std::string name;
     std::string type;
     std::unique_ptr<Expression> initializer;
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        if (initializer) {
+            return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: {}))", name, type, initializer.get());
+        }
+        return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: nullptr))", name, type);
+    }
 };
 
 struct ReturnStatement : Statement
 {
     std::unique_ptr<Expression> value;
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("ReturnStatement(value: {})", value ? value->GetTypeString() : "void");
+    }
 };
 
 struct BodyStatement : Statement
 {
-    std::vector<std::unique_ptr<Statement>> statements;
+    std::vector<std::unique_ptr<ASTNode>> statements;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        if (statements.empty()) return "BodyStatement(empty)";
+
+        std::string inner;
+        for (size_t i = 0; i < statements.size(); ++i)
+        {
+            inner += statements[i] ? statements[i]->GetTypeString() : "nullptr";
+            if (i + 1 < statements.size())
+            {
+                inner += ", ";
+            }
+        }
+
+        return std::format("BodyStatement([{}])", inner);
+    }
 };
 
 struct WhileStatement : Statement
 {
     std::unique_ptr<Expression> condition;
     std::unique_ptr<BodyStatement> body;
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("WhileStatement(condition: {}, body: {})", condition.get(), body.get());
+    }
 };
 
+
+struct Parameter
+{
+    std::string name;
+    std::string type_name;
+};
+
+struct FunctionDeclaration : Statement
+{
+    std::string name;
+    std::vector<Parameter> parameters;
+    std::string return_type;
+    std::unique_ptr<BodyStatement> body;
+
+    FunctionDeclaration(std::string name,
+                        std::vector<Parameter> params,
+                        std::string ret_type,
+                        std::unique_ptr<BodyStatement> body_node)
+        : name(std::move(name)),
+          parameters(std::move(params)),
+          return_type(std::move(ret_type)),
+          body(std::move(body_node))
+    {}
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        std::string params_str;
+        for (size_t i = 0; i < parameters.size(); ++i) {
+            params_str += std::format("{}: {}", parameters[i].name, parameters[i].type_name);
+            if (i + 1 < parameters.size()) params_str += ", ";
+        }
+        return std::format(R"(FunctionDeclaration(name: "{}", params: [{}], return: "{}", body: {}))",
+                           name, params_str, return_type, body.get());
+    }
+};
+
+struct ExpressionStatement : Statement
+{
+    std::unique_ptr<Expression> expression;
+    explicit ExpressionStatement(std::unique_ptr<Expression>&& expr)
+        : expression(std::move(expr)) {}
+
+    [[nodiscard]] std::string GetTypeString() const override {
+        return std::format("ExpressionStatement(expr: {})", expression.get());
+    }
+};

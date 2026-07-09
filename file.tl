@@ -1,4 +1,4 @@
-fn Main(args: String[]) -> int
+fn Main(args: String) -> int
 {
     var x: int = 42;
     var y: int = 10;

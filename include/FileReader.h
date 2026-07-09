@@ -4,5 +4,5 @@
 
 
 namespace FileReader {
-    [[no_discard]] std::expected<std::string, std::string> Read(const std::filesystem::path& file_path);
+    [[nodiscard]] std::expected<std::string, std::string> Read(const std::filesystem::path& file_path);
 };

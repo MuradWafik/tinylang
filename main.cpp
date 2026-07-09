@@ -44,7 +44,11 @@ int main(int argc, char** argv)
     }
     else
     {
-        // for()
+        std::println("Number of parsed tokens: {}", parse_result->size());
+        for(const auto& ast_node : parse_result.value())
+        {
+            std::println("Parsed Token: {}", ast_node.get());
+        }
     }
 
     return 0;

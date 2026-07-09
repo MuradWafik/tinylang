@@ -105,4 +105,21 @@ struct Token {
         {"void", TokenType::Void},
     };
     static std::string TypeToString(TokenType token_type);
+
+    [[nodiscard]] bool IsTypeName() const
+    {
+        return type == TokenType::BoolType
+        || type == TokenType::IntType
+        || type == TokenType::FloatType
+        || type == TokenType::StringType;
+    }
+};
+
+template <>
+struct std::formatter<TokenType> : std::formatter<std::string> {
+    // Define the format function
+    template <typename FormatContext>
+    auto format(const TokenType& t, FormatContext& ctx) const {
+        return std::formatter<std::string>::format(Token::TypeToString(t), ctx);
+    }
 };

@@ -5,55 +5,61 @@ std::string Token::TypeToString(const TokenType token_type)
 {
     switch (token_type)
     {
-        case TokenType::Identifier:   return "Identifier";
-        case TokenType::IntLiteral:      return "Integer";
-        case TokenType::FloatLiteral:        return "Float";
-        case TokenType::StringLiteral:       return "String";
+        // Literals & Identifiers
+        case TokenType::Identifier:      return "identifier";
+        case TokenType::IntLiteral:      return "integer literal";
+        case TokenType::FloatLiteral:    return "float literal";
+        case TokenType::StringLiteral:   return "string literal";
 
-        case TokenType::Fn:           return "Fn";
-        case TokenType::Var:          return "Var";
-        case TokenType::If:           return "If";
-        case TokenType::Else:         return "Else";
-        case TokenType::While:        return "While";
-        case TokenType::Return:       return "Return";
-        case TokenType::True:         return "True";
-        case TokenType::False:        return "False";
+        // Keywords
+        case TokenType::Fn:              return "'fn'";
+        case TokenType::Var:             return "'var'";
+        case TokenType::If:              return "'if'";
+        case TokenType::Else:            return "'else'";
+        case TokenType::While:           return "'while'";
+        case TokenType::Return:          return "'return'";
+        case TokenType::True:            return "'true'";
+        case TokenType::False:           return "'false'";
 
-        case TokenType::IntType:      return "Int";
-        case TokenType::FloatType:    return "FloatType";
-        case TokenType::BoolType:     return "Bool";
-        case TokenType::StringType:   return "StringType";
-        case TokenType::Void:         return "Void";
+        // Built-in Types
+        case TokenType::IntType:         return "'int'";
+        case TokenType::FloatType:       return "'float'";
+        case TokenType::BoolType:        return "'bool'";
+        case TokenType::StringType:      return "'String'";
+        case TokenType::Void:            return "'void'";
 
-        case TokenType::Plus:         return "Plus";
-        case TokenType::Minus:        return "Minus";
-        case TokenType::Star:         return "Star";
-        case TokenType::Slash:        return "Slash";
-        case TokenType::Assign:       return "Assign";
-        case TokenType::Equal:        return "Equal";
-        case TokenType::Negate:       return "Negate";
-        case TokenType::NotEqual:     return "NotEqual";
-        case TokenType::Less:         return "Less";
-        case TokenType::LessEqual:    return "LessEqual";
-        case TokenType::Greater:      return "Greater";
-        case TokenType::GreaterEqual: return "GreaterEqual";
-        case TokenType::BitAnd:       return "BitAnd";
-        case TokenType::AndAnd:       return "AndAnd";
-        case TokenType::BitOr:        return "BitOr";
-        case TokenType::OrOr:         return "OrOr";
+        // Operators
+        case TokenType::Plus:            return "'+'";
+        case TokenType::Minus:           return "'-'";
+        case TokenType::Star:            return "'*'";
+        case TokenType::Slash:           return "'/'";
+        case TokenType::Assign:          return "'='";
+        case TokenType::Equal:           return "'=='";
+        case TokenType::Negate:          return "'!'";
+        case TokenType::NotEqual:        return "'!='";
+        case TokenType::Less:            return "'<'";
+        case TokenType::LessEqual:       return "'<='";
+        case TokenType::Greater:         return "'>'";
+        case TokenType::GreaterEqual:    return "'>='";
+        case TokenType::BitAnd:          return "'&'";
+        case TokenType::AndAnd:          return "'&&'";
+        case TokenType::BitOr:           return "'|'";
+        case TokenType::OrOr:            return "'||'";
 
-        case TokenType::LeftParen:    return "LeftParen";
-        case TokenType::RightParen:   return "RightParen";
-        case TokenType::LeftBrace:    return "LeftBrace";
-        case TokenType::RightBrace:   return "RightBrace";
-        case TokenType::LeftBracket:  return "LeftBracket";
-        case TokenType::RightBracket: return "RightBracket";
-        case TokenType::Colon:        return "Colon";
-        case TokenType::Semicolon:    return "Semicolon";
-        case TokenType::Comma:        return "Comma";
-        case TokenType::Arrow:        return "Arrow";
+        // Delimiters & Punctuation
+        case TokenType::LeftParen:       return "'('";
+        case TokenType::RightParen:      return "')'";
+        case TokenType::LeftBrace:       return "'{'";
+        case TokenType::RightBrace:      return "'}'";
+        case TokenType::LeftBracket:     return "'['";
+        case TokenType::RightBracket:    return "']'";
+        case TokenType::Colon:           return "':'";
+        case TokenType::Semicolon:       return "';'";
+        case TokenType::Comma:           return "','";
+        case TokenType::Arrow:           return "'->'";
 
-        case TokenType::EndOfFile:    return "EndOfFile";
+        // Special System Tokens
+        case TokenType::EndOfFile:       return "end of file";
     }
-    return "<unknown TokenType>";
+    return "unknown token";
 }
