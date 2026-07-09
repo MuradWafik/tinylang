@@ -102,3 +102,15 @@ struct IdentifierExpression : Expression
         return std::format("Identifier, name(\"{}\")", name);
     }
 };
+
+struct AssignmentExpression : Expression
+{
+    std::string name;
+    std::unique_ptr<Expression> value;
+    AssignmentExpression(std::string name, std::unique_ptr<Expression> val)
+        : name(std::move(name)), value(std::move(val)) {}
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("AssignmentExpression(name: \"{}\", value: {})", name, value.get());
+    }
+};

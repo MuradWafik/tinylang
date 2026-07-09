@@ -111,7 +111,8 @@ struct Token {
         return type == TokenType::BoolType
         || type == TokenType::IntType
         || type == TokenType::FloatType
-        || type == TokenType::StringType;
+        || type == TokenType::StringType
+        || type == TokenType::Void;
     }
 };
 

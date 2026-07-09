@@ -50,6 +50,7 @@ private:
     *return left;
      */
     // expressions sorted from lowest to highest priority so each one calls on the one below it
+    ExpectedExpressionPtr ParseAssignment();
     ExpectedExpressionPtr ParseLogicalOr();
     ExpectedExpressionPtr ParseLogicalAnd();
     ExpectedExpressionPtr ParseEquality();
@@ -62,10 +63,13 @@ private:
     //TODO: Most have the same logic refactor, (potentially a dictionary with the tokens to match and next level)
 
 
+
     ExpectedStatementPtr ParseFunctionDeclaration();
     Expected<std::vector<Parameter>> ParseParameters();
     ExpectedPtr<VariableDeclaration> ParseVariableDeclaration();
     ExpectedPtr<BodyStatement> ParseBodyStatement();
     ExpectedPtr<IfStatement> ParseIfStatement();
+    ExpectedPtr<WhileStatement> ParseWhileStatement();
+    ExpectedPtr<ReturnStatement> ParseReturnStatement();
 
 };

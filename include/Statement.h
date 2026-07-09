@@ -42,6 +42,11 @@ struct ReturnStatement : Statement
     {
         return std::format("ReturnStatement(value: {})", value ? value->GetTypeString() : "void");
     }
+
+    [[nodiscard]] bool IsVoidReturn() const { return value == nullptr; }
+
+    explicit ReturnStatement(std::unique_ptr<Expression> value) : value{std::move(value)}
+    {}
 };
 
 struct BodyStatement : Statement
@@ -74,6 +79,10 @@ struct WhileStatement : Statement
     {
         return std::format("WhileStatement(condition: {}, body: {})", condition.get(), body.get());
     }
+
+    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body) :
+        condition{std::move(condition)}, body{std::move(body)}
+    {}
 };
 
 struct IfStatement : Statement

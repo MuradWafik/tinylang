@@ -22,6 +22,6 @@ fn Main(args: String) -> int
         x = x - 1;
     }
 
-    var errorString: String = "dsadsa"
+    var errorString: String = "dsadsa";
     return 0;
 }

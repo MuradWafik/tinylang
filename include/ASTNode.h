@@ -11,7 +11,6 @@ struct ASTNode
 };
 
 
-
 // 1. Formatter for raw references (e.g., *node)
 template <>
 struct std::formatter<ASTNode> : std::formatter<std::string> {

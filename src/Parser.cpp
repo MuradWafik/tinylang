@@ -9,7 +9,7 @@
 const Token& Parser::Consume()
 {
     assert(!IsAtEnd());
-    auto& cur = Peek();
+    const auto& cur = Peek();
     ++index;
     return cur;
 }
@@ -32,7 +32,7 @@ const Token* Parser::TryPeekNext() const
 
 bool Parser::IsAtEnd() const
 {
-    return index >= tokens.size();
+    return index >= tokens.size() || Peek().type == TokenType::EndOfFile;
 }
 
 bool Parser::Match(const TokenType target)
@@ -90,10 +90,11 @@ ExpectedNodePtr Parser::ParseStatement()
     {
         case TokenType::Var: return ParseVariableDeclaration();
         case TokenType::Fn: return ParseFunctionDeclaration();
-            // case TokenType::Return: return ParseReturnStatement();
-
+        case TokenType::Return: return ParseReturnStatement();
+        case TokenType::While: return ParseWhileStatement();
         case TokenType::If: return ParseIfStatement();
         case TokenType::LeftBrace: return ParseBodyStatement();
+        case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
 }
@@ -172,9 +173,41 @@ ExpectedNodePtr Parser::ParseExpressionStatement()
 
 ExpectedExpressionPtr Parser::ParseExpression()
 {
-    return ParseLogicalOr();
+    return ParseAssignment();
 }
 
+ExpectedExpressionPtr Parser::ParseAssignment()
+{
+    ExpectedExpressionPtr left = ParseLogicalOr();
+    if(!left)
+    {
+        return std::unexpected(left.error());
+    }
+
+    if(Match(TokenType::Assign))
+    {
+        Token op = tokens[index - 1]; // same structure for all the following functions, cache the token of it
+        // The left-hand side of an assignment must be a valid identifier
+        // something like 10 = 9 should not be allowed
+        auto* identifier_expr = dynamic_cast<IdentifierExpression*>(left.value().get());
+        if (!identifier_expr)
+        {
+            return std::unexpected(
+                std::format("Invalid assignment target at {}", op.source_location)
+            );
+        }
+        std::string var_name = identifier_expr->name;
+
+        // its a right associative operator, so right must be recursive, not down the chain
+        auto right = ParseAssignment();
+        if (!right)
+        {
+            return std::unexpected(right.error());
+        }
+        return std::make_unique<AssignmentExpression>(std::move(var_name), std::move(right.value()));
+    }
+    return left;
+}
 
 ExpectedExpressionPtr Parser::ParseLogicalOr()
 {
@@ -578,4 +611,72 @@ ExpectedPtr<IfStatement> Parser::ParseIfStatement()
     }
 
     return std::make_unique<IfStatement>(std::move(condition.value()), std::move(body.value()));
+}
+
+ExpectedPtr<WhileStatement> Parser::ParseWhileStatement()
+{
+    const std::string_view error_message = "Error parsing while statement";
+    if(auto while_keyword = Expect(TokenType::While, error_message);
+       !while_keyword)
+    {
+        return std::unexpected(while_keyword.error());
+    }
+
+    if(auto left_paren = Expect(TokenType::LeftParen, error_message);
+        !left_paren)
+    {
+        return std::unexpected(left_paren.error());
+    }
+
+    auto condition = ParseExpression();
+    if(!condition)
+    {
+        return std::unexpected(
+            std::format("Error parsing condition of while statement. {}", condition.error())
+        );
+    }
+
+    if(auto right_paren = Expect(TokenType::RightParen, error_message);
+        !right_paren)
+    {
+        return std::unexpected(right_paren.error());
+    }
+
+    auto body = ParseBodyStatement();
+    if(!body)
+    {
+        return std::unexpected(
+            std::format("Error parsing body of while statement. {}", body.error())
+        );
+    }
+
+    return std::make_unique<WhileStatement>(std::move(condition.value()), std::move(body.value()));
+}
+
+ExpectedPtr<ReturnStatement> Parser::ParseReturnStatement()
+{
+    const std::string_view error_msg = "Error parsing return statement";
+    if(auto return_keyword = Expect(TokenType::Return, error_msg);
+        !return_keyword)
+    {
+        return std::unexpected(return_keyword.error());
+    }
+
+    if(Match(TokenType::Semicolon))
+    {
+        return std::make_unique<ReturnStatement>(nullptr);
+    }
+
+    auto return_expression = ParseExpression();
+    if(!return_expression)
+    {
+        return std::unexpected(std::format("{}, {}", error_msg, return_expression.error()));
+    }
+
+    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg);
+        !semi_colon)
+    {
+        return std::unexpected(semi_colon.error());
+    }
+    return std::make_unique<ReturnStatement>(std::move(return_expression.value()));
 }
