@@ -11,8 +11,6 @@ public:
 
     // Checks if this type can be assigned to another type
     [[nodiscard]] virtual bool IsAssignableTo(const Type* other) const = 0;
-    [[nodiscard]] virtual const Type* GetBinaryOperatorResult(const Token& op, const Type* right_type) const { return nullptr; }
-    [[nodiscard]] virtual const Type* GetUnaryOperatorResult(const Token& op) const { return nullptr; }
 };
 
 
@@ -34,8 +32,6 @@ public:
         return this == other;
     }
     [[nodiscard]] bool IsIntegral() const;
-    const Type* GetBinaryOperatorResult(const Token& op, const Type* right_type) const override;
-    const Type* GetUnaryOperatorResult(const Token& op) const override;
     PrimitiveType(const PrimitiveKind k, std::string n) : kind(k), name(std::move(n)) {}
 
     // Singletons for primitives during semantic analysis
