@@ -110,14 +110,11 @@ struct Token {
     };
     static std::string TypeToString(TokenType token_type);
 
-    [[nodiscard]] bool IsTypeName() const
-    {
-        return type == TokenType::BoolType
-        || type == TokenType::IntType
-        || type == TokenType::FloatType
-        || type == TokenType::StringType
-        || type == TokenType::Void;
-    }
+    [[nodiscard]] bool IsPrimitiveTypeName() const;
+    [[nodiscard]] bool IsArithmeticOperator() const;
+    [[nodiscard]] bool IsComparisonOperator() const;
+    [[nodiscard]] bool IsLogicalOperator() const;
+    [[nodiscard]] bool IsEqualityOperator() const;
 };
 
 template <>

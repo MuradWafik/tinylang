@@ -125,7 +125,7 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
     }
 
     const auto& type_name_token = Peek();
-    if(!type_name_token.IsTypeName())
+    if(!type_name_token.IsPrimitiveTypeName())
     {
         return std::unexpected(
             std::format("Expected typename for variable declaration got '{}'. {}'", type_name_token.type, type_name_token.source_location));
@@ -477,7 +477,7 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
     if(!arrow) return std::unexpected(arrow.error());
 
     const Token& return_type = Peek();
-    if(!return_type.IsTypeName())
+    if(!return_type.IsPrimitiveTypeName())
     {
         return std::unexpected(
             std::format("Expected type name after '->', got '{}' at {}",
@@ -528,7 +528,7 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
         if(!colon) return std::unexpected(colon.error());
 
         const Token& type_name = Peek();
-        if(!type_name.IsTypeName())
+        if(!type_name.IsPrimitiveTypeName())
         {
             return std::unexpected(
                 std::format("Expected type name for parameter '{}', got '{}' at {}",

@@ -1,14 +1,18 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <Token.h>
 
 class Type {
 public:
     virtual ~Type() = default;
-    // Returns a string representation of the type (e.g., "int", "Point", "int[]")
+    // Returns a string representation of the type (e.g., "int", "Point")
     [[nodiscard]] virtual std::string GetName() const = 0;
+
     // Checks if this type can be assigned to another type
-    virtual bool IsAssignableTo(const Type* other) const = 0;
+    [[nodiscard]] virtual bool IsAssignableTo(const Type* other) const = 0;
+    [[nodiscard]] virtual const Type* GetBinaryOperatorResult(const Token& op, const Type* right_type) const { return nullptr; }
+    [[nodiscard]] virtual const Type* GetUnaryOperatorResult(const Token& op) const { return nullptr; }
 };
 
 
@@ -29,7 +33,9 @@ public:
         // A primitive is assignable if the other type is the exact same primitive instance
         return this == other;
     }
-
+    [[nodiscard]] bool IsIntegral() const;
+    const Type* GetBinaryOperatorResult(const Token& op, const Type* right_type) const override;
+    const Type* GetUnaryOperatorResult(const Token& op) const override;
     PrimitiveType(const PrimitiveKind k, std::string n) : kind(k), name(std::move(n)) {}
 
     // Singletons for primitives during semantic analysis

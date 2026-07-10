@@ -53,8 +53,7 @@ int main(int argc, char** argv)
     }
 
     SemanticAnalyzer semantic_analyzer{};
-    auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value());
-    if(!semantic_analysis_result)
+    if(auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value()); !semantic_analysis_result)
     {
         std::println(std::cerr, "Error in semantic analysis: {}", semantic_analysis_result.error());
     }

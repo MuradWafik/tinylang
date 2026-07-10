@@ -11,7 +11,7 @@
 // According to AI, something like foo(10) is *usually* an expression
 struct Expression : ASTNode
 {
-    std::unique_ptr<Type> type_info = nullptr;
+    const Type* type_info = nullptr; // reference to the one once semantic analysis occurs
 };
 
 struct IntegerLiteral final : Expression

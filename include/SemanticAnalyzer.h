@@ -8,6 +8,44 @@
 
 #include "ASTNode.h"
 #include "Statement.h"
+#include "Token.h"
+#include "Type.h"
+
+struct OperatorSignature {
+    TokenType op;
+    const Type* left;
+    const Type* right;
+
+    bool operator==(const OperatorSignature& other) const {
+        return op == other.op && left == other.left && right == other.right;
+    }
+};
+
+struct OperatorSignatureHash {
+    size_t operator()(const OperatorSignature& sig) const {
+        const size_t h1 = std::hash<std::underlying_type_t<TokenType>>{}(static_cast<int>(sig.op));
+        const size_t h2 = std::hash<const Type*>{}(sig.left);
+        const size_t h3 = std::hash<const Type*>{}(sig.right);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
+
+
+struct UnaryOperatorSignature {
+    TokenType op;
+    const Type* operand;
+};
+
+
+struct UnaryOperatorSignatureHash {
+    size_t operator()(const UnaryOperatorSignature& sig) const {
+        const size_t h1 = std::hash<int>{}(static_cast<std::underlying_type_t<TokenType>>(sig.op));
+        const size_t h2 = std::hash<const Type*>{}(sig.operand);
+        return h1 ^ (h2 << 1);
+    }
+};
+
+
 
 struct Symbol {
     std::string name;
@@ -63,8 +101,33 @@ public:
     std::expected<void, std::string> Analyze(std::vector<std::unique_ptr<ASTNode>>& program);
 private:
     SymbolTable symbol_table{};
+    size_t loop_depth{0};
+    std::unordered_map<OperatorSignature, const Type*, OperatorSignatureHash> binary_operators;
+    std::unordered_map<UnaryOperatorSignature, const Type*, UnaryOperatorSignatureHash> unary_operators;
 
-    std::expected<std::string, std::string> AnalyzeNode(ASTNode* node);
-    std::expected<std::string, std::string> AnalyzeVariableDeclaration(VariableDeclaration* variable_declaration);
+
+    std::expected<void, std::string> AnalyzeNode(ASTNode* node);
+    std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
+    std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
+
+    std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);
+    std::expected<void, std::string> AnalyzeIfStatement(const IfStatement* if_statement);
+    std::expected<void, std::string> AnalyzeWhileStatement(const WhileStatement* while_statement);
+
+    std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);
+    std::expected<const Type*, std::string> AnalyzeUnaryExpression(UnaryExpression* unary_expression);
+
+    void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
+    const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
+
+    void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);
+    const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
+
+    static std::unexpected<std::string> Return(const std::string_view error)
+    {
+        return std::unexpected(std::format("Error in semantic analysis: {}", error));
+    }
+
+    void InitializeDefaults();
 
 };

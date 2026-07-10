@@ -63,3 +63,61 @@ std::string Token::TypeToString(const TokenType token_type)
     }
     return "unknown token";
 }
+
+bool Token::IsPrimitiveTypeName() const {
+    switch (type)
+    {
+        case TokenType::BoolType:
+        case TokenType::IntType:
+        case TokenType::FloatType:
+        case TokenType::StringType:
+        case TokenType::Void:
+            return true;
+        default: return false;
+    }
+}
+
+bool Token::IsArithmeticOperator() const {
+    switch (type)
+    {
+        case TokenType::Plus:
+        case TokenType::Minus:
+        case TokenType::Star:
+        case TokenType::Slash:
+            return true;
+        default: return false;
+    }
+}
+
+bool Token::IsComparisonOperator() const {
+    switch(type)
+    {
+        case TokenType::Less:
+        case TokenType::Greater:
+        case TokenType::GreaterEqual:
+        case TokenType::LessEqual:
+            return true;
+        default: return false;
+    }
+}
+
+bool Token::IsLogicalOperator() const {
+    switch(type)
+    {
+        case TokenType::AndAnd:
+        case TokenType::OrOr:
+            return true;
+        default: return false;
+    }
+}
+
+bool Token::IsEqualityOperator() const
+{
+    switch(type)
+    {
+        case TokenType::Equal:
+        case TokenType::NotEqual:
+            return true;
+        default: return false;
+    }
+}
