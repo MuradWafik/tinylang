@@ -24,6 +24,18 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(std::vector<std::uniq
     return {};
 }
 
+std::expected<void, std::string> SemanticAnalyzer::Analyze(ASTNode* node)
+{
+    // Initialize global scope
+    symbol_table.PushScope();
+    InitializeDefaults();
+
+    auto result = AnalyzeNode(node);
+
+    symbol_table.PopScope();
+    return result;
+}
+
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeNode(ASTNode* node)
 {
@@ -34,6 +46,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNode(ASTNode* node)
     }
     if(auto* expr = dynamic_cast<Expression*>(node))
     {
+        // expressions return an expected type for their recursive chain, can just be ignored here
         if (auto res = AnalyzeExpression(expr); !res) return std::unexpected(res.error());
         return {};
     }
@@ -41,20 +54,27 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNode(ASTNode* node)
 
 }
 
-std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* stmt) {
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* stmt)
+{
     if(const auto* var_decl = dynamic_cast<VariableDeclaration*>(stmt)) return AnalyzeVariableDeclaration(var_decl);
     if(const auto* if_stmt = dynamic_cast<IfStatement*>(stmt)) return AnalyzeIfStatement(if_stmt);
     if(const auto* while_stmt = dynamic_cast<WhileStatement*>(stmt)) return AnalyzeWhileStatement(while_stmt);
+    if(const auto* fn_declaration = dynamic_cast<FunctionDeclaration*>(stmt)) return AnalyzeFunctionDeclaration(fn_declaration);
+    if(const auto* break_stmt = dynamic_cast<BreakStatement*>(stmt)) return AnalyzeBreakStatement(break_stmt);
+    if(const auto* continue_stmt = dynamic_cast<ContinueStatement*>(stmt)) return AnalyzeContinueStatement(continue_stmt);
+    if(const auto* return_stmt = dynamic_cast<ReturnStatement*>(stmt)) return AnalyzeReturnStatement(return_stmt);
+    if(const auto* body_stmt = dynamic_cast<BodyStatement*>(stmt)) return AnalyzeBodyStatement(body_stmt);
 
     return std::unexpected("Unknown statement type");
 }
 
-std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expression* expr) {
-    if(auto* binary_expr = dynamic_cast<BinaryExpression*>(expr)) return AnalyzeBinaryExpression(binary_expr);
-    if(auto* id_expr = dynamic_cast<IdentifierExpression*>(expr)) {
-        // return AnalyzeIdentifierExpression(id_expr);
-    }
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expression* expr)
+{
     if(auto* unary_expr = dynamic_cast<UnaryExpression*>(expr)) return AnalyzeUnaryExpression(unary_expr);
+    if(auto* binary_expr = dynamic_cast<BinaryExpression*>(expr)) return AnalyzeBinaryExpression(binary_expr);
+    if(auto* id_expr = dynamic_cast<IdentifierExpression*>(expr)) return AnalyzeIdentifierExpression(id_expr);
+    if(auto* assign_expr = dynamic_cast<AssignmentExpression*>(expr)) return AnalyzeAssignmentExpression(assign_expr);
+    if(auto* call_expr = dynamic_cast<CallExpression*>(expr)) return AnalyzeCallExpression(call_expr);
     if(auto* bool_node = dynamic_cast<BoolLiteral*>(expr))
     {
         bool_node->type_info = PrimitiveType::Bool.get();
@@ -87,7 +107,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
         return std::unexpected(std::format("Unknown type name {}", variable_declaration->type));
     }
 
-    if(symbol_table.LookupVariable(variable_declaration->name))
+    if(symbol_table.IsDeclaredInCurrentScope(variable_declaration->name))
     {
         return std::unexpected(std::format("Redefinition of variable {}", variable_declaration->name));
     }
@@ -104,6 +124,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
             std::format("Unable to assign {} to type {}", expression_type.value()->GetName(), type->GetName())
         );
     }
+    symbol_table.DefineVariable({variable_declaration->name, type});
     return {};
 }
 
@@ -123,6 +144,11 @@ std::optional<Symbol> SymbolTable::LookupVariable(const std::string_view name)
         }
     }
     return std::nullopt;
+}
+
+bool SymbolTable::IsDeclaredInCurrentScope(const std::string_view name) const
+{
+    return scopes.back().variables.find(name) != scopes.back().variables.end();
 }
 
 void SymbolTable::DefineType(const std::string_view name, const Type* type)
@@ -193,6 +219,120 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeWhileStatement(const W
     return {};
 }
 
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
+    const FunctionDeclaration* function_declaration)
+{
+    // cache what the return type was before in case its nested
+    const auto* outer_return = current_function_return_type;
+
+    if(symbol_table.IsDeclaredInCurrentScope(function_declaration->name))
+    {
+        return Return(std::format("Redefinition of variable/function '{}'", function_declaration->name));
+    }
+
+    const auto* return_type = symbol_table.LookupType(function_declaration->return_type);
+    if(!return_type)
+    {
+        return Return(std::format("Unknown return type '{}'", function_declaration->return_type));
+    }
+
+    std::vector<const Type*> parameter_types;
+    for(const auto& [name, type_name]: function_declaration->parameters)
+    {
+        auto* type = symbol_table.LookupType(type_name);
+        if(!type)
+        {
+            return Return(std::format("Unknown type '{}' for function parameter '{}'", type_name, name));
+        }
+        parameter_types.push_back(type);
+    }
+
+    auto func_type = std::make_unique<FunctionType>(parameter_types, return_type);
+
+    symbol_table.DefineType(func_type->GetName(), func_type.get());
+    symbol_table.DefineVariable({function_declaration->name, func_type.get()});
+
+    // once in the body those variables are in the scope
+    symbol_table.PushScope();
+    for(const auto& [param_name, param_type_name]: function_declaration->parameters)
+    {
+        // garunteed to exist based on earlier check
+        const auto* param_type = symbol_table.LookupType(param_type_name);
+        symbol_table.DefineVariable({param_name, param_type});
+    }
+
+    current_function_return_type = return_type;
+
+    if(auto body = AnalyzeStatement(function_declaration->body.get()); !body)
+    {
+        return std::unexpected(body.error());
+    }
+    symbol_table.PopScope();
+
+    current_function_return_type = outer_return; // return to its previous value (even if it was null)
+    allocated_types.push_back(std::move(func_type));
+
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeBreakStatement(const BreakStatement* break_statement)
+{
+    if(loop_depth <= 0)
+    {
+        return Return("Breaking outside of a loop");
+    }
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeContinueStatement(const ContinueStatement* continue_statement)
+{
+    if(loop_depth <= 0)
+    {
+        return Return("Continuing outside of a loop");
+    }
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeReturnStatement(const ReturnStatement* return_statement)
+{
+    if(!current_function_return_type)
+    {
+        return Return("Return statement outside of function body");
+    }
+
+    auto return_value = AnalyzeExpression(return_statement->value.get());
+    if(!return_value)
+    {
+        return Return(std::format("Unable to parse return expression, {}", return_value.error()));
+    }
+
+    if(!return_value.value()->IsAssignableTo(current_function_return_type))
+    {
+        return Return(
+            std::format("Unable to assign return type '{}' to function return type '{}'",
+                return_value.value()->GetName(), current_function_return_type->GetName())
+        );
+    }
+
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeBodyStatement(const BodyStatement* body_statement)
+{
+    symbol_table.PushScope();
+    for(const auto& statement: body_statement->statements)
+    {
+        if (auto result = AnalyzeNode(statement.get()); !result)
+        {
+            symbol_table.PopScope();
+            return std::unexpected(result.error());
+        }
+    }
+    symbol_table.PopScope();
+    return {};
+}
+
+
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeBinaryExpression(BinaryExpression* binary_expression)
 {
     const auto left = AnalyzeExpression(binary_expression->left.get());
@@ -245,6 +385,82 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeUnaryExpression
     }
     unary_expression->type_info = return_type;
     return return_type;
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpression(
+    IdentifierExpression* identifier_expression)
+{
+    const auto& identifier = symbol_table.LookupVariable(identifier_expression->name);
+    if(!identifier)
+    {
+        return std::unexpected(std::format("Unknown symbol: {}", identifier_expression->name));
+    }
+    identifier_expression->type_info = identifier->type;
+    return identifier->type;
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpression(
+    AssignmentExpression* assignment_expression)
+{
+    auto lhs = symbol_table.LookupVariable(assignment_expression->name);
+    if(!lhs)
+    {
+        return Return(std::format("Use of undeclared identifier '{}'", assignment_expression->name));
+    }
+
+    auto rhs = AnalyzeExpression(assignment_expression->value.get());
+    if(!rhs)
+    {
+        return Return(std::format("Unable to parse right hand side of assignment, {}", rhs.error()));
+    }
+
+    if(!rhs.value()->IsAssignableTo(lhs->type))
+    {
+        return Return(std::format("Unable to assign type '{}' to '{}'", rhs.value()->GetName(), lhs->type->GetName()));
+    }
+
+    return PrimitiveType::Void.get();
+    // According to AI, best to NOT then return the value and instead return void, disallowing chaining `x = y = 10;`
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(CallExpression* call_expression)
+{
+    const auto func = symbol_table.LookupVariable(call_expression->function_name);
+    if(!func)
+    {
+        return Return(std::format("Unknown function '{}'", call_expression->function_name));
+    }
+
+
+    const auto* func_type = dynamic_cast<const FunctionType*>(func->type);
+    if(!func_type)
+    {
+        return Return(std::format("Calling a non-function '{}'", func->name));
+    }
+
+    if (func_type->GetParameters().size() != call_expression->arguments.size()) {
+        return Return(std::format("Argument count mismatch for '{}': expected {}, got {}",
+            call_expression->function_name, func_type->GetParameters().size(), call_expression->arguments.size()));
+    }
+
+
+    for (auto [param, arg] : std::views::zip(func_type->GetParameters(), call_expression->arguments))
+    {
+        auto arg_type = AnalyzeExpression(arg.get());
+        if(!arg_type)
+        {
+            return Return(std::format("Error parsing function parameter expression, {}", arg_type.error()));
+        }
+        if(!arg_type.value()->IsAssignableTo(param))
+        {
+            return Return(
+                std::format("Error calling function '{}', Type '{}' is not assignable to '{}'",
+                    call_expression->function_name, arg_type.value()->GetName(), param->GetName()));
+        }
+    }
+
+    call_expression->type_info = func_type->GetReturnType();
+    return func_type->GetReturnType();
 }
 
 void SemanticAnalyzer::RegisterBinaryOperator(const TokenType op, const Type* left, const Type* right, const Type* result)

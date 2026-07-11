@@ -13,7 +13,6 @@ int main(int argc, char** argv)
         std::println(std::cerr, "No File Path provided");
     }
 
-
     auto FileOpenResult = FileReader::Read(argv[1]);
     if(!FileOpenResult.has_value())
     {
@@ -22,7 +21,6 @@ int main(int argc, char** argv)
 
     Lexer lexer{};
     auto LexResult = lexer.Lex(FileOpenResult.value());
-
     if(!LexResult)
     {
         std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);

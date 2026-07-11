@@ -477,6 +477,8 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
     if(!arrow) return std::unexpected(arrow.error());
 
     const Token& return_type = Peek();
+
+    // FIXME: allow for other types
     if(!return_type.IsPrimitiveTypeName())
     {
         return std::unexpected(

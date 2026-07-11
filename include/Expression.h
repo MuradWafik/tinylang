@@ -44,12 +44,12 @@ struct BoolLiteral final : Expression
 
 struct BinaryExpression final : Expression
 {
-    const Token& operator_token;
+    Token operator_token;
     std::unique_ptr<Expression> left;
     std::unique_ptr<Expression> right;
 
-    BinaryExpression(const Token& token, std::unique_ptr<Expression> left_node, std::unique_ptr<Expression> right_node)
-        : operator_token(token),
+    BinaryExpression(Token token, std::unique_ptr<Expression> left_node, std::unique_ptr<Expression> right_node)
+        : operator_token(std::move(token)),
           left(std::move(left_node)),
           right(std::move(right_node))
     {}
@@ -61,11 +61,11 @@ struct BinaryExpression final : Expression
 
 struct UnaryExpression final : Expression
 {
-    const Token& operator_token;
+    Token operator_token;
     std::unique_ptr<Expression> right;
 
-    UnaryExpression(const Token& token, std::unique_ptr<Expression> right_node)
-        : operator_token(token),
+    UnaryExpression(Token token, std::unique_ptr<Expression> right_node)
+        : operator_token(std::move(token)),
           right(std::move(right_node))
     {}
 

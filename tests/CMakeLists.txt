@@ -2,6 +2,7 @@ add_executable(
         tinylangTests
         LexerTests.cpp
         ParserTests.cpp
+        SemanticAnalyzerTests.cpp
 )
 
 target_link_libraries(

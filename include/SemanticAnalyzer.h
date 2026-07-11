@@ -34,6 +34,10 @@ struct OperatorSignatureHash {
 struct UnaryOperatorSignature {
     TokenType op;
     const Type* operand;
+
+    bool operator==(const UnaryOperatorSignature& other) const {
+        return op == other.op && operand == other.operand;
+    }
 };
 
 
@@ -85,6 +89,7 @@ public:
     // Variable API
     void DefineVariable(const Symbol& symbol);
     std::optional<Symbol> LookupVariable(std::string_view name);
+    [[nodiscard]] bool IsDeclaredInCurrentScope(std::string_view name) const;
 
     // Type API
     void DefineType(std::string_view name, const Type* type);
@@ -99,11 +104,19 @@ private:
 class SemanticAnalyzer {
 public:
     std::expected<void, std::string> Analyze(std::vector<std::unique_ptr<ASTNode>>& program);
+    std::expected<void, std::string> Analyze(ASTNode* node);
 private:
     SymbolTable symbol_table{};
     size_t loop_depth{0};
     std::unordered_map<OperatorSignature, const Type*, OperatorSignatureHash> binary_operators;
     std::unordered_map<UnaryOperatorSignature, const Type*, UnaryOperatorSignatureHash> unary_operators;
+
+    // Has to take ownership of the types since they must be dynamically allocated for dynamic dispatch
+    std::vector<std::unique_ptr<Type>> allocated_types;
+
+    const Type* current_function_return_type{nullptr}; // used to track if the return statement type matches
+    // as return statements have no information of their functions
+
 
 
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
@@ -113,9 +126,18 @@ private:
     std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);
     std::expected<void, std::string> AnalyzeIfStatement(const IfStatement* if_statement);
     std::expected<void, std::string> AnalyzeWhileStatement(const WhileStatement* while_statement);
+    std::expected<void, std::string> AnalyzeFunctionDeclaration(const FunctionDeclaration* function_declaration);
+    std::expected<void, std::string> AnalyzeBreakStatement(const BreakStatement* break_statement);
+    std::expected<void, std::string> AnalyzeContinueStatement(const ContinueStatement* continue_statement);
+    std::expected<void, std::string> AnalyzeReturnStatement(const ReturnStatement* return_statement);
+    std::expected<void, std::string> AnalyzeBodyStatement(const BodyStatement* body_statement);
+
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);
     std::expected<const Type*, std::string> AnalyzeUnaryExpression(UnaryExpression* unary_expression);
+    std::expected<const Type*, std::string> AnalyzeIdentifierExpression(IdentifierExpression* identifier_expression);
+    std::expected<const Type*, std::string> AnalyzeAssignmentExpression(AssignmentExpression* assignment_expression);
+    std::expected<const Type*, std::string> AnalyzeCallExpression(CallExpression* call_expression);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;

@@ -2,8 +2,10 @@
 #include <memory>
 #include <string>
 #include <Token.h>
+#include <vector>
 
-class Type {
+class Type
+{
 public:
     virtual ~Type() = default;
     // Returns a string representation of the type (e.g., "int", "Point")
@@ -14,7 +16,8 @@ public:
 };
 
 
-enum class PrimitiveKind {
+enum class PrimitiveKind
+{
     Int,
     Float,
     Bool,
@@ -22,7 +25,8 @@ enum class PrimitiveKind {
     Void
 };
 
-class PrimitiveType final : public Type {
+class PrimitiveType final : public Type
+{
 public:
     [[nodiscard]] std::string GetName() const override { return name; }
     [[nodiscard]] PrimitiveKind GetKind() const { return kind; }
@@ -54,3 +58,21 @@ inline const std::unique_ptr<PrimitiveType> PrimitiveType::Void = std::make_uniq
 
 
 // TODO: Classes for ArrayType and/or StructType depending on roadmap
+
+class FunctionType : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override;
+    [[nodiscard]] const Type* GetReturnType() const { return return_type; }
+    [[nodiscard]] std::vector<const Type*> GetParameters() const { return arguments; }
+    bool IsAssignableTo(const Type* other) const override;
+
+    FunctionType(std::vector<const Type*> arguments, const Type* return_type) :
+        arguments{std::move(arguments)},
+        return_type{return_type}
+    { }
+
+private:
+    std::vector<const Type*> arguments;
+    const Type* return_type{nullptr};
+};
