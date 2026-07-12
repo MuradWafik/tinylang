@@ -8,6 +8,7 @@
 
 #include "ASTNode.h"
 #include "Statement.h"
+#include "StringHash.h"
 #include "Token.h"
 #include "Type.h"
 
@@ -56,18 +57,6 @@ struct Symbol {
     const Type* type; // non-owning
 };
 
-struct StringHash {
-    using is_transparent = void;
-    size_t operator()(std::string_view sv) const {
-        return std::hash<std::string_view>{}(sv);
-    }
-    size_t operator()(const std::string& s) const {
-        return std::hash<std::string>{}(s);
-    }
-    size_t operator()(const char* s) const {
-        return std::hash<std::string_view>{}(s);
-    }
-};
 
 struct Scope {
     std::unordered_map<std::string, Symbol, StringHash, std::equal_to<>> variables;
@@ -105,6 +94,9 @@ class SemanticAnalyzer {
 public:
     std::expected<void, std::string> Analyze(std::vector<std::unique_ptr<ASTNode>>& program);
     std::expected<void, std::string> Analyze(ASTNode* node);
+    const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
+    const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
+
 private:
     SymbolTable symbol_table{};
     size_t loop_depth{0};
@@ -116,7 +108,6 @@ private:
 
     const Type* current_function_return_type{nullptr}; // used to track if the return statement type matches
     // as return statements have no information of their functions
-
 
 
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
@@ -140,10 +131,7 @@ private:
     std::expected<const Type*, std::string> AnalyzeCallExpression(CallExpression* call_expression);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
-    const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
-
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);
-    const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
 
     static std::unexpected<std::string> Return(const std::string_view error)
     {

@@ -5,6 +5,7 @@
 #include "Lexer.h"
 #include "Parser.h"
 #include "SemanticAnalyzer.h"
+#include "TreeWalkInterpreter.h"
 
 int main(int argc, char** argv)
 {
@@ -54,6 +55,15 @@ int main(int argc, char** argv)
     if(auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value()); !semantic_analysis_result)
     {
         std::println(std::cerr, "Error in semantic analysis: {}", semantic_analysis_result.error());
+    }
+
+    TreeWalkInterpreter tree_walk_interpreter{semantic_analyzer};
+
+    for(const auto node: parse_result.value())
+    {
+        if(auto* stmt = dynamic_cast<Statement*>(node.get())) tree_walk_interpreter.Execute(stmt);
+        else if(auto* expr = dynamic_cast<Expression*>(node.get())) tree_walk_interpreter.Evaluate(expr);
+
     }
 
     return 0;

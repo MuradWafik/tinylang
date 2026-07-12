@@ -10,6 +10,9 @@ add_library(tinylang_lib
         src/Parser.cpp
         src/SemanticAnalyzer.cpp
         src/Type.cpp
+        src/TreeWalkInterpreter.cpp
+        src/Environment.cpp
+        include/Environment.h
 )
 
 target_include_directories(tinylang_lib PUBLIC

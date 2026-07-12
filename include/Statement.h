@@ -11,7 +11,7 @@
 struct Statement : ASTNode
 {};
 
-struct VariableDeclaration : Statement
+struct VariableDeclaration final : Statement
 {
     std::string name;
     std::string type;
@@ -35,7 +35,7 @@ struct VariableDeclaration : Statement
     {}
 };
 
-struct ReturnStatement : Statement
+struct ReturnStatement final : Statement
 {
     std::unique_ptr<Expression> value;
     [[nodiscard]] std::string GetTypeString() const override
@@ -49,7 +49,9 @@ struct ReturnStatement : Statement
     {}
 };
 
-struct BodyStatement : Statement
+struct ReturnException { RuntimeValue value; };
+
+struct BodyStatement final : Statement
 {
     std::vector<std::unique_ptr<ASTNode>> statements;
 
@@ -71,7 +73,7 @@ struct BodyStatement : Statement
     }
 };
 
-struct WhileStatement : Statement
+struct WhileStatement final : Statement
 {
     std::unique_ptr<Expression> condition;
     std::unique_ptr<BodyStatement> body;
@@ -85,7 +87,7 @@ struct WhileStatement : Statement
     {}
 };
 
-struct IfStatement : Statement
+struct IfStatement final : Statement
 {
     std::unique_ptr<Expression> condition;
     std::unique_ptr<BodyStatement> body;
@@ -115,7 +117,7 @@ struct Parameter
     std::string type_name;
 };
 
-struct FunctionDeclaration : Statement
+struct FunctionDeclaration final : Statement
 {
     std::string name;
     std::vector<Parameter> parameters;
@@ -144,7 +146,7 @@ struct FunctionDeclaration : Statement
     }
 };
 
-struct ExpressionStatement : Statement
+struct ExpressionStatement final : Statement
 {
     std::unique_ptr<Expression> expression;
     explicit ExpressionStatement(std::unique_ptr<Expression>&& expr)
@@ -155,14 +157,14 @@ struct ExpressionStatement : Statement
     }
 };
 
-struct BreakStatement : Statement
+struct BreakStatement final : Statement
 {
     [[nodiscard]] std::string GetTypeString() const override {
         return "BreakStatement";
     }
 };
 
-struct ContinueStatement : Statement
+struct ContinueStatement final : Statement
 {
     [[nodiscard]] std::string GetTypeString() const override {
         return "ContinueStatement";
