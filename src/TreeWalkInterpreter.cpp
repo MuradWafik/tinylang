@@ -1,5 +1,7 @@
 #include "TreeWalkInterpreter.h"
 
+#include <ranges>
+
 RuntimeValue TreeWalkInterpreter::Evaluate(Expression* expr)
 {
     if(const auto* int_literal = dynamic_cast<IntegerLiteral*>(expr)) return int_literal->value;
@@ -114,15 +116,142 @@ RuntimeValue TreeWalkInterpreter::EvaluateAssignmentExpression(const AssignmentE
 
 RuntimeValue TreeWalkInterpreter::EvaluateCallExpression(const CallExpression* call_expression)
 {
-    auto function = environment.get()->Get(call_expression->function_name);
+    const auto function = environment->Get(call_expression->function_name);
     std::vector<RuntimeValue> arguments{};
     for(const auto& argument: call_expression->arguments)
     {
         arguments.push_back(Evaluate(argument.get()));
     }
-    Environment function_environment{environment.get()};
+
+    // functions have their own scope, can only reference global variables and their own
+    const auto old_env = environment;
+    const auto function_env = std::make_shared<Environment>(global_environment);
+    
+    // DEFINE ARGUMENTS IN THE NEW ENVIRONMENT!
+    const auto* func_decl = std::get<const FunctionDeclaration*>(function);
+    for (size_t i = 0; i < arguments.size(); ++i) {
+        function_env->Define(func_decl->parameters[i].name, arguments[i]);
+    }
+
+    environment = function_env;
+    Execute(func_decl->body.get());
+
+    environment = old_env;
+
+    // the return value gets set to whatever the function executed body returns, even if void
+    RuntimeValue final_return_value = return_value;
+    is_returning = false; // RESET THE FLAG!
+    
+    return final_return_value;
 
 }
+
+void TreeWalkInterpreter::Execute(Statement* statement)
+{
+    if(const auto* expression_stmt = dynamic_cast<ExpressionStatement*>(statement)) return ExecuteExpressionStatement(expression_stmt);
+    if(const auto* variable_decl = dynamic_cast<VariableDeclaration*>(statement)) return ExecuteVariableDeclaration(variable_decl);
+    if(const auto* body_stmt = dynamic_cast<BodyStatement*>(statement)) return ExecuteBodyStatement(body_stmt);
+    if(const auto* if_stmt = dynamic_cast<IfStatement*>(statement)) return ExecuteIfStatement(if_stmt);
+    if(const auto* while_stmt = dynamic_cast<WhileStatement*>(statement)) return ExecuteWhileStatement(while_stmt);
+    if(const auto* break_stmt = dynamic_cast<BreakStatement*>(statement)) return ExecuteBreakStatement(break_stmt);
+    if(const auto* continue_stmt = dynamic_cast<ContinueStatement*>(statement)) return ExecuteContinueStatement(continue_stmt);
+    if(const auto* return_stmt = dynamic_cast<ReturnStatement*>(statement)) return ExecuteReturnStatement(return_stmt);
+    if(const auto* fn_decl = dynamic_cast<FunctionDeclaration*>(statement)) return ExecuteFunctionDeclaration(fn_decl);
+}
+
+void TreeWalkInterpreter::ExecuteExpressionStatement(const ExpressionStatement* expression_statement)
+{
+     Evaluate(expression_statement->expression.get());
+}
+
+void TreeWalkInterpreter::ExecuteVariableDeclaration(const VariableDeclaration* variable_declaration)
+{
+    const auto initializer = Evaluate(variable_declaration->initializer.get());
+    environment->Define(variable_declaration->name, initializer);
+}
+
+void TreeWalkInterpreter::ExecuteBodyStatement(const BodyStatement* body_statement)
+{
+    const auto old_env = environment;
+    environment = std::make_shared<Environment>(old_env);
+
+    for(auto& node : body_statement->statements)
+    {
+
+        if(auto* stmt = dynamic_cast<Statement*>(node.get())) Execute(stmt);
+        else if(auto* expr = dynamic_cast<Expression*>(node.get())) Evaluate(expr);
+
+        if (is_breaking || is_continuing || is_returning) {
+            break; // Bubble the signal up the call stack
+        }
+    }
+    environment = old_env;
+}
+
+void TreeWalkInterpreter::ExecuteIfStatement(const IfStatement* if_statement)
+{
+    // Garunteed to be boolean from semantic analysis
+    const bool is_true = std::get<bool>(Evaluate(if_statement->condition.get()));
+
+    if(is_true)
+    {
+        return ExecuteBodyStatement(if_statement->body.get());
+    }
+
+    // Else branch will just branch through else ifs, finalising at the else
+    if(if_statement->else_branch != nullptr)
+    {
+        return Execute(if_statement->else_branch.get());
+    }
+}
+
+void TreeWalkInterpreter::ExecuteWhileStatement(const WhileStatement* while_statement)
+{
+    while (std::get<bool>(Evaluate(while_statement->condition.get()))) {
+        Execute(while_statement->body.get());
+
+        if (is_returning)
+        {
+            return;
+        }
+
+        if (is_breaking) {
+            is_breaking = false; // Reset flag, but break -- same logic in here as interpreter
+            break;
+        }
+
+        if (is_continuing) {
+            is_continuing = false; // Reset flag and continue to next iteration
+        }
+    }
+}
+
+void TreeWalkInterpreter::ExecuteBreakStatement(const BreakStatement*)
+{
+    is_breaking = true;
+}
+
+void TreeWalkInterpreter::ExecuteContinueStatement(const ContinueStatement*)
+{
+    is_continuing = true;
+}
+
+void TreeWalkInterpreter::ExecuteReturnStatement(const ReturnStatement* return_statement)
+{
+    auto val = Evaluate(return_statement->value.get());
+    is_returning = true;
+    return_value = val;
+}
+
+void TreeWalkInterpreter::ExecuteFunctionDeclaration(const FunctionDeclaration* function_declaration)
+{
+    environment->Define(function_declaration->name, function_declaration);
+}
+
+
+
+
+
 
 
 

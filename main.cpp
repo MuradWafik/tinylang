@@ -63,7 +63,6 @@ int main(int argc, char** argv)
     {
         if(auto* stmt = dynamic_cast<Statement*>(node.get())) tree_walk_interpreter.Execute(stmt);
         else if(auto* expr = dynamic_cast<Expression*>(node.get())) tree_walk_interpreter.Evaluate(expr);
-
     }
 
     return 0;

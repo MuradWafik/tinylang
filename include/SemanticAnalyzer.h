@@ -111,6 +111,9 @@ private:
 
 
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
+
+
+
     std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
     std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
 
@@ -122,6 +125,7 @@ private:
     std::expected<void, std::string> AnalyzeContinueStatement(const ContinueStatement* continue_statement);
     std::expected<void, std::string> AnalyzeReturnStatement(const ReturnStatement* return_statement);
     std::expected<void, std::string> AnalyzeBodyStatement(const BodyStatement* body_statement);
+    std::expected<void, std::string> AnalyzeExpressionStatement(const ExpressionStatement* expression_statement);
 
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);

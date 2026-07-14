@@ -3,6 +3,7 @@
 #include <numeric>
 
 #include "Expression.h"
+#include "RuntimeValue.h"
 
 // Instruction that does something
 // can be like a variable declaration,
@@ -48,8 +49,6 @@ struct ReturnStatement final : Statement
     explicit ReturnStatement(std::unique_ptr<Expression> value) : value{std::move(value)}
     {}
 };
-
-struct ReturnException { RuntimeValue value; };
 
 struct BodyStatement final : Statement
 {

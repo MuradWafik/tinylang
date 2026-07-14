@@ -64,8 +64,9 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* s
     if(const auto* continue_stmt = dynamic_cast<ContinueStatement*>(stmt)) return AnalyzeContinueStatement(continue_stmt);
     if(const auto* return_stmt = dynamic_cast<ReturnStatement*>(stmt)) return AnalyzeReturnStatement(return_stmt);
     if(const auto* body_stmt = dynamic_cast<BodyStatement*>(stmt)) return AnalyzeBodyStatement(body_stmt);
+    if(const auto* expr_stmt = dynamic_cast<ExpressionStatement*>(stmt)) return AnalyzeExpressionStatement(expr_stmt);
 
-    return std::unexpected("Unknown statement type");
+    return std::unexpected(std::format("Unknown statement type '{}'", stmt->GetTypeString()));
 }
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expression* expr)
@@ -330,6 +331,12 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeBodyStatement(const Bo
     }
     symbol_table.PopScope();
     return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeExpressionStatement(
+        const ExpressionStatement* expression_statement)
+{
+    return Analyze(expression_statement->expression.get());
 }
 
 

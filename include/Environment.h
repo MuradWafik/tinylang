@@ -9,9 +9,10 @@
 class Environment
 {
 public:
-    explicit Environment(Environment* parent) : enclosing{parent} {}
+    explicit Environment(std::shared_ptr<Environment> parent) : enclosing{std::move(parent)} {}
     RuntimeValue Get(std::string_view name);
     void Assign(const std::string& name, const RuntimeValue& value);
+    void Define(const std::string& name, const RuntimeValue& value);
 
     std::shared_ptr<Environment> enclosing;
     // Functions should be able to reference their scope and global scope,
