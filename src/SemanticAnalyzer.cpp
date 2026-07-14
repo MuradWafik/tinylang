@@ -3,6 +3,7 @@
 #include <ranges>
 
 #include "Expression.h"
+#include "NativeFunction.h"
 #include "Statement.h"
 #include "Type.h"
 
@@ -551,5 +552,7 @@ void SemanticAnalyzer::InitializeDefaults()
     RegisterUnaryOperator(TokenType::Minus, int_t, int_t);
     RegisterUnaryOperator(TokenType::Minus, float_t, float_t);
 
+
+    NativeFunction::RegisterTypes(symbol_table);
 }
 

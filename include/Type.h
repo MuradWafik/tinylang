@@ -59,7 +59,7 @@ inline const std::unique_ptr<PrimitiveType> PrimitiveType::Void = std::make_uniq
 
 // TODO: Classes for ArrayType and/or StructType depending on roadmap
 
-class FunctionType : public Type
+class FunctionType final : public Type
 {
 public:
     [[nodiscard]] std::string GetName() const override;

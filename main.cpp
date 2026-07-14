@@ -7,17 +7,20 @@
 #include "SemanticAnalyzer.h"
 #include "TreeWalkInterpreter.h"
 
-int main(int argc, char** argv)
+
+void Run(const int argc, char** argv)
 {
     if(argc < 2)
     {
         std::println(std::cerr, "No File Path provided");
+        return;
     }
 
     auto FileOpenResult = FileReader::Read(argv[1]);
     if(!FileOpenResult.has_value())
     {
         std::println(std::cerr, "{}", FileOpenResult.error());
+        return;
     }
 
     Lexer lexer{};
@@ -26,13 +29,7 @@ int main(int argc, char** argv)
     {
         std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);
         std::println(std::cerr, "{}", LexResult.error().location);
-    }
-    else
-    {
-        for(const auto& token: LexResult.value())
-        {
-            std::println("Type: {} Value: {}", Token::TypeToString(token.type), token.lexeme);
-        }
+        return;
     }
 
     Parser parser{LexResult.value()};
@@ -41,29 +38,26 @@ int main(int argc, char** argv)
     if(!parse_result)
     {
         std::println(std::cerr, "Error Parsing: {}", parse_result.error());
-    }
-    else
-    {
-        std::println("Number of parsed tokens: {}", parse_result->size());
-        for(const auto& ast_node : parse_result.value())
-        {
-            std::println("Parsed Token: {}", ast_node.get());
-        }
+        return;
     }
 
     SemanticAnalyzer semantic_analyzer{};
     if(auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value()); !semantic_analysis_result)
     {
         std::println(std::cerr, "Error in semantic analysis: {}", semantic_analysis_result.error());
+        return;
     }
 
     TreeWalkInterpreter tree_walk_interpreter{semantic_analyzer};
-
-    for(const auto node: parse_result.value())
+    for(const auto& node: parse_result.value())
     {
         if(auto* stmt = dynamic_cast<Statement*>(node.get())) tree_walk_interpreter.Execute(stmt);
         else if(auto* expr = dynamic_cast<Expression*>(node.get())) tree_walk_interpreter.Evaluate(expr);
     }
 
+}
+int main(const int argc, char** argv)
+{
+    Run(argc, argv);
     return 0;
 }

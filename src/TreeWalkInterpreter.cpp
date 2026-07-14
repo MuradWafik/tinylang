@@ -1,7 +1,10 @@
 #include "TreeWalkInterpreter.h"
 
+#include <algorithm>
 #include <ranges>
 
+
+// NOLINTBEGIN(misc-no-recursion)
 RuntimeValue TreeWalkInterpreter::Evaluate(Expression* expr)
 {
     if(const auto* int_literal = dynamic_cast<IntegerLiteral*>(expr)) return int_literal->value;
@@ -123,20 +126,29 @@ RuntimeValue TreeWalkInterpreter::EvaluateCallExpression(const CallExpression* c
         arguments.push_back(Evaluate(argument.get()));
     }
 
-    // functions have their own scope, can only reference global variables and their own
-    const auto old_env = environment;
-    const auto function_env = std::make_shared<Environment>(global_environment);
-    
-    // DEFINE ARGUMENTS IN THE NEW ENVIRONMENT!
-    const auto* func_decl = std::get<const FunctionDeclaration*>(function);
-    for (size_t i = 0; i < arguments.size(); ++i) {
-        function_env->Define(func_decl->parameters[i].name, arguments[i]);
+
+
+    if(std::holds_alternative<std::shared_ptr<NativeFunctionWrapper>>(function))
+    {
+        const auto native_func = std::get<std::shared_ptr<NativeFunctionWrapper>>(function);
+        return_value = native_func->func(arguments);
     }
+    else
+    {
+        // functions have their own scope, can only reference global variables and their own
+        const auto old_env = environment;
+        const auto function_env = std::make_shared<Environment>(global_environment);
 
-    environment = function_env;
-    Execute(func_decl->body.get());
+        // DEFINE ARGUMENTS IN THE NEW ENVIRONMENT!
+        const auto* func_decl = std::get<const FunctionDeclaration*>(function);
+        for (size_t i = 0; i < arguments.size(); ++i) {
+            function_env->Define(func_decl->parameters[i].name, arguments[i]);
+        }
 
-    environment = old_env;
+        environment = function_env;
+        Execute(func_decl->body.get());
+        environment = old_env;
+    }
 
     // the return value gets set to whatever the function executed body returns, even if void
     RuntimeValue final_return_value = return_value;
@@ -248,10 +260,4 @@ void TreeWalkInterpreter::ExecuteFunctionDeclaration(const FunctionDeclaration* 
     environment->Define(function_declaration->name, function_declaration);
 }
 
-
-
-
-
-
-
-
+// NOLINTEND(misc-no-recursion)

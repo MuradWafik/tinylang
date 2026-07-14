@@ -13,6 +13,7 @@ add_library(tinylang_lib
         src/TreeWalkInterpreter.cpp
         src/Environment.cpp
         include/Environment.h
+        include/NativeFunction.h
 )
 
 target_include_directories(tinylang_lib PUBLIC

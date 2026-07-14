@@ -1,6 +1,1 @@
-if(true){
-
-}
-else if(false){
-
-}
+Print("Hello world");

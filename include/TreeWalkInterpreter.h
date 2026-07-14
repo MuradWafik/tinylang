@@ -4,6 +4,7 @@
 #include <variant>
 
 #include "Environment.h"
+#include "NativeFunction.h"
 #include "RuntimeValue.h"
 #include "SemanticAnalyzer.h"
 #include "Statement.h"
@@ -17,7 +18,9 @@ class TreeWalkInterpreter {
 public:
     explicit TreeWalkInterpreter(const SemanticAnalyzer& semantic_analyzer)
         : semantic_analyzer{semantic_analyzer}
-    {}
+    {
+        NativeFunction::RegisterImplementations(environment.get());
+    }
 
     void Execute(Statement* statement);
     RuntimeValue Evaluate(Expression* expr);
