@@ -2,8 +2,8 @@
 #include <memory>
 #include <numeric>
 
-#include "Expression.h"
-#include "RuntimeValue.h"
+#include "frontend/Expression.h"
+#include "interpreter/RuntimeValue.h"
 
 // Instruction that does something
 // can be like a variable declaration,
@@ -28,12 +28,13 @@ struct VariableDeclaration final : Statement
     VariableDeclaration(
         std::string name,
         std::string type,
-        std::unique_ptr<Expression> initializer
+        std::unique_ptr<Expression> initializer,
+        SourceLocation loc
         ) :
     name(std::move(name)),
     type(std::move(type)),
     initializer{std::move(initializer)}
-    {}
+    { this->source_location = loc; }
 };
 
 struct ReturnStatement final : Statement
@@ -46,8 +47,8 @@ struct ReturnStatement final : Statement
 
     [[nodiscard]] bool IsVoidReturn() const { return value == nullptr; }
 
-    explicit ReturnStatement(std::unique_ptr<Expression> value) : value{std::move(value)}
-    {}
+    explicit ReturnStatement(std::unique_ptr<Expression> value, SourceLocation loc) : value{std::move(value)}
+    { this->source_location = loc; }
 };
 
 struct BodyStatement final : Statement
@@ -70,6 +71,8 @@ struct BodyStatement final : Statement
 
         return std::format("BodyStatement([{}])", inner);
     }
+
+    explicit BodyStatement(SourceLocation loc) { this->source_location = loc; }
 };
 
 struct WhileStatement final : Statement
@@ -81,9 +84,9 @@ struct WhileStatement final : Statement
         return std::format("WhileStatement(condition: {}, body: {})", condition.get(), body.get());
     }
 
-    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body) :
+    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body, SourceLocation loc) :
         condition{std::move(condition)}, body{std::move(body)}
-    {}
+    { this->source_location = loc; }
 };
 
 struct IfStatement final : Statement
@@ -105,9 +108,10 @@ struct IfStatement final : Statement
     IfStatement(
         std::unique_ptr<Expression> condition,
         std::unique_ptr<BodyStatement> body,
-        std::unique_ptr<Statement> else_branch)
+        std::unique_ptr<Statement> else_branch,
+        SourceLocation loc)
     : condition{std::move(condition)}, body{std::move(body)}, else_branch{std::move(else_branch)}
-    {}
+    { this->source_location = loc; }
 };
 
 struct Parameter
@@ -126,12 +130,13 @@ struct FunctionDeclaration final : Statement
     FunctionDeclaration(std::string name,
                         std::vector<Parameter> params,
                         std::string ret_type,
-                        std::unique_ptr<BodyStatement> body_node)
+                        std::unique_ptr<BodyStatement> body_node,
+                        SourceLocation loc)
         : name(std::move(name)),
           parameters(std::move(params)),
           return_type(std::move(ret_type)),
           body(std::move(body_node))
-    {}
+    { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -148,8 +153,8 @@ struct FunctionDeclaration final : Statement
 struct ExpressionStatement final : Statement
 {
     std::unique_ptr<Expression> expression;
-    explicit ExpressionStatement(std::unique_ptr<Expression>&& expr)
-        : expression(std::move(expr)) {}
+    explicit ExpressionStatement(std::unique_ptr<Expression>&& expr, SourceLocation loc)
+        : expression(std::move(expr)) { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override {
         return std::format("ExpressionStatement(expr: {})", expression.get());
@@ -161,6 +166,8 @@ struct BreakStatement final : Statement
     [[nodiscard]] std::string GetTypeString() const override {
         return "BreakStatement";
     }
+
+    explicit BreakStatement(SourceLocation loc) { this->source_location = loc; }
 };
 
 struct ContinueStatement final : Statement
@@ -168,4 +175,6 @@ struct ContinueStatement final : Statement
     [[nodiscard]] std::string GetTypeString() const override {
         return "ContinueStatement";
     }
+
+    explicit ContinueStatement(SourceLocation loc) { this->source_location = loc; }
 };

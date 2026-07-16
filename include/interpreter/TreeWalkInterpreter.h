@@ -3,11 +3,11 @@
 #include <unordered_map>
 #include <variant>
 
-#include "Environment.h"
-#include "NativeFunction.h"
-#include "RuntimeValue.h"
-#include "SemanticAnalyzer.h"
-#include "Statement.h"
+#include "interpreter/Environment.h"
+#include "interpreter/NativeFunction.h"
+#include "interpreter/RuntimeValue.h"
+#include "analysis/SemanticAnalyzer.h"
+#include "frontend/Statement.h"
 
 // Used for the visitor for binary and unary operations
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };

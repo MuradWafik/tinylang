@@ -1,4 +1,4 @@
-#include "Lexer.h"
+#include "frontend/Lexer.h"
 
 #include <cassert>
 #include <cctype>

@@ -3,8 +3,8 @@
 #include <memory>
 #include <unordered_map>
 
-#include "RuntimeValue.h"
-#include "StringHash.h"
+#include "interpreter/RuntimeValue.h"
+#include "utils/StringHash.h"
 
 class Environment
 {

@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "Lexer.h"
-#include "Token.h"
+#include "frontend/Lexer.h"
+#include "frontend/Token.h"
 
 #include <catch2/catch_tostring.hpp>
 

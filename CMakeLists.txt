@@ -4,16 +4,18 @@ project(tinylang)
 set(CMAKE_CXX_STANDARD 26)
 
 add_library(tinylang_lib
-        src/Lexer.cpp
-        src/Token.cpp
-        src/FileReader.cpp
-        src/Parser.cpp
-        src/SemanticAnalyzer.cpp
-        src/Type.cpp
-        src/TreeWalkInterpreter.cpp
-        src/Environment.cpp
-        include/Environment.h
-        include/NativeFunction.h
+        src/frontend/Lexer.cpp
+        src/frontend/Token.cpp
+        src/frontend/Parser.cpp
+        src/analysis/SemanticAnalyzer.cpp
+        src/analysis/Type.cpp
+        src/interpreter/TreeWalkInterpreter.cpp
+        src/interpreter/Environment.cpp
+        src/interpreter/NativeFunction.cpp
+        src/utils/FileReader.cpp
+        src/vm/Chunk.cpp
+        src/vm/Compiler.cpp
+        src/vm/VM.cpp
 )
 
 target_include_directories(tinylang_lib PUBLIC

@@ -1,11 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
-#include "Expression.h"
-#include "Lexer.h"
-#include "Parser.h"
-#include "SemanticAnalyzer.h"
-#include "TreeWalkInterpreter.h"
+#include "frontend/Expression.h"
+#include "frontend/Lexer.h"
+#include "frontend/Parser.h"
+#include "analysis/SemanticAnalyzer.h"
+#include "interpreter/TreeWalkInterpreter.h"
 
 // Helper function to run code and extract the value of a specific variable
 static RuntimeValue RunAndGetVariable(const std::string& source, const std::string& var_name) {

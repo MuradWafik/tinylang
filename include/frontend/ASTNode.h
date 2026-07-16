@@ -4,8 +4,11 @@
 #include <format>
 #include <memory>
 
+#include "frontend/Token.h"
+
 struct ASTNode
 {
+    SourceLocation source_location{0, 0};
     virtual ~ASTNode() = default;
     [[nodiscard]] virtual std::string GetTypeString() const = 0;
 };

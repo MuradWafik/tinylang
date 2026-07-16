@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
 #include <string>
-#include <Token.h>
+#include "frontend/Token.h"
 #include <vector>
 
 class Type

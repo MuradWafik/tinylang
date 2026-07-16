@@ -1,11 +1,11 @@
-#include "SemanticAnalyzer.h"
+#include "analysis/SemanticAnalyzer.h"
 
 #include <ranges>
 
-#include "Expression.h"
-#include "NativeFunction.h"
-#include "Statement.h"
-#include "Type.h"
+#include "frontend/Expression.h"
+#include "interpreter/NativeFunction.h"
+#include "frontend/Statement.h"
+#include "analysis/Type.h"
 
 
 std::expected<void, std::string> SemanticAnalyzer::Analyze(std::vector<std::unique_ptr<ASTNode>>& program)

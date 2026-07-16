@@ -1,8 +1,6 @@
-#include "TreeWalkInterpreter.h"
+#include "interpreter/TreeWalkInterpreter.h"
 
-#include <algorithm>
 #include <ranges>
-
 
 // NOLINTBEGIN(misc-no-recursion)
 RuntimeValue TreeWalkInterpreter::Evaluate(Expression* expr)
@@ -125,8 +123,6 @@ RuntimeValue TreeWalkInterpreter::EvaluateCallExpression(const CallExpression* c
     {
         arguments.push_back(Evaluate(argument.get()));
     }
-
-
 
     if(std::holds_alternative<std::shared_ptr<NativeFunctionWrapper>>(function))
     {

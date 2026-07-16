@@ -2,9 +2,9 @@
 #include <string>
 #include <vector>
 
-#include "ASTNode.h"
-#include "Token.h"
-#include "Type.h"
+#include "frontend/ASTNode.h"
+#include "frontend/Token.h"
+#include "analysis/Type.h"
 
 // Something that has a value
 // even something like x + 5 is an expression since that yields a value
@@ -17,28 +17,28 @@ struct Expression : ASTNode
 struct IntegerLiteral final : Expression
 {
     int value;
-    explicit IntegerLiteral(const int val) : value(val) {}
+    explicit IntegerLiteral(const int val, SourceLocation loc) : value(val) { this->source_location = loc; }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("IntegerLiteral({})", value); }
 };
 
 struct FloatLiteral final : Expression
 {
     float value;
-    explicit FloatLiteral(const float val) : value(val) {}
+    explicit FloatLiteral(const float val, SourceLocation loc) : value(val) { this->source_location = loc; }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("FloatLiteral({})", value); }
 };
 
 struct StringLiteral final : Expression
 {
     std::string value;
-    explicit StringLiteral(std::string val) : value(std::move(val)) {}
+    explicit StringLiteral(std::string val, SourceLocation loc) : value(std::move(val)) { this->source_location = loc; }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("StringLiteral(\"{}\")", value); }
 };
 
 struct BoolLiteral final : Expression
 {
     bool value;
-    explicit BoolLiteral(const bool val) : value(val) {}
+    explicit BoolLiteral(const bool val, SourceLocation loc) : value(val) { this->source_location = loc; }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("BoolLiteral({})", value); }
 };
 
@@ -48,11 +48,13 @@ struct BinaryExpression final : Expression
     std::unique_ptr<Expression> left;
     std::unique_ptr<Expression> right;
 
-    BinaryExpression(Token token, std::unique_ptr<Expression> left_node, std::unique_ptr<Expression> right_node)
+    BinaryExpression(Token token, std::unique_ptr<Expression> left_node, std::unique_ptr<Expression> right_node, SourceLocation loc)
         : operator_token(std::move(token)),
           left(std::move(left_node)),
           right(std::move(right_node))
-    {}
+    {
+        this->source_location = loc;
+    }
     [[nodiscard]] std::string GetTypeString() const override
     {
         return std::format("Binary Expression, operator({}), left: {}, right: {}", operator_token.type, left.get(), right.get());
@@ -64,10 +66,12 @@ struct UnaryExpression final : Expression
     Token operator_token;
     std::unique_ptr<Expression> right;
 
-    UnaryExpression(Token token, std::unique_ptr<Expression> right_node)
+    UnaryExpression(Token token, std::unique_ptr<Expression> right_node, SourceLocation loc)
         : operator_token(std::move(token)),
           right(std::move(right_node))
-    {}
+    {
+        this->source_location = loc;
+    }
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -80,9 +84,11 @@ struct CallExpression final : Expression
     std::string function_name;
     std::vector<std::unique_ptr<Expression>> arguments;
 
-    CallExpression(std::string name, std::vector<std::unique_ptr<Expression>> args)
+    CallExpression(std::string name, std::vector<std::unique_ptr<Expression>> args, SourceLocation loc)
         : function_name(std::move(name)),
-          arguments(std::move(args)) {}
+          arguments(std::move(args)) {
+        this->source_location = loc;
+    }
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -98,7 +104,7 @@ struct CallExpression final : Expression
 struct IdentifierExpression final : Expression
 {
     std::string name;
-    explicit IdentifierExpression(std::string name) : name(std::move(name)) {}
+    explicit IdentifierExpression(std::string name, SourceLocation loc) : name(std::move(name)) { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -110,8 +116,10 @@ struct AssignmentExpression final : Expression
 {
     std::string name;
     std::unique_ptr<Expression> value;
-    AssignmentExpression(std::string name, std::unique_ptr<Expression> val)
-        : name(std::move(name)), value(std::move(val)) {}
+    AssignmentExpression(std::string name, std::unique_ptr<Expression> val, SourceLocation loc)
+        : name(std::move(name)), value(std::move(val)) {
+        this->source_location = loc;
+    }
     [[nodiscard]] std::string GetTypeString() const override
     {
         return std::format("AssignmentExpression(name: \"{}\", value: {})", name, value.get());

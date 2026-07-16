@@ -1,4 +1,4 @@
-#include "Type.h"
+#include "analysis/Type.h"
 
 bool PrimitiveType::IsIntegral() const
 {

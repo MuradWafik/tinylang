@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
-#include "Lexer.h"
-#include "Parser.h"
-#include "SemanticAnalyzer.h"
+#include "frontend/Lexer.h"
+#include "frontend/Parser.h"
+#include "analysis/SemanticAnalyzer.h"
 
 static std::expected<void, std::string> Analyze(const std::string_view source)
 {

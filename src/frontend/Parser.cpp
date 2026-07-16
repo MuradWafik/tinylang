@@ -1,9 +1,9 @@
-#include "Parser.h"
+#include "frontend/Parser.h"
 
 #include <cassert>
 #include <format>
 
-#include "Expression.h"
+#include "frontend/Expression.h"
 
 
 const Token& Parser::Consume()
@@ -103,7 +103,8 @@ ExpectedNodePtr Parser::ParseStatement()
 
 ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
 {
-    if(auto var = Expect(TokenType::Var, "Expected variable keyword"); !var)
+    auto var = Expect(TokenType::Var, "Expected variable keyword");
+    if(!var)
     {
         return std::unexpected(var.error());
     }
@@ -157,7 +158,8 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
     return std::make_unique<VariableDeclaration>(
         variable_name->lexeme,
         type_name_token.lexeme,
-        std::move(initializer_result.value()));
+        std::move(initializer_result.value()),
+        var->source_location);
 }
 
 
@@ -170,7 +172,8 @@ ExpectedNodePtr Parser::ParseExpressionStatement()
     if(!semicolon) return std::unexpected(semicolon.error());
 
     // Wrap the expression cleanly into a statement node
-    return std::make_unique<ExpressionStatement>(std::move(e.value()));
+    SourceLocation loc = e.value()->source_location;
+    return std::make_unique<ExpressionStatement>(std::move(e.value()), loc);
 }
 
 ExpectedExpressionPtr Parser::ParseExpression()
@@ -206,7 +209,7 @@ ExpectedExpressionPtr Parser::ParseAssignment()
         {
             return std::unexpected(right.error());
         }
-        return std::make_unique<AssignmentExpression>(std::move(var_name), std::move(right.value()));
+        return std::make_unique<AssignmentExpression>(std::move(var_name), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -227,7 +230,7 @@ ExpectedExpressionPtr Parser::ParseLogicalOr()
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -248,7 +251,7 @@ ExpectedExpressionPtr Parser::ParseLogicalAnd()
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -269,7 +272,7 @@ ExpectedExpressionPtr Parser::ParseEquality()
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -291,7 +294,7 @@ ExpectedExpressionPtr Parser::ParseComparison()
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -312,7 +315,7 @@ ExpectedExpressionPtr Parser::ParseAddition()
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -333,7 +336,7 @@ ExpectedExpressionPtr Parser::ParseMultiplication()
         {
             return std::unexpected(right.error());
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()));
+        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }
@@ -351,7 +354,7 @@ ExpectedExpressionPtr Parser::ParseUnary()
             return std::unexpected(right.error());
         }
 
-        return std::make_unique<UnaryExpression>(op, std::move(right.value()));
+        return std::make_unique<UnaryExpression>(op, std::move(right.value()), op.source_location);
     }
     return ParseFunctionCall();
 }
@@ -387,7 +390,7 @@ ExpectedExpressionPtr Parser::ParseFunctionCall()
             );
         }
 
-        return std::make_unique<CallExpression>(std::move(function_name.lexeme), std::move(arguments));
+        return std::make_unique<CallExpression>(std::move(function_name.lexeme), std::move(arguments), function_name.source_location);
     }
 
     return ParsePrimary();
@@ -403,34 +406,34 @@ ExpectedExpressionPtr Parser::ParsePrimary()
         case TokenType::IntLiteral:
         {
             Consume();
-            return std::make_unique<IntegerLiteral>(std::stoi(lexeme));
+            return std::make_unique<IntegerLiteral>(std::stoi(lexeme), source_location);
         }
         case TokenType::FloatLiteral:
         {
             Consume();
-            return std::make_unique<FloatLiteral>(std::stof(lexeme));
+            return std::make_unique<FloatLiteral>(std::stof(lexeme), source_location);
         }
         case TokenType::StringLiteral:
         {
             Token strToken = Consume();
-            return std::make_unique<StringLiteral>(std::move(strToken.lexeme));
+            return std::make_unique<StringLiteral>(std::move(strToken.lexeme), source_location);
         }
         case TokenType::True:
         {
             Consume();
-            return std::make_unique<BoolLiteral>(true);
+            return std::make_unique<BoolLiteral>(true, source_location);
         }
         case TokenType::False:
         {
             Consume();
-            return std::make_unique<BoolLiteral>(false);
+            return std::make_unique<BoolLiteral>(false, source_location);
         }
 
         // 2. Identifiers (Variable evaluation)
         case TokenType::Identifier:
         {
             Token idToken = Consume();
-            return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme));
+            return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme), source_location);
         }
 
         // 3. Grouped Expressions
@@ -456,6 +459,7 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
 {
     // function_declaration
     //    ::= "fn" IDENTIFIER "(" parameters? ")" ":" type block
+    SourceLocation fn_loc = Peek().source_location;
     Consume(); // fn keyword
 
     auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
@@ -500,7 +504,8 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         function_name->lexeme,
         std::move(parameters_result.value()),
         return_type.lexeme,
-        std::move(body.value())
+        std::move(body.value()),
+        fn_loc
     );
 }
 
@@ -559,7 +564,8 @@ ExpectedPtr<BodyStatement> Parser::ParseBodyStatement()
     }
     Consume();
 
-    auto body = std::make_unique<BodyStatement>();
+    SourceLocation loc = starter.source_location;
+    auto body = std::make_unique<BodyStatement>(loc);
 
     while(!IsAtEnd() && Peek().type != TokenType::RightBrace)
     {
@@ -584,8 +590,8 @@ ExpectedPtr<BodyStatement> Parser::ParseBodyStatement()
 
 ExpectedPtr<IfStatement> Parser::ParseIfStatement()
 {
-    if(const auto if_keyword = Expect(TokenType::If, "If keyword expected");
-        !if_keyword)
+    auto if_keyword = Expect(TokenType::If, "If keyword expected");
+    if(!if_keyword)
     {
         return std::unexpected(if_keyword.error());
     }
@@ -627,7 +633,8 @@ ExpectedPtr<IfStatement> Parser::ParseIfStatement()
             return std::make_unique<IfStatement>(
                 std::move(condition.value()),
                 std::move(body.value()),
-                std::move(elif_branch.value()));
+                std::move(elif_branch.value()),
+                if_keyword->source_location);
         }
         auto else_body = ParseBodyStatement();
         if(!else_body)
@@ -639,17 +646,18 @@ ExpectedPtr<IfStatement> Parser::ParseIfStatement()
         return std::make_unique<IfStatement>(
             std::move(condition.value()),
             std::move(body.value()),
-            std::move(else_body.value())
+            std::move(else_body.value()),
+            if_keyword->source_location
         );
     }
-    return std::make_unique<IfStatement>(std::move(condition.value()), std::move(body.value()), nullptr);
+    return std::make_unique<IfStatement>(std::move(condition.value()), std::move(body.value()), nullptr, if_keyword->source_location);
 }
 
 ExpectedPtr<WhileStatement> Parser::ParseWhileStatement()
 {
     constexpr std::string_view error_message = "Error parsing while statement";
-    if(auto while_keyword = Expect(TokenType::While, error_message);
-       !while_keyword)
+    auto while_keyword = Expect(TokenType::While, error_message);
+    if(!while_keyword)
     {
         return std::unexpected(while_keyword.error());
     }
@@ -682,21 +690,21 @@ ExpectedPtr<WhileStatement> Parser::ParseWhileStatement()
         );
     }
 
-    return std::make_unique<WhileStatement>(std::move(condition.value()), std::move(body.value()));
+    return std::make_unique<WhileStatement>(std::move(condition.value()), std::move(body.value()), while_keyword->source_location);
 }
 
 ExpectedPtr<ReturnStatement> Parser::ParseReturnStatement()
 {
     constexpr std::string_view error_msg = "Error parsing return statement";
-    if(auto return_keyword = Expect(TokenType::Return, error_msg);
-        !return_keyword)
+    auto return_keyword = Expect(TokenType::Return, error_msg);
+    if(!return_keyword)
     {
         return std::unexpected(return_keyword.error());
     }
 
     if(Match(TokenType::Semicolon))
     {
-        return std::make_unique<ReturnStatement>(nullptr);
+        return std::make_unique<ReturnStatement>(nullptr, return_keyword->source_location);
     }
 
     auto return_expression = ParseExpression();
@@ -710,29 +718,31 @@ ExpectedPtr<ReturnStatement> Parser::ParseReturnStatement()
     {
         return std::unexpected(semi_colon.error());
     }
-    return std::make_unique<ReturnStatement>(std::move(return_expression.value()));
+    return std::make_unique<ReturnStatement>(std::move(return_expression.value()), return_keyword->source_location);
 }
 
 ExpectedPtr<BreakStatement> Parser::ParseBreakStatement()
 {
     constexpr std::string_view error_msg = "Error parsing break statement";
-    if(auto break_keyword = Expect(TokenType::Break, error_msg); !break_keyword) {
+    auto break_keyword = Expect(TokenType::Break, error_msg);
+    if(!break_keyword) {
         return std::unexpected(break_keyword.error());
     }
     if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon) {
         return std::unexpected(semi_colon.error());
     }
-    return std::make_unique<BreakStatement>();
+    return std::make_unique<BreakStatement>(break_keyword->source_location);
 }
 
 ExpectedPtr<ContinueStatement> Parser::ParseContinueStatement()
 {
     constexpr std::string_view error_msg = "Error parsing continue statement";
-    if(auto continue_keyword = Expect(TokenType::Continue, error_msg); !continue_keyword) {
+    auto continue_keyword = Expect(TokenType::Continue, error_msg);
+    if(!continue_keyword) {
         return std::unexpected(continue_keyword.error());
     }
     if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon) {
         return std::unexpected(semi_colon.error());
     }
-    return std::make_unique<ContinueStatement>();
+    return std::make_unique<ContinueStatement>(continue_keyword->source_location);
 }

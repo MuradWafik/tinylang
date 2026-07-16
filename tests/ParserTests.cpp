@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
-#include "Lexer.h"
-#include "Parser.h"
+#include "frontend/Lexer.h"
+#include "frontend/Parser.h"
 #include <print>
 
 static std::expected<std::vector<std::unique_ptr<ASTNode>>, std::string> Parse(const std::string_view source)
