@@ -19,10 +19,17 @@ public:
 
 private:
     std::stack<RuntimeValue, std::vector<RuntimeValue>> stack;
+    std::unordered_map<std::string, RuntimeValue> globals;
     Chunk* chunk;
     uint8_t* ip;
 
     void Push(RuntimeValue value);
     RuntimeValue Pop();
+    RuntimeValue HandleAdd();
+    void DefineGlobal();
+    void GetGlobal();
+    void SetGlobal();
+
     InterpretResult Run();
+    RuntimeValue& ExtractNextConstant();
 };

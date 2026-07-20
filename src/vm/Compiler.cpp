@@ -3,13 +3,13 @@
 Chunk Compiler::Compile(const std::vector<std::unique_ptr<ASTNode>>& statements)
 {
     current_chunk = Chunk(); // Reset for a fresh compile
-
     for(const auto& node: statements)
     {
         if(const auto* stmt = dynamic_cast<Statement*>(node.get())) CompileStatement(stmt);
         else if(const auto* expr = dynamic_cast<Expression*>(node.get())) CompileExpression(expr);
     }
-    
+
+    current_chunk.Write(OpCode::OP_RETURN, current_chunk.lines[current_chunk.lines.size() - 1]); // hacky fix make it on the last line
     return std::move(current_chunk);
 }
 
@@ -42,14 +42,24 @@ void Compiler::CompileBinaryExpression(const BinaryExpression* binary_expression
     CompileExpression(binary_expression->left.get());
     CompileExpression(binary_expression->right.get());
 
-    if(binary_expression->operator_token.type == TokenType::Plus)
+    switch(const auto token_type = binary_expression->operator_token.type)
     {
-        current_chunk.Write(static_cast<uint8_t>(OpCode::OP_ADD), line);
+        case TokenType::Plus: return current_chunk.Write(static_cast<uint8_t>(OpCode::OP_ADD), line);
+        case TokenType::Minus: return current_chunk.Write(static_cast<uint8_t>(OpCode::OP_SUBTRACT), line);
+        case TokenType::Star: return current_chunk.Write(static_cast<uint8_t>(OpCode::OP_MULTIPLY), line);
+        case TokenType::Slash: return current_chunk.Write(static_cast<uint8_t>(OpCode::OP_DIVIDE), line);
+        default: assert(false && "Unexpectedly reached default case compiling binary expression");
     }
 }
 
 void Compiler::CompileUnaryExpression(const UnaryExpression* unary_expression, const int line)
 {
-    throw;
+    CompileExpression(unary_expression->right.get());
+
+    switch(const auto token_type = unary_expression->operator_token.type)
+    {
+        case TokenType::Negate: return current_chunk.Write(static_cast<uint8_t>(OpCode::OP_NEGATE), line);
+        default: assert(false && "Unexpectedly reached default case compiling unary expression");
+    }
 }
 

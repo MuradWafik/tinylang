@@ -8,7 +8,10 @@ enum class OpCode : uint8_t {
     OP_MULTIPLY,
     OP_DIVIDE,
     OP_NEGATE,
-    OP_RETURN
+    OP_RETURN,
+    OP_DEFINE_GLOBAL,
+    OP_GET_GLOBAL,
+    OP_SET_GLOBAL,
 };
 
 
@@ -24,6 +27,9 @@ constexpr std::string OpCodeToString(const OpCode op_code)
         case OpCode::OP_DIVIDE: return "OP_DIVIDE";
         case OpCode::OP_NEGATE: return "OP_NEGATE";
         case OpCode::OP_RETURN: return "OP_RETURN";
+        case OpCode::OP_DEFINE_GLOBAL: return "OP_DEFINE_GLOBAL";
+        case OpCode::OP_GET_GLOBAL: return "OP_GET_GLOBAL";
+        case OpCode::OP_SET_GLOBAL: return "OP_SET_GLOBAL";
         default: return "Unknown";
     }
 }

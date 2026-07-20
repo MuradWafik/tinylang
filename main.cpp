@@ -75,14 +75,14 @@ int main() {
     SourceLocation fake_loc{1, 1};
     auto left = std::make_unique<FloatLiteral>(1.5f, fake_loc);
     auto right = std::make_unique<FloatLiteral>(2.5f, fake_loc);
-    
+
     // Setup a PLUS token
     Token plus_token;
-    plus_token.type = TokenType::Plus; 
-    
+    plus_token.type = TokenType::Plus;
+
     auto binary_expr = std::make_unique<BinaryExpression>(
-        std::move(plus_token), 
-        std::move(left), 
+        std::move(plus_token),
+        std::move(left),
         std::move(right),
         fake_loc
     );
@@ -101,6 +101,6 @@ int main() {
     // 5. Run it in the VM!
     VM vm;
     vm.Interpret(&chunk);
-    
+
     return 0;
 }
