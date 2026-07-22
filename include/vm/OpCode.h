@@ -1,7 +1,8 @@
 #pragma once
 #include <cstdint>
 
-enum class OpCode : uint8_t {
+enum class OpCode : uint8_t
+{
     OP_CONSTANT,
     OP_ADD,
     OP_SUBTRACT,
@@ -12,6 +13,8 @@ enum class OpCode : uint8_t {
     OP_DEFINE_GLOBAL,
     OP_GET_GLOBAL,
     OP_SET_GLOBAL,
+    OP_CALL,
+    OP_NIL,
 };
 
 
@@ -30,6 +33,8 @@ constexpr std::string OpCodeToString(const OpCode op_code)
         case OpCode::OP_DEFINE_GLOBAL: return "OP_DEFINE_GLOBAL";
         case OpCode::OP_GET_GLOBAL: return "OP_GET_GLOBAL";
         case OpCode::OP_SET_GLOBAL: return "OP_SET_GLOBAL";
+        case OpCode::OP_CALL: return "OP_CALL";
+        case OpCode::OP_NIL: return "OP_NIL";
         default: return "Unknown";
     }
 }

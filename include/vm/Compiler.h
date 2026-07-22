@@ -9,19 +9,25 @@
 class Compiler {
 public:
     Compiler() = default;
-    Chunk Compile(const std::vector<std::unique_ptr<ASTNode>>& statements);
+
+    std::unique_ptr<Chunk> Compile(const std::vector<std::unique_ptr<ASTNode>>& statements);
 
 private:
-
     void CompileStatement(const Statement* statement);
-
+    void CompileVariableDeclaration(const VariableDeclaration* variable_declaration);
+    void CompileFunctionDeclaration(const FunctionDeclaration* function_declaration);
+    void CompileReturnStatement(const ReturnStatement* return_statement);
+    void CompileBodyStatement(const BodyStatement* body_statement);
 
 
     void CompileExpression(const Expression* expression);
-    void CompileLiteral(const RuntimeValue& value, int line);
-    void CompileBinaryExpression(const BinaryExpression* binary_expression, int line);
-    void CompileUnaryExpression(const UnaryExpression* unary_expression, int line);
+    void CompileLiteral(const RuntimeValue& value, uint32_t line) const;
+    void CompileBinaryExpression(const BinaryExpression* binary_expression);
+    void CompileUnaryExpression(const UnaryExpression* unary_expression);
+    void CompileIdentifierExpression(const IdentifierExpression* identifier_expression);
+    void CompileCallExpression(const CallExpression* call_expression);
+    void CompileAssignmentExpression(const AssignmentExpression* assignment_expression);
 
+    std::unique_ptr<Chunk> current_chunk;
 
-    Chunk current_chunk;
 };

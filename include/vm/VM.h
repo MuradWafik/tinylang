@@ -1,8 +1,9 @@
 #pragma once
-#include <stack>
+// No longer need stack header
+#include <unordered_map>
 #include <vector>
 
-#include "interpreter/RuntimeValue.h"
+#include "vm/RuntimeValue.h"
 #include "vm/Chunk.h"
 
 enum class InterpretResult {
@@ -18,18 +19,38 @@ public:
     InterpretResult Interpret(Chunk* chunk);
 
 private:
-    std::stack<RuntimeValue, std::vector<RuntimeValue>> stack;
-    std::unordered_map<std::string, RuntimeValue> globals;
-    Chunk* chunk;
-    uint8_t* ip;
+    std::vector<RuntimeValue> stack{};
+    std::unordered_map<std::string, RuntimeValue> globals{};
+
+    struct CallFrame
+    {
+        Chunk* chunk;
+        uint8_t* ip;
+        size_t stack_base;
+    };
+
+    std::vector<CallFrame> call_frames{};
+
 
     void Push(RuntimeValue value);
     RuntimeValue Pop();
     RuntimeValue HandleAdd();
+    RuntimeValue HandleSubtract();
+    RuntimeValue HandleMultiply();
+    RuntimeValue HandleDivide();
+    RuntimeValue HandleNegate();
     void DefineGlobal();
     void GetGlobal();
     void SetGlobal();
+    void CallFunction();
 
     InterpretResult Run();
     RuntimeValue& ExtractNextConstant();
+
+    template<typename T0, typename T1, typename Target>
+    static constexpr bool AreBoth()
+    {
+        return std::is_same_v<T0, Target> && std::is_same_v<T1, Target>;
+    }
+
 };

@@ -2,13 +2,12 @@
 
 #include <ranges>
 
-#include "frontend/Expression.h"
-#include "interpreter/NativeFunction.h"
-#include "frontend/Statement.h"
 #include "analysis/Type.h"
+#include "frontend/Expression.h"
+#include "frontend/Statement.h"
 
 
-std::expected<void, std::string> SemanticAnalyzer::Analyze(std::vector<std::unique_ptr<ASTNode>>& program)
+std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std::unique_ptr<ASTNode>>& program)
 {
     // Initialize global scope
     symbol_table.PushScope();
@@ -150,7 +149,7 @@ std::optional<Symbol> SymbolTable::LookupVariable(const std::string_view name)
 
 bool SymbolTable::IsDeclaredInCurrentScope(const std::string_view name) const
 {
-    return scopes.back().variables.find(name) != scopes.back().variables.end();
+    return scopes.back().variables.contains(name);
 }
 
 void SymbolTable::DefineType(const std::string_view name, const Type* type)
@@ -277,7 +276,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     return {};
 }
 
-std::expected<void, std::string> SemanticAnalyzer::AnalyzeBreakStatement(const BreakStatement* break_statement)
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeBreakStatement(const BreakStatement* break_statement) const
 {
     if(loop_depth <= 0)
     {
@@ -286,7 +285,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeBreakStatement(const B
     return {};
 }
 
-std::expected<void, std::string> SemanticAnalyzer::AnalyzeContinueStatement(const ContinueStatement* continue_statement)
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeContinueStatement(const ContinueStatement* continue_statement) const
 {
     if(loop_depth <= 0)
     {
@@ -553,6 +552,7 @@ void SemanticAnalyzer::InitializeDefaults()
     RegisterUnaryOperator(TokenType::Minus, float_t, float_t);
 
 
-    NativeFunction::RegisterTypes(symbol_table);
+    // TODO: Reimplement native functions
+    // NativeFunction::RegisterTypes(symbol_table);
 }
 

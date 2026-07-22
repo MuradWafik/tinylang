@@ -92,7 +92,7 @@ private:
 // walks AST and ensures the code obeys all the semantic rules of the language
 class SemanticAnalyzer {
 public:
-    std::expected<void, std::string> Analyze(std::vector<std::unique_ptr<ASTNode>>& program);
+    std::expected<void, std::string> Analyze(const std::vector<std::unique_ptr<ASTNode>>& program);
     std::expected<void, std::string> Analyze(ASTNode* node);
     const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
     const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
@@ -121,8 +121,8 @@ private:
     std::expected<void, std::string> AnalyzeIfStatement(const IfStatement* if_statement);
     std::expected<void, std::string> AnalyzeWhileStatement(const WhileStatement* while_statement);
     std::expected<void, std::string> AnalyzeFunctionDeclaration(const FunctionDeclaration* function_declaration);
-    std::expected<void, std::string> AnalyzeBreakStatement(const BreakStatement* break_statement);
-    std::expected<void, std::string> AnalyzeContinueStatement(const ContinueStatement* continue_statement);
+    std::expected<void, std::string> AnalyzeBreakStatement(const BreakStatement* break_statement) const;
+    std::expected<void, std::string> AnalyzeContinueStatement(const ContinueStatement* continue_statement) const;
     std::expected<void, std::string> AnalyzeReturnStatement(const ReturnStatement* return_statement);
     std::expected<void, std::string> AnalyzeBodyStatement(const BodyStatement* body_statement);
     std::expected<void, std::string> AnalyzeExpressionStatement(const ExpressionStatement* expression_statement);

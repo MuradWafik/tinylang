@@ -2,56 +2,71 @@
 
 #include <print>
 
-void Chunk::Write(const uint8_t byte, const int line)
+void Chunk::Write(const uint8_t byte, const uint32_t line)
 {
     code.push_back(byte);
     lines.push_back(line);
 }
 
-void Chunk::Write(OpCode opcode, const int line)
+void Chunk::Write(OpCode opcode, const uint32_t line)
 {
     Write(static_cast<uint8_t>(opcode), line);
 }
 
-int Chunk::AddConstant(RuntimeValue value)
+size_t Chunk::AddConstant(RuntimeValue value)
 {
     constants.push_back(std::move(value));
     return constants.size() - 1;
 }
 
 
-void Chunk::Disassemble(std::string_view name)
+int Chunk::DisassembleInstruction(int offset) const
 {
-    std::println("=== {} ===", name);
-    for(size_t i = 0; i < code.size(); ++i)
+    std::print("{:04} ", offset);
+
+    if (offset > 0 && lines[offset] == lines[offset - 1])
     {
-        // Print the byte offset index
-        std::print("{:04} ", i);
+        std::print("   | ");
+    }
+    else
+    {
+        std::print("{:4} ", lines[offset]);
+    }
 
-        // Print the line number (or | if it's the same line as the previous byte)
-        if (i > 0 && lines[i] == lines[i - 1])
-        {
-            std::print("   | ");
-        }
-        else
-        {
-            std::print("{:4} ", lines[i]);
-        }
+    const auto opcode = static_cast<OpCode>(code[offset]);
+    const auto opcode_name = OpCodeToString(opcode);
 
-        const auto opcode_int = code[i];
-        const OpCode opcode{opcode_int};
-        const auto opcode_name = OpCodeToString(opcode);
-
-        if(opcode == OpCode::OP_CONSTANT)
+    switch(opcode)
+    {
+        case OpCode::OP_CONSTANT:
+        case OpCode::OP_DEFINE_GLOBAL:
+        case OpCode::OP_GET_GLOBAL:
+        case OpCode::OP_SET_GLOBAL:
         {
-            // The operand is the next byte,  preincrement i to advance to it before accessing
-            const auto variable_index = code[++i];
-            const auto variable = constants[variable_index];
-            std::println("{:<16} {:4} '{}'", opcode_name, variable_index, variable);
+            const auto index = code[offset + 1];
+            const auto& variable = constants[index];
+            std::println("{:<16} {:4} '{}'", opcode_name, index, variable);
+            return offset + 2;
         }
-        else
+        case OpCode::OP_CALL:
+        {
+            const auto num_args = code[offset + 1];
+            std::println("{:<16} {:4} args", opcode_name, num_args);
+            return offset + 2;
+        }
+        default:
         {
             std::println("{}", opcode_name);
+            return offset + 1;
         }
+    }
+}
+
+void Chunk::Disassemble(std::string_view name) const
+{
+    std::println("=== {} ===", name);
+    for(int offset = 0; offset < code.size();)
+    {
+        offset = DisassembleInstruction(offset);
     }
 }
