@@ -72,7 +72,7 @@ struct BodyStatement final : Statement
         return std::format("BodyStatement([{}])", inner);
     }
 
-    explicit BodyStatement(SourceLocation loc) { this->source_location = loc; }
+    explicit BodyStatement(const SourceLocation loc) { this->source_location = loc; }
 };
 
 struct WhileStatement final : Statement
@@ -84,7 +84,7 @@ struct WhileStatement final : Statement
         return std::format("WhileStatement(condition: {}, body: {})", condition.get(), body.get());
     }
 
-    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body, SourceLocation loc) :
+    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body, const SourceLocation loc) :
         condition{std::move(condition)}, body{std::move(body)}
     { this->source_location = loc; }
 };
@@ -109,7 +109,7 @@ struct IfStatement final : Statement
         std::unique_ptr<Expression> condition,
         std::unique_ptr<BodyStatement> body,
         std::unique_ptr<Statement> else_branch,
-        SourceLocation loc)
+        const SourceLocation loc)
     : condition{std::move(condition)}, body{std::move(body)}, else_branch{std::move(else_branch)}
     { this->source_location = loc; }
 };
@@ -131,7 +131,7 @@ struct FunctionDeclaration final : Statement
                         std::vector<Parameter> params,
                         std::string ret_type,
                         std::unique_ptr<BodyStatement> body_node,
-                        SourceLocation loc)
+                        const SourceLocation loc)
         : name(std::move(name)),
           parameters(std::move(params)),
           return_type(std::move(ret_type)),
@@ -153,7 +153,7 @@ struct FunctionDeclaration final : Statement
 struct ExpressionStatement final : Statement
 {
     std::unique_ptr<Expression> expression;
-    explicit ExpressionStatement(std::unique_ptr<Expression>&& expr, SourceLocation loc)
+    explicit ExpressionStatement(std::unique_ptr<Expression>&& expr, const SourceLocation loc)
         : expression(std::move(expr)) { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override {
@@ -167,7 +167,7 @@ struct BreakStatement final : Statement
         return "BreakStatement";
     }
 
-    explicit BreakStatement(SourceLocation loc) { this->source_location = loc; }
+    explicit BreakStatement(const SourceLocation loc) { this->source_location = loc; }
 };
 
 struct ContinueStatement final : Statement
@@ -176,5 +176,5 @@ struct ContinueStatement final : Statement
         return "ContinueStatement";
     }
 
-    explicit ContinueStatement(SourceLocation loc) { this->source_location = loc; }
+    explicit ContinueStatement(const SourceLocation loc) { this->source_location = loc; }
 };

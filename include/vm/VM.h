@@ -43,6 +43,10 @@ private:
     void GetGlobal();
     void SetGlobal();
     void CallFunction();
+    void HandleJump();
+    void SetLocalVariable();
+    void HandleJumpIfFalse();
+    void GetLocalVariable();
 
     InterpretResult Run();
     RuntimeValue& ExtractNextConstant();

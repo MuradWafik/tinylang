@@ -103,6 +103,26 @@ InterpretResult VM::Run()
                 Push(std::monostate{});
                 break;
             }
+            case OpCode::OP_GET_LOCAL:
+            {
+                GetLocalVariable();
+                break;
+            }
+            case OpCode::OP_SET_LOCAL:
+            {
+                SetLocalVariable();
+                break;
+            }
+            case OpCode::OP_JUMP_IF_FALSE:
+            {
+                HandleJumpIfFalse();
+                break;
+            }
+            case OpCode::OP_JUMP:
+            {
+                HandleJump();
+                break;
+            }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
     }
@@ -309,4 +329,42 @@ RuntimeValue VM::HandleNegate()
 
         return std::monostate{};
     }, var);
+}
+
+void VM::GetLocalVariable()
+{
+    const auto local_index = *(call_frames.back().ip)++;
+    // stack_base is the function, so +1 jumps to the start of the variables
+    Push(stack[call_frames.back().stack_base + 1 + local_index]);
+}
+
+void VM::SetLocalVariable()
+{
+    const auto local_index = *(call_frames.back().ip)++;
+    // Peek at the top of the stack, and copy it into the local slot
+    stack[call_frames.back().stack_base + 1 + local_index] = stack.back();
+}
+
+void VM::HandleJumpIfFalse()
+{
+
+    const uint8_t high = *(call_frames.back().ip)++;
+    const uint8_t low = *(call_frames.back().ip)++;
+    const uint16_t offset = (high << 8) | low;
+
+    // Pop the true/false condition off the stack
+    // TODO: If falsey/bool operators get added handle here?
+    if (const auto condition = Pop(); std::get<bool>(condition) == false)
+    {
+        call_frames.back().ip += offset;
+    }
+}
+
+void VM::HandleJump()
+{
+    const uint8_t high = *(call_frames.back().ip)++;
+    const uint8_t low = *(call_frames.back().ip)++;
+
+    const uint16_t offset = (high << 8) | low;
+    call_frames.back().ip += offset;
 }

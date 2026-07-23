@@ -1,5 +1,6 @@
 #include "vm/Compiler.h"
 
+#include <algorithm>
 #include <variant>
 #include <variant>
 
@@ -23,6 +24,7 @@ void Compiler::CompileStatement(const Statement* statement)
     if(const auto func_decl = dynamic_cast<const FunctionDeclaration*>(statement)) return CompileFunctionDeclaration(func_decl);
     if(const auto ret_stmt = dynamic_cast<const ReturnStatement*>(statement)) return CompileReturnStatement(ret_stmt);
     if(const auto body_stmt = dynamic_cast<const BodyStatement*>(statement)) return CompileBodyStatement(body_stmt);
+    if(const auto if_stmt = dynamic_cast<const IfStatement*>(statement)) return CompileIfStatement(if_stmt);
 }
 
 void Compiler::CompileExpression(const Expression* expression)
@@ -83,8 +85,15 @@ void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_de
     CompileExpression(variable_declaration->initializer.get());
     // After compiling its value is at the top of the stack
 
-    const int name_index = current_chunk->AddConstant(variable_declaration->name);
-    current_chunk->WriteInstruction(variable_declaration->source_location.line_number, OpCode::OP_DEFINE_GLOBAL, name_index);
+    if(scope_depth == 0)
+    {
+        const int name_index = current_chunk->AddConstant(variable_declaration->name);
+        current_chunk->WriteInstruction(variable_declaration->source_location.line_number, OpCode::OP_DEFINE_GLOBAL, name_index);
+    }
+    else
+    {
+        locals.push_back(variable_declaration->name);
+    }
 }
 
 void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_declaration)
@@ -92,6 +101,12 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     std::unique_ptr<Chunk> outer_scope = std::move(current_chunk);
 
     current_chunk = std::make_unique<Chunk>();
+
+    for(const auto& param: function_declaration->parameters)
+    {
+        locals.push_back(param.name);
+    }
+
     CompileStatement(function_declaration->body.get());
     current_chunk->Write(OpCode::OP_RETURN, function_declaration->body->source_location.line_number);
     // add a return before resetting the chunk to the outer one
@@ -120,11 +135,26 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
 
 void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifier_expression)
 {
-    const int name_index = current_chunk->AddConstant(identifier_expression->name);
-    // Where to find it when looking in the VM
 
     const auto line = identifier_expression->source_location.line_number;
-    current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL, name_index);
+
+    if(scope_depth == 0)
+    {
+        const int name_index = current_chunk->AddConstant(identifier_expression->name);
+        // Where to find it when looking in the VM
+        current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL, name_index);
+    }
+    else if(const int64_t local_index = GetLocalVariableIndex(identifier_expression->name);
+        local_index != -1)
+    {
+        current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, local_index);
+    }
+    else
+    {
+        const int name_index = current_chunk->AddConstant(identifier_expression->name);
+        // Where to find it when looking in the VM
+        current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL, name_index);
+    }
 }
 
 void Compiler::CompileCallExpression(const CallExpression* call_expression)
@@ -147,12 +177,27 @@ void Compiler::CompileCallExpression(const CallExpression* call_expression)
 void Compiler::CompileAssignmentExpression(const AssignmentExpression* assignment_expression)
 {
     // find the variable
-    const auto name_index = current_chunk->AddConstant(assignment_expression->name);
+
+
     const auto line = assignment_expression->source_location.line_number;
 
     CompileExpression(assignment_expression->value.get());
-    current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL, name_index);
-
+    if(scope_depth == 0 )
+    {
+        const auto name_index = current_chunk->AddConstant(assignment_expression->name);
+        current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL, name_index);
+    }
+    // the variable being called/assigned to is a local one
+    else if(const int64_t local_index = GetLocalVariableIndex(assignment_expression->name);
+        local_index != -1)
+    {
+        current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL, local_index);
+    }
+    else
+    {
+        const auto name_index = current_chunk->AddConstant(assignment_expression->name);
+        current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL, name_index);
+    }
 }
 
 void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
@@ -167,4 +212,71 @@ void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
         current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_NIL);
     }
     current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN);
+}
+
+void Compiler::CompileBodyStatement(const BodyStatement* body_statement)
+{
+    ++scope_depth;
+
+    const size_t prev_size = locals.size();
+    for(const auto& stmt : body_statement->statements)
+    {
+        CompileStatement(dynamic_cast<const Statement*>(stmt.get()));
+    }
+    --scope_depth;
+
+    locals.resize(prev_size);
+}
+
+void Compiler::CompileIfStatement(const IfStatement* if_statement)
+{
+    // stack contains the true or false condition
+    CompileExpression(if_statement->condition.get());
+
+
+    // Don't know yet how far the jump is so a plceholder offset is used, and then gets set later after the body is compiled
+    current_chunk->WriteInstruction(
+        if_statement->source_location.line_number,
+        OpCode::OP_JUMP_IF_FALSE,
+        0, // high byte
+        0 // low byte
+    );
+    // and jumps use 2 bytes for offsets, (design spec by ai)
+
+    // -2 to get the index of the high byte
+    const size_t placeholder_if_index = current_chunk->code.size() - 2;
+
+    CompileStatement(if_statement->body.get());
+
+    const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
+    current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff; // High byte
+    current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff; // Low byte
+
+    current_chunk->WriteInstruction(
+        if_statement->else_branch->source_location.line_number,
+        OpCode::OP_JUMP, // Jump instruction for the else branch
+        0, // with a placeholder values again
+        0
+    );
+
+
+    const auto placeholder_else_index  = current_chunk->code.size() -2;
+    CompileStatement(if_statement->else_branch.get());
+
+    const uint16_t else_jump = current_chunk->code.size() - (placeholder_else_index + 2);
+    current_chunk->code[placeholder_else_index] = (else_jump >> 8) & 0xff; // High byte
+    current_chunk->code[placeholder_else_index + 1] = else_jump & 0xff; // Low byte
+}
+
+
+int64_t Compiler::GetLocalVariableIndex(const std::string& name)
+{
+    if(const auto it = std::find(locals.rbegin(), locals.rend(), name);
+        it != locals.rend())
+    {
+        return std::distance(it, locals.rend()) - 1;
+    }
+    return -1;
+
+    assert(false);
 }

@@ -18,6 +18,7 @@ private:
     void CompileFunctionDeclaration(const FunctionDeclaration* function_declaration);
     void CompileReturnStatement(const ReturnStatement* return_statement);
     void CompileBodyStatement(const BodyStatement* body_statement);
+    void CompileIfStatement(const IfStatement* if_statement);
 
 
     void CompileExpression(const Expression* expression);
@@ -28,6 +29,10 @@ private:
     void CompileCallExpression(const CallExpression* call_expression);
     void CompileAssignmentExpression(const AssignmentExpression* assignment_expression);
 
+    int64_t GetLocalVariableIndex(const std::string& name);
+
     std::unique_ptr<Chunk> current_chunk;
+    size_t scope_depth{0};
+    std::vector<std::string> locals;
 
 };
