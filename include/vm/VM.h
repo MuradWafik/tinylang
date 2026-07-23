@@ -39,6 +39,13 @@ private:
     RuntimeValue HandleMultiply();
     RuntimeValue HandleDivide();
     RuntimeValue HandleNegate();
+    RuntimeValue HandleGreaterThan();
+    RuntimeValue HandleGreaterEqualThan();
+    RuntimeValue HandleLessThan();
+    RuntimeValue HandleLessEqualThan();
+    RuntimeValue HandleEqualTo();
+    RuntimeValue HandleNotEqualTo();
+
     void DefineGlobal();
     void GetGlobal();
     void SetGlobal();
@@ -47,6 +54,9 @@ private:
     void SetLocalVariable();
     void HandleJumpIfFalse();
     void GetLocalVariable();
+    void HandleLoop();
+    void HandleJumpIfFalsePeek();
+    void HandleJumpIfTruePeek();
 
     InterpretResult Run();
     RuntimeValue& ExtractNextConstant();

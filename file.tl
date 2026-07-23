@@ -1,13 +1,15 @@
 fn x(a: int, b: int) -> int
 {
-    if(true)
+    while(a < b)
     {
-        return 10 + 20;
+        a = a + 1;
+        if(true)
+        {
+            break;
+        }
     }
-    else
-    {
-        return a + b;
-    }
+
+    return a;
 }
 
-var e: int = x(3, 4);
+var e: int = x(3, 7);

@@ -24,6 +24,7 @@ enum class TokenType
     False,
     Break,
     Continue,
+    Native,
 
     // Types
     IntType,
@@ -107,6 +108,7 @@ struct Token {
         {"bool", TokenType::BoolType},
         {"String", TokenType::StringType},
         {"void", TokenType::Void},
+        {"native", TokenType::Native},
     };
     static std::string TypeToString(TokenType token_type);
 

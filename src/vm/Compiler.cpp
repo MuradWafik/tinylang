@@ -25,6 +25,10 @@ void Compiler::CompileStatement(const Statement* statement)
     if(const auto ret_stmt = dynamic_cast<const ReturnStatement*>(statement)) return CompileReturnStatement(ret_stmt);
     if(const auto body_stmt = dynamic_cast<const BodyStatement*>(statement)) return CompileBodyStatement(body_stmt);
     if(const auto if_stmt = dynamic_cast<const IfStatement*>(statement)) return CompileIfStatement(if_stmt);
+    if(const auto while_stmt = dynamic_cast<const WhileStatement*>(statement)) return CompileWhileStatement(while_stmt);
+    if(const auto expr_stmt = dynamic_cast<const ExpressionStatement*>(statement)) return CompileExpressionStatement(expr_stmt);
+    if(const auto cnt_stmt = dynamic_cast<const ContinueStatement*>(statement)) return CompileContinueStatement(cnt_stmt);
+    if(const auto brk_stmt = dynamic_cast<const BreakStatement*>(statement)) return CompileBreakStatement(brk_stmt);
 }
 
 void Compiler::CompileExpression(const Expression* expression)
@@ -48,8 +52,51 @@ void Compiler::CompileLiteral(const RuntimeValue& value, const uint32_t line) co
     current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT, index);
 }
 
+void Compiler::CompileLogicalAnd(const BinaryExpression* binary_expression)
+{
+    CompileExpression(binary_expression->left.get());
+
+    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_JUMP_IF_FALSE_PEEK, 0, 0);
+    const size_t jump_index = current_chunk->code.size() - 2;
+
+    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_POP);
+
+    CompileExpression(binary_expression->right.get());
+
+    const uint16_t distance = current_chunk->code.size() - jump_index;
+    current_chunk->code[jump_index] = (distance >> 8) & 0xff; // High byte
+    current_chunk->code[jump_index + 1] = distance & 0xff; // Low byte
+}
+
+void Compiler::CompileLogicalOr(const BinaryExpression* binary_expression)
+{
+    CompileExpression(binary_expression->left.get());
+
+    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_JUMP_IF_TRUE_PEEK, 0, 0);
+    const size_t jump_index = current_chunk->code.size() - 2;
+
+    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_POP);
+
+    CompileExpression(binary_expression->right.get());
+
+    const uint16_t distance = current_chunk->code.size() - jump_index;
+    current_chunk->code[jump_index] = (distance >> 8) & 0xff; // High byte
+    current_chunk->code[jump_index + 1] = distance & 0xff; // Low byte
+}
+
 void Compiler::CompileBinaryExpression(const BinaryExpression* binary_expression)
 {
+    const auto operator_token = binary_expression->operator_token.type;
+    // have their own optimization of short circuiting so cant precompile left and right sides
+    if(operator_token == TokenType::AndAnd)
+    {
+        return CompileLogicalAnd(binary_expression);
+    }
+    if(operator_token == TokenType::OrOr)
+    {
+        return CompileLogicalOr(binary_expression);
+    }
+
     CompileExpression(binary_expression->left.get());
     CompileExpression(binary_expression->right.get());
 
@@ -61,6 +108,12 @@ void Compiler::CompileBinaryExpression(const BinaryExpression* binary_expression
         case TokenType::Minus: return current_chunk->Write(OpCode::OP_SUBTRACT, line);
         case TokenType::Star: return current_chunk->Write(OpCode::OP_MULTIPLY, line);
         case TokenType::Slash: return current_chunk->Write(OpCode::OP_DIVIDE, line);
+        case TokenType::Greater: return current_chunk->Write(OpCode::OP_GREATER, line);
+        case TokenType::GreaterEqual: return current_chunk->Write(OpCode::OP_GREATER_EQUAL, line);
+        case TokenType::Less: return current_chunk->Write(OpCode::OP_LESS, line);
+        case TokenType::LessEqual: return current_chunk->Write(OpCode::OP_LESS_EQUAL, line);
+        case TokenType::Equal: return current_chunk->Write(OpCode::OP_EQUAL, line);
+        case TokenType::NotEqual: return current_chunk->Write(OpCode::OP_NOT_EQUAL, line);
         default: assert(false && "Unexpectedly reached default case compiling binary expression");
     }
 }
@@ -78,7 +131,6 @@ void Compiler::CompileUnaryExpression(const UnaryExpression* unary_expression)
         default: assert(false && "Unexpectedly reached default case compiling unary expression");
     }
 }
-
 
 void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_declaration)
 {
@@ -225,6 +277,11 @@ void Compiler::CompileBodyStatement(const BodyStatement* body_statement)
     }
     --scope_depth;
 
+    // if prevent variables defined in inner scopes from remaining in the stack of the VM
+    for(size_t i = prev_size; i < locals.size(); ++i)
+    {
+        current_chunk->WriteInstruction(body_statement->source_location.line_number, OpCode::OP_POP);
+    }
     locals.resize(prev_size);
 }
 
@@ -233,10 +290,57 @@ void Compiler::CompileIfStatement(const IfStatement* if_statement)
     // stack contains the true or false condition
     CompileExpression(if_statement->condition.get());
 
+    const int line = if_statement->source_location.line_number;
 
-    // Don't know yet how far the jump is so a plceholder offset is used, and then gets set later after the body is compiled
+    // Don't know yet how far the jump is so a placeholder offset is used, and then gets set later after the body is compiled
+    current_chunk->WriteInstruction(line,OpCode::OP_JUMP_IF_FALSE, /*high byte=*/0, /*low byte=*/0);
+    // and jumps use 2 bytes for offsets, (design spec by ai)
+
+    // -2 to get the index of the high byte
+    const size_t placeholder_if_index = current_chunk->code.size() - 2;
+    CompileStatement(if_statement->body.get());
+
+    if(if_statement->else_branch)
+    {
+        // REMINDER SINCE THERE WAS ISSUE: don't want the if's body block to fall into the else block.
+        // So emit an unconditional jump right here to skip over what is about to get compiled
+        current_chunk->WriteInstruction(
+            if_statement->else_branch->source_location.line_number,
+            OpCode::OP_JUMP, 0, 0
+        );
+
+        const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
+        current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff;
+        current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff;
+
+
+        const size_t placeholder_else_index = current_chunk->code.size() - 2;
+        CompileStatement(if_statement->else_branch.get());
+
+        const uint16_t else_jump = current_chunk->code.size() - (placeholder_else_index + 2);
+        current_chunk->code[placeholder_else_index] = (else_jump >> 8) & 0xff;
+        current_chunk->code[placeholder_else_index + 1] = else_jump & 0xff;
+    }
+    else
+    {
+        const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
+        current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff; // High byte
+        current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff; // Low byte
+
+    }
+}
+
+void Compiler::CompileWhileStatement(const WhileStatement* while_statement)
+{
+    const size_t loop_start = current_chunk->code.size();
+    loop_starts.push_back(loop_start);
+
+    // stack contains the true or false condition
+    CompileExpression(while_statement->condition.get());
+
+    // Don't know yet how far the jump is so a placeholder offset is used, and then gets set later after the body is compiled
     current_chunk->WriteInstruction(
-        if_statement->source_location.line_number,
+        while_statement->source_location.line_number,
         OpCode::OP_JUMP_IF_FALSE,
         0, // high byte
         0 // low byte
@@ -244,30 +348,58 @@ void Compiler::CompileIfStatement(const IfStatement* if_statement)
     // and jumps use 2 bytes for offsets, (design spec by ai)
 
     // -2 to get the index of the high byte
-    const size_t placeholder_if_index = current_chunk->code.size() - 2;
+    const size_t placeholder_while_index = current_chunk->code.size() - 2;
 
-    CompileStatement(if_statement->body.get());
+    CompileStatement(while_statement->body.get());
 
-    const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
-    current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff; // High byte
-    current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff; // Low byte
-
+    // Offset 3 here so that the vm instruction rechecks the condition for the loop
+    const uint16_t backward_jump = (current_chunk->code.size() + 3) - loop_start;
     current_chunk->WriteInstruction(
-        if_statement->else_branch->source_location.line_number,
-        OpCode::OP_JUMP, // Jump instruction for the else branch
-        0, // with a placeholder values again
-        0
+        while_statement->body->source_location.line_number,
+        OpCode::OP_LOOP,
+        (backward_jump >> 8) & 0xff,
+        backward_jump & 0xff
     );
 
+    const uint16_t while_jump = current_chunk->code.size() - (placeholder_while_index + 2);
+    current_chunk->code[placeholder_while_index] = (while_jump >> 8) & 0xff; // High byte
+    current_chunk->code[placeholder_while_index + 1] = while_jump & 0xff; // Low byte
 
-    const auto placeholder_else_index  = current_chunk->code.size() -2;
-    CompileStatement(if_statement->else_branch.get());
-
-    const uint16_t else_jump = current_chunk->code.size() - (placeholder_else_index + 2);
-    current_chunk->code[placeholder_else_index] = (else_jump >> 8) & 0xff; // High byte
-    current_chunk->code[placeholder_else_index + 1] = else_jump & 0xff; // Low byte
+    for(const auto index : break_placeholders)
+    {
+        const uint16_t break_jump = current_chunk->code.size() - (index + 2);
+        current_chunk->code[index] = (break_jump >> 8) & 0xff;
+        current_chunk->code[index + 1] = break_jump & 0xff;
+    }
+    break_placeholders.clear();
+    loop_starts.pop_back();
 }
 
+void Compiler::CompileExpressionStatement(const ExpressionStatement* expression_statement)
+{
+    CompileExpression(expression_statement->expression.get());
+    current_chunk->WriteInstruction(
+        expression_statement->source_location.line_number,
+        OpCode::OP_POP
+    );
+}
+
+void Compiler::CompileContinueStatement(const ContinueStatement* continue_statement) const
+{
+    const size_t loop_start = loop_starts.back();
+    const uint16_t distance =  (current_chunk->code.size() + 3) - loop_start; // offset 3 to not rerun the loop instruction
+
+    current_chunk->WriteInstruction(
+        continue_statement->source_location.line_number, OpCode::OP_LOOP,
+        (distance >> 8) & 0xff, distance & 0xff);
+}
+
+void Compiler::CompileBreakStatement(const BreakStatement* break_statement)
+{
+    // Don't know the location so leave placeholder, the while populates (reminder jump uses 2 bytes);
+    current_chunk->WriteInstruction(break_statement->source_location.line_number, OpCode::OP_JUMP, 0, 0);
+    break_placeholders.push_back(current_chunk->code.size() - 2);
+}
 
 int64_t Compiler::GetLocalVariableIndex(const std::string& name)
 {

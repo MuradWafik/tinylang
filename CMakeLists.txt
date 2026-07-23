@@ -9,7 +9,6 @@ add_library(tinylang_lib
         src/frontend/Parser.cpp
         src/analysis/SemanticAnalyzer.cpp
         src/analysis/Type.cpp
-        src/utils/FileReader.cpp
         src/vm/RuntimeValue.cpp
         src/vm/Chunk.cpp
         src/vm/Compiler.cpp

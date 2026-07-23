@@ -6,11 +6,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include "analysis/Type.h"
 #include "frontend/ASTNode.h"
 #include "frontend/Statement.h"
-#include "utils/StringHash.h"
 #include "frontend/Token.h"
-#include "analysis/Type.h"
+#include "utils/Utils.h"
 
 struct OperatorSignature {
     TokenType op;

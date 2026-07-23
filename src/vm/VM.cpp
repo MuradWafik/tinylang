@@ -3,6 +3,8 @@
 #include <cassert>
 #include <print>
 
+#include "utils/Utils.h"
+
 InterpretResult VM::Interpret(Chunk* chunk)
 {
     call_frames.emplace_back(chunk, chunk->code.data(), 0);
@@ -22,8 +24,8 @@ InterpretResult VM::Run()
         }
         std::println("");
         
-        const auto& frame = call_frames.back();
-        frame.chunk->DisassembleInstruction(frame.ip - frame.chunk->code.data());
+        const auto& cur_frame = call_frames.back();
+        cur_frame.chunk->DisassembleInstruction(cur_frame.ip - cur_frame.chunk->code.data());
 #endif
 
         switch(static_cast<OpCode>(*(call_frames.back().ip)++))
@@ -73,10 +75,42 @@ InterpretResult VM::Run()
             case OpCode::OP_DIVIDE:
             {
                 Push(std::move(HandleDivide()));
+                break;
+            }
+            case OpCode::OP_GREATER:
+            {
+                Push(std::move(HandleGreaterThan()));
+                break;
+            }
+            case OpCode::OP_GREATER_EQUAL:
+            {
+                Push(std::move(HandleGreaterEqualThan()));
+                break;
+            }
+            case OpCode::OP_LESS:
+            {
+                Push(std::move(HandleGreaterThan()));
+                break;
+            }
+            case OpCode::OP_LESS_EQUAL:
+            {
+                Push(std::move(HandleGreaterEqualThan()));
+                break;
+            }
+            case OpCode::OP_EQUAL:
+            {
+                Push(std::move(HandleEqualTo()));
+                break;
+            }
+            case OpCode::OP_NOT_EQUAL:
+            {
+                Push(std::move(HandleNotEqualTo()));
+                break;
             }
             case OpCode::OP_NEGATE:
             {
                 Push(std::move(HandleNegate()));
+                break;
             }
             case OpCode::OP_DEFINE_GLOBAL:
             {
@@ -113,6 +147,11 @@ InterpretResult VM::Run()
                 SetLocalVariable();
                 break;
             }
+            case OpCode::OP_POP:
+            {
+                Pop();
+                break;
+            }
             case OpCode::OP_JUMP_IF_FALSE:
             {
                 HandleJumpIfFalse();
@@ -121,6 +160,21 @@ InterpretResult VM::Run()
             case OpCode::OP_JUMP:
             {
                 HandleJump();
+                break;
+            }
+            case OpCode::OP_LOOP:
+            {
+                HandleLoop();
+                break;
+            }
+            case OpCode::OP_JUMP_IF_FALSE_PEEK:
+            {
+                HandleJumpIfFalsePeek();
+                break;
+            }
+            case OpCode::OP_JUMP_IF_TRUE_PEEK:
+            {
+                HandleJumpIfTruePeek();
                 break;
             }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
@@ -158,18 +212,6 @@ RuntimeValue VM::HandleAdd()
         {
             return l + r;
         }
-
-        // allow for int and float addition, casting to float
-        else if constexpr(std::is_same_v<T2, int> && std::is_same_v<T3, float>)
-        {
-            return static_cast<float>(l) + r;
-        }
-        else if constexpr(std::is_same_v<T2, float> && std::is_same_v<T3, int>)
-        {
-            return l + static_cast<float>(r);
-        }
-
-
         return std::monostate{};
     }, left, right);
 }
@@ -236,16 +278,6 @@ RuntimeValue VM::HandleSubtract()
             return l - r;
         }
 
-        // allow for int and float subtraction, casting to float
-        else if constexpr(std::is_same_v<T2, int> && std::is_same_v<T3, float>)
-        {
-            return static_cast<float>(l) - r;
-        }
-        else if constexpr(std::is_same_v<T2, float> && std::is_same_v<T3, int>)
-        {
-            return l - static_cast<float>(r);
-        }
-
         return std::monostate{};
     }, left, right);
 }
@@ -266,17 +298,6 @@ RuntimeValue VM::HandleMultiply()
         {
             return l * r;
         }
-
-        // allow for int and float multiplication, casting to float
-        else if constexpr(std::is_same_v<T2, int> && std::is_same_v<T3, float>)
-        {
-            return static_cast<float>(l) * r;
-        }
-        else if constexpr(std::is_same_v<T2, float> && std::is_same_v<T3, int>)
-        {
-            return l * static_cast<float>(r);
-        }
-
         return std::monostate{};
     }, left, right);
 }
@@ -297,17 +318,6 @@ RuntimeValue VM::HandleDivide()
         {
             return l/r;
         }
-
-        // allow for int and float division, casting to float
-        else if constexpr(std::is_same_v<T2, int> && std::is_same_v<T3, float>)
-        {
-            return static_cast<float>(l) / r;
-        }
-        else if constexpr(std::is_same_v<T2, float> && std::is_same_v<T3, int>)
-        {
-            return l / static_cast<float>(r);
-        }
-
         return std::monostate{};
     }, left, right);
 }
@@ -331,6 +341,121 @@ RuntimeValue VM::HandleNegate()
     }, var);
 }
 
+RuntimeValue VM::HandleGreaterThan()
+{
+    auto right = Pop();
+    auto left = Pop();
+
+    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
+        using T2 = std::decay_t<T0>;
+        using T3 = std::decay_t<T1>;
+
+        // direct int, and float math
+        if constexpr(
+               AreBoth<T2, T3, int>()
+            || AreBoth<T2, T3, float>())
+        {
+            return l < r;
+        }
+        return std::monostate{};
+    }, left, right);
+}
+
+RuntimeValue VM::HandleGreaterEqualThan()
+{
+    auto right = Pop();
+    auto left = Pop();
+
+    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
+        using T2 = std::decay_t<T0>;
+        using T3 = std::decay_t<T1>;
+
+        // direct int, and float math
+        if constexpr(
+               AreBoth<T2, T3, int>()
+            || AreBoth<T2, T3, float>())
+        {
+            return l <= r;
+        }
+        return std::monostate{};
+    }, left, right);
+}
+
+RuntimeValue VM::HandleLessThan()
+{
+    auto right = Pop();
+    auto left = Pop();
+
+    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
+        using T2 = std::decay_t<T0>;
+        using T3 = std::decay_t<T1>;
+
+        // direct int, and float math
+        if constexpr(
+               AreBoth<T2, T3, int>()
+            || AreBoth<T2, T3, float>())
+        {
+            return l > r;
+        }
+        return std::monostate{};
+    }, left, right);
+}
+
+RuntimeValue VM::HandleLessEqualThan()
+{
+    auto right = Pop();
+    auto left = Pop();
+
+    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
+        using T2 = std::decay_t<T0>;
+        using T3 = std::decay_t<T1>;
+
+        // direct int, and float math
+        if constexpr(
+               AreBoth<T2, T3, int>()
+            || AreBoth<T2, T3, float>())
+        {
+            return l >= r;
+        }
+        return std::monostate{};
+    }, left, right);
+}
+
+RuntimeValue VM::HandleEqualTo()
+{
+    auto right = Pop();
+    auto left = Pop();
+
+    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
+        using T2 = std::decay_t<T0>;
+        using T3 = std::decay_t<T1>;
+
+        if constexpr(std::is_same_v<T2, T3>)
+        {
+            return l == r;
+        }
+        return std::monostate{};
+    }, left, right);
+}
+
+RuntimeValue VM::HandleNotEqualTo()
+{
+    auto right = Pop();
+    auto left = Pop();
+
+    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
+        using T2 = std::decay_t<T0>;
+        using T3 = std::decay_t<T1>;
+
+        if constexpr(std::is_same_v<T2, T3>)
+        {
+            return l != r;
+        }
+
+        return std::monostate{};
+    }, left, right);
+}
+
 void VM::GetLocalVariable()
 {
     const auto local_index = *(call_frames.back().ip)++;
@@ -347,10 +472,7 @@ void VM::SetLocalVariable()
 
 void VM::HandleJumpIfFalse()
 {
-
-    const uint8_t high = *(call_frames.back().ip)++;
-    const uint8_t low = *(call_frames.back().ip)++;
-    const uint16_t offset = (high << 8) | low;
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
 
     // Pop the true/false condition off the stack
     // TODO: If falsey/bool operators get added handle here?
@@ -362,9 +484,34 @@ void VM::HandleJumpIfFalse()
 
 void VM::HandleJump()
 {
-    const uint8_t high = *(call_frames.back().ip)++;
-    const uint8_t low = *(call_frames.back().ip)++;
-
-    const uint16_t offset = (high << 8) | low;
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     call_frames.back().ip += offset;
+}
+
+void VM::HandleLoop()
+{
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    call_frames.back().ip -= offset;
+
+}
+
+void VM::HandleJumpIfFalsePeek()
+{
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+
+    // TODO: If falsey/bool operators get added handle here?
+    if (const auto condition = stack.back(); std::get<bool>(condition) == false)
+    {
+        call_frames.back().ip += offset;
+    }
+}
+
+void VM::HandleJumpIfTruePeek()
+{
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+
+    if (const auto condition = stack.back(); std::get<bool>(condition) == true)
+    {
+        call_frames.back().ip += offset;
+    }
 }
