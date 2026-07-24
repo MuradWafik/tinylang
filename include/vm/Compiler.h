@@ -33,7 +33,7 @@ private:
 
 
     void CompileExpression(const Expression* expression);
-    void CompileLiteral(const RuntimeValue& value, uint32_t line) const;
+    void CompileLiteral(const ConstantValue& value, uint32_t line) const;
     void CompileLogicalAnd(const BinaryExpression* binary_expression);
     void CompileLogicalOr(const BinaryExpression* binary_expression);
     void CompileBinaryExpression(const BinaryExpression* binary_expression);

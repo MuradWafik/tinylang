@@ -1,5 +1,6 @@
 #pragma once
 #include <concepts>
+#include <cstring>
 #include <expected>
 #include <filesystem>
 #include <fstream>
@@ -58,6 +59,45 @@ T ReadAndAdvanceBytes(uint8_t*& ip) // apparently needs a REFERENCE to the point
     return result;
 }
 
+// Fast native-endian write for the VM Stack
+template <typename T>
+void WriteBytes(std::vector<uint8_t>& stack, const T& value)
+{
+    const auto bytes = reinterpret_cast<const uint8_t*>(&value);
+    stack.insert(stack.end(), bytes, bytes + sizeof(T));
+}
+
+// Fast native-endian read and pop from the VM Stack
+template <typename T>
+T ReadAndPopBytes(std::vector<uint8_t>& stack)
+{
+    T result;
+    const size_t offset = stack.size() - sizeof(T);
+    std::memcpy(&result, stack.data() + offset, sizeof(T));
+    stack.resize(offset);
+    return result;
+}
+
+// Fast native-endian peek from the VM Stack (does not pop)
+template <typename T>
+T ReadBytes(const std::vector<uint8_t>& stack, const size_t offset_from_top = 0)
+{
+    T result;
+    // offset_from_top is the number of bytes from the top of the stack to skip
+    const size_t offset = stack.size() - sizeof(T) - offset_from_top;
+    std::memcpy(&result, stack.data() + offset, sizeof(T));
+    return result;
+}
+
+// Fast native-endian read from an absolute byte index in the VM Stack
+template <typename T>
+T ReadBytesAbsolute(const std::vector<uint8_t>& stack, size_t absolute_index)
+{
+    T result;
+    std::memcpy(&result, stack.data() + absolute_index, sizeof(T));
+    return result;
+}
+
 struct StringHash
 {
     using is_transparent = void;
@@ -74,3 +114,7 @@ struct StringHash
         return std::hash<std::string_view>{}(s);
     }
 };
+
+
+template<typename T>
+concept fundamental = std::is_fundamental_v<T>;

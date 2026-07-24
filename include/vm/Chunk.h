@@ -1,18 +1,15 @@
 #pragma once
-#include <vector>
 #include <cstdint>
-#include <variant>
-#include <variant>
-#include <variant>
-#include <variant>
+#include <vector>
 
+#include "vm/ConstantValue.h"
 #include "vm/OpCode.h"
-#include "vm/RuntimeValue.h"
 
-class Chunk {
+class Chunk
+{
 public:
     std::vector<uint8_t> code;
-    std::vector<RuntimeValue> constants;
+    std::vector<ConstantValue> constants;
     std::vector<uint32_t> lines;
 
     Chunk() = default;
@@ -32,7 +29,7 @@ public:
         ((code.push_back(static_cast<uint8_t>(operands)), lines.push_back(line)), ...);
     }
 
-    unsigned long AddConstant(RuntimeValue value);
+    unsigned long AddConstant(ConstantValue value);
 
      void Disassemble(std::string_view name) const;
     int DisassembleInstruction(int offset) const;

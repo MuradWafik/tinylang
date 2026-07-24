@@ -1,7 +1,9 @@
 #include "vm/VM.h"
 
-#include <cassert>
+#include <stdfloat>
+#ifdef DEBUG_TRACE_EXECUTION
 #include <print>
+#endif
 
 #include "utils/Utils.h"
 
@@ -30,128 +32,284 @@ InterpretResult VM::Run()
 
         switch(static_cast<OpCode>(*(call_frames.back().ip)++))
         {
-            case OpCode::OP_RETURN:
+            case OpCode::OP_RETURN_INT:
             {
-                // exit if its outermost scope, program terminates
-                if(call_frames.size() == 1)
+                if(const auto terminated = Return<int32_t>())
                 {
-                    call_frames.pop_back();
-
-                    return InterpretResult::INTERPRET_OK;
+                    return terminated.value();
                 }
+                break;
+            }
+            case OpCode::OP_RETURN_FLOAT:
+            {
+                if(const auto terminated = Return<std::float32_t>())
+                {
+                    return terminated.value();
+                }
+                break;
+            }
+            case OpCode::OP_RETURN_BOOL:
+            {
+                if(const auto terminated = Return<bool>())
+                {
+                    return terminated.value();
+                }
+                break;
+            }
+            case OpCode::OP_RETURN_VOID:
+            {
+                if(const auto terminated = Return())
+                {
+                    return terminated.value();
+                }
+                break;
+            }
+            case OpCode::OP_CONSTANT_INT:
+            {
+                const auto val = std::get<int32_t>(ExtractNextConstant());
+                Push(val);
+                break;
+            }
+            case OpCode::OP_CONSTANT_FLOAT:
+            {
+                const auto val = std::get<std::float32_t>(ExtractNextConstant());
+                Push(val);
+                break;
+            }
+            case OpCode::OP_CONSTANT_BOOL:
+            {
+                const auto val = std::get<bool>(ExtractNextConstant());
+                Push(val);
+                break;
+            }
 
-                const auto return_value = Pop();
+            case OpCode::OP_ADD_INT:
+            {
+                Push(Add<int32_t>());
+                break;
+            }
+            case OpCode::OP_ADD_FLOAT:
+            {
+                Push(Add<std::float32_t>());
+                break;
+            }
 
-                const auto frame = call_frames.back();
-                call_frames.pop_back();
+            case OpCode::OP_SUBTRACT_INT:
+            {
+                Push(Subtract<int32_t>());
+                break;
+            }
+            case OpCode::OP_SUBTRACT_FLOAT:
+            {
+                Push(Subtract<std::float32_t>());
+                break;
+            }
 
-                // Erase everything that belongs to this function;
-                // deleting the function object, the arguments, and any temp variables.
-                stack.erase(stack.begin() + frame.stack_base, stack.end());
+            case OpCode::OP_MULTIPLY_INT:
+            {
+                Push(Multiply<int32_t>());
+                break;
+            }
+            case OpCode::OP_MULTIPLY_FLOAT:
+            {
+                Push(Multiply<std::float32_t>());
+                break;
+            }
 
-                Push(return_value);
-                break;
-            }
-            case OpCode::OP_CONSTANT:
+            case OpCode::OP_DIVIDE_INT:
             {
-                Push(std::move(ExtractNextConstant()));
+                Push(Divide<int32_t>());
                 break;
             }
-            case OpCode::OP_ADD:
+            case OpCode::OP_DIVIDE_FLOAT:
             {
-                Push(std::move(HandleAdd()));
+                Push(Divide<std::float32_t>());
                 break;
             }
-            case OpCode::OP_SUBTRACT:
+
+            case OpCode::OP_GREATER_INT:
             {
-                Push(std::move(HandleSubtract()));
+                Push(GreaterThan<int32_t>());
                 break;
             }
-            case OpCode::OP_MULTIPLY:
+            case OpCode::OP_GREATER_FLOAT:
             {
-                Push(std::move(HandleMultiply()));
+                Push(GreaterThan<std::float32_t>());
                 break;
             }
-            case OpCode::OP_DIVIDE:
+
+            case OpCode::OP_GREATER_EQUAL_INT:
             {
-                Push(std::move(HandleDivide()));
+                Push(GreaterEqualThan<int32_t>());
                 break;
             }
-            case OpCode::OP_GREATER:
+            case OpCode::OP_GREATER_EQUAL_FLOAT:
             {
-                Push(std::move(HandleGreaterThan()));
+                Push(GreaterEqualThan<std::float32_t>());
                 break;
             }
-            case OpCode::OP_GREATER_EQUAL:
+
+            case OpCode::OP_LESS_INT:
             {
-                Push(std::move(HandleGreaterEqualThan()));
+                Push(LessThan<int32_t>());
                 break;
             }
-            case OpCode::OP_LESS:
+            case OpCode::OP_LESS_FLOAT:
             {
-                Push(std::move(HandleGreaterThan()));
+                Push(LessThan<std::float32_t>());
                 break;
             }
-            case OpCode::OP_LESS_EQUAL:
+
+            case OpCode::OP_LESS_EQUAL_INT:
             {
-                Push(std::move(HandleGreaterEqualThan()));
+                Push(LessEqualThan<int32_t>());
                 break;
             }
-            case OpCode::OP_EQUAL:
+            case OpCode::OP_LESS_EQUAL_FLOAT:
             {
-                Push(std::move(HandleEqualTo()));
+                Push(LessEqualThan<std::float32_t>());
                 break;
             }
-            case OpCode::OP_NOT_EQUAL:
+
+            case OpCode::OP_EQUAL_INT:
             {
-                Push(std::move(HandleNotEqualTo()));
+                Push(EqualTo<int32_t>());
                 break;
             }
-            case OpCode::OP_NEGATE:
+            case OpCode::OP_EQUAL_FLOAT:
             {
-                Push(std::move(HandleNegate()));
+                Push(EqualTo<std::float32_t>());
                 break;
             }
-            case OpCode::OP_DEFINE_GLOBAL:
+            case OpCode::OP_EQUAL_BOOL:
             {
-                DefineGlobal();
+                Push(EqualTo<bool>());
                 break;
             }
-            case OpCode::OP_GET_GLOBAL:
+
+            case OpCode::OP_NOT_EQUAL_INT:
             {
-                GetGlobal();
+                Push(NotEqualTo<int32_t>());
                 break;
             }
-            case OpCode::OP_SET_GLOBAL:
+            case OpCode::OP_NOT_EQUAL_FLOAT:
             {
-                SetGlobal();
+                Push(NotEqualTo<std::float32_t>());
                 break;
             }
+            case OpCode::OP_NOT_EQUAL_BOOL:
+            {
+                Push(NotEqualTo<bool>());
+                break;
+            }
+
+            // case OpCode::OP_NEGATE:
+            // {
+            //     Push(std::move(HandleNegate()));
+            //     break;
+            // }
+            case OpCode::OP_DEFINE_GLOBAL_INT:
+            {
+                DefineGlobal<int32_t>();
+                break;
+            }
+            case OpCode::OP_DEFINE_GLOBAL_FLOAT:
+            {
+                DefineGlobal<std::float32_t>();
+                break;
+            }
+            case OpCode::OP_DEFINE_GLOBAL_BOOL:
+            {
+                DefineGlobal<bool>();
+                break;
+            }
+
+            case OpCode::OP_GET_GLOBAL_INT:
+            {
+                GetGlobal<int32_t>();
+                break;
+            }
+            case OpCode::OP_GET_GLOBAL_FLOAT:
+            {
+                GetGlobal<std::float32_t>();
+                break;
+            }
+            case OpCode::OP_GET_GLOBAL_BOOL:
+            {
+                GetGlobal<bool>();
+                break;
+            }
+
+            case OpCode::OP_SET_GLOBAL_INT:
+            {
+                SetGlobal<int32_t>();
+                break;
+            }
+            case OpCode::OP_SET_GLOBAL_FLOAT:
+            {
+                SetGlobal<std::float32_t>();
+                break;
+            }
+            case OpCode::OP_SET_GLOBAL_BOOL:
+            {
+                SetGlobal<bool>();
+                break;
+            }
+
             case OpCode::OP_CALL:
             {
                 CallFunction();
                 break;
             }
-            case OpCode::OP_NIL:
+
+            case OpCode::OP_GET_LOCAL_INT:
             {
-                Push(std::monostate{});
+                GetLocalVariable<int32_t>();
                 break;
             }
-            case OpCode::OP_GET_LOCAL:
+            case OpCode::OP_GET_LOCAL_FLOAT:
             {
-                GetLocalVariable();
+                GetLocalVariable<std::float32_t>();
                 break;
             }
-            case OpCode::OP_SET_LOCAL:
+            case OpCode::OP_GET_LOCAL_BOOL:
             {
-                SetLocalVariable();
+                GetLocalVariable<bool>();
                 break;
             }
-            case OpCode::OP_POP:
+
+            case OpCode::OP_SET_LOCAL_INT:
             {
-                Pop();
+                SetLocalVariable<int32_t>();
                 break;
             }
+            case OpCode::OP_SET_LOCAL_FLOAT:
+            {
+                SetLocalVariable<std::float32_t>();
+                break;
+            }
+            case OpCode::OP_SET_LOCAL_BOOL:
+            {
+                SetLocalVariable<bool>();
+                break;
+            }
+
+            case OpCode::OP_POP_INT:
+            {
+                Pop<int32_t>();
+                break;
+            }
+            case OpCode::OP_POP_FLOAT:
+            {
+                Pop<std::float32_t>();
+                break;
+            }
+            case OpCode::OP_POP_BOOL:
+            {
+                Pop<bool>();
+                break;
+            }
+
             case OpCode::OP_JUMP_IF_FALSE:
             {
                 HandleJumpIfFalse();
@@ -188,306 +346,44 @@ InterpretResult VM::Run()
     return InterpretResult::INTERPRET_OK;
 }
 
-void VM::Push(RuntimeValue value)
-{
-    stack.push_back(std::move(value));
-}
-
-RuntimeValue VM::Pop()
-{
-    auto value = std::move(stack.back());
-    stack.pop_back();
-    return value;
-}
-
-RuntimeValue VM::HandleAdd()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math, along with string concatenation
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>()
-            || AreBoth<T2, T3, std::string>())
-        {
-            return l + r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-void VM::DefineGlobal()
-{
-    const auto global_symbol = ExtractNextConstant();
-    const auto value = Pop();
-    globals[std::get<std::string>(global_symbol)] = value;
-}
-
-RuntimeValue& VM::ExtractNextConstant()
+ConstantValue& VM::ExtractNextConstant()
 {
     const uint8_t index = *(call_frames.back().ip)++; // constant index is on the next instruction
     return call_frames.back().chunk->constants[index]; // value can maybe be cleared? maybe take by reference and move
 }
 
-void VM::GetGlobal()
-{
-    Push(globals[std::get<std::string>(ExtractNextConstant())]);
-}
-
-void VM::SetGlobal()
-{
-    const auto value = stack.back(); // Peek, don't pop, so assignment expressions return their value!
-    globals[std::get<std::string>(ExtractNextConstant())] = value;
-}
-
 void VM::CallFunction()
 {
-    // Assumes everything is correctly ordered
-    // OP_CALL NUM_ARGS
-    const auto num_args = *(call_frames.back().ip)++;
-
-
     // cant pop since the function itself and its args must remain in scope
     // for recursion and referencing the args
-    const auto func_val = stack[stack.size() - 1 - num_args];
-    const auto function_object = std::get<std::shared_ptr<FunctionObject>>(func_val);
 
-    assert(function_object->num_args == num_args && "Function called with too much arguments");
+    const auto arg_bytes = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const size_t func_ptr_index = stack.size() - arg_bytes - sizeof(FunctionObject*);
 
-    if(function_object->is_native())
+    if(const auto* function_object = ReadBytesAbsolute<FunctionObject*>(stack, func_ptr_index);
+        function_object->is_native())
     {
-        std::vector<RuntimeValue> args;
-        for(int i = 0; i < num_args; ++i)
-        {
-            args.push_back( Pop());
-        }
+        const uint8_t* args_ptr = stack.data() + stack.size() - arg_bytes;
+        // Buffer for the return value (8 bytes is enough for any primitive)
+        uint8_t return_buffer[8];
 
-        Pop(); // function
-        const auto result = function_object->native_fn(args);
-        Push(result);
+        function_object->native_fn(args_ptr, return_buffer);
+
+        stack.resize(func_ptr_index);
+        // Push the return value if its not void
+        if (function_object->return_bytes > 0)
+        {
+            stack.insert(stack.end(), return_buffer, return_buffer + function_object->return_bytes);
+        }
     }
     else
     {
         call_frames.emplace_back(
             function_object->chunk.get(),
             function_object->chunk->code.data(),
-            stack.size() - 1 - num_args
+            func_ptr_index
         );
     }
-}
-
-RuntimeValue VM::HandleSubtract()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l - r;
-        }
-
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleMultiply()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l * r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleDivide()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l/r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleNegate()
-{
-    auto var = Pop();
-
-    return std::visit([]<typename T>(T&& v) -> RuntimeValue {
-        using T1 = std::decay_t<T>;
-        if constexpr (std::is_same_v<T1, bool>)
-        {
-            return !v;
-        }
-        else if constexpr (std::is_same_v<T1, int> || std::is_same_v<T1, float>)
-        {
-            return -v;
-        }
-
-        return std::monostate{};
-    }, var);
-}
-
-RuntimeValue VM::HandleGreaterThan()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l < r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleGreaterEqualThan()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l <= r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleLessThan()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l > r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleLessEqualThan()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        // direct int, and float math
-        if constexpr(
-               AreBoth<T2, T3, int>()
-            || AreBoth<T2, T3, float>())
-        {
-            return l >= r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleEqualTo()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        if constexpr(std::is_same_v<T2, T3>)
-        {
-            return l == r;
-        }
-        return std::monostate{};
-    }, left, right);
-}
-
-RuntimeValue VM::HandleNotEqualTo()
-{
-    auto right = Pop();
-    auto left = Pop();
-
-    return std::visit([]<typename T0, typename T1>(T0&& l, T1&& r) -> RuntimeValue {
-        using T2 = std::decay_t<T0>;
-        using T3 = std::decay_t<T1>;
-
-        if constexpr(std::is_same_v<T2, T3>)
-        {
-            return l != r;
-        }
-
-        return std::monostate{};
-    }, left, right);
-}
-
-void VM::GetLocalVariable()
-{
-    const auto local_index = *(call_frames.back().ip)++;
-    // stack_base is the function, so +1 jumps to the start of the variables
-    Push(stack[call_frames.back().stack_base + 1 + local_index]);
-}
-
-void VM::SetLocalVariable()
-{
-    const auto local_index = *(call_frames.back().ip)++;
-    // Peek at the top of the stack, and copy it into the local slot
-    stack[call_frames.back().stack_base + 1 + local_index] = stack.back();
 }
 
 void VM::HandleJumpIfFalse()
@@ -496,7 +392,7 @@ void VM::HandleJumpIfFalse()
 
     // Pop the true/false condition off the stack
     // TODO: If falsey/bool operators get added handle here?
-    if (const auto condition = Pop(); std::get<bool>(condition) == false)
+    if (const auto condition = Pop<bool>(); condition == false)
     {
         call_frames.back().ip += offset;
     }
@@ -512,7 +408,6 @@ void VM::HandleLoop()
 {
     const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     call_frames.back().ip -= offset;
-
 }
 
 void VM::HandleJumpIfFalsePeek()
@@ -520,7 +415,7 @@ void VM::HandleJumpIfFalsePeek()
     const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
 
     // TODO: If falsey/bool operators get added handle here?
-    if (const auto condition = stack.back(); std::get<bool>(condition) == false)
+    if(const auto condition = Peek<bool>(); condition == false)
     {
         call_frames.back().ip += offset;
     }
@@ -530,7 +425,7 @@ void VM::HandleJumpIfTruePeek()
 {
     const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
 
-    if (const auto condition = stack.back(); std::get<bool>(condition) == true)
+    if(const auto condition = Peek<bool>(); condition == true)
     {
         call_frames.back().ip += offset;
     }
@@ -540,12 +435,13 @@ void VM::LoadNativeFunction()
 {
     const std::string& lib_path = std::get<std::string>(ExtractNextConstant());
     const std::string& symbol_name = std::get<std::string>(ExtractNextConstant());
-    uint8_t num_args   = *(call_frames.back().ip)++;
+    const auto num_args = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto return_bytes = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     auto result = plugin_loader.LoadSymbol(lib_path, symbol_name);
     if (!result)
     {
         throw std::runtime_error(result.error());
     }
 
-    globals[symbol_name] = std::make_shared<FunctionObject>(symbol_name, num_args, result.value());
+    globals[symbol_name] = std::make_shared<FunctionObject>(symbol_name, num_args, return_bytes, result.value());
 }

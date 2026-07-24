@@ -3,7 +3,7 @@
 #include <numeric>
 
 #include "frontend/Expression.h"
-#include "vm/RuntimeValue.h"
+#include "vm/ConstantValue.h"
 
 // Instruction that does something
 // can be like a variable declaration,

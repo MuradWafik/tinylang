@@ -3,9 +3,9 @@
 #include <expected>
 #include <string>
 #include <unordered_map>
-#include "vm/RuntimeValue.h"
+#include "vm/ConstantValue.h"
 
-using NativeFuncPtr = RuntimeValue (*)(const std::vector<RuntimeValue>&);
+using NativeFuncPtr = void (*)(const uint8_t*, uint8_t*);
 
 class PluginLoader
 {

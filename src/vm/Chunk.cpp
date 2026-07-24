@@ -13,7 +13,7 @@ void Chunk::Write(OpCode opcode, const uint32_t line)
     Write(static_cast<uint8_t>(opcode), line);
 }
 
-size_t Chunk::AddConstant(RuntimeValue value)
+size_t Chunk::AddConstant(ConstantValue value)
 {
     constants.push_back(std::move(value));
     return constants.size() - 1;

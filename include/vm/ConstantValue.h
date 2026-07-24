@@ -10,7 +10,7 @@
 class Chunk;
 struct FunctionObject;
 
-using RuntimeValue = std::variant<
+using ConstantValue = std::variant<
     int,
     float,
     bool,
@@ -19,7 +19,7 @@ using RuntimeValue = std::variant<
     std::monostate  // void/no value
 >;
 
-using NativeFn = RuntimeValue (*)(const std::vector<RuntimeValue>&);
+using NativeFn = void (*)(const uint8_t* args, uint8_t* return_slot);
 
 struct FunctionObject
 {
@@ -27,11 +27,12 @@ struct FunctionObject
     size_t num_args = 0;
     std::unique_ptr<Chunk> chunk{nullptr};
 
+    uint8_t return_bytes = 0; // how many bytes to push after execution
     NativeFn native_fn{nullptr};
-    bool is_native() const { return native_fn != nullptr; }
+    [[nodiscard]] bool is_native() const { return native_fn != nullptr; }
 
-    FunctionObject(std::string n, size_t a, std::unique_ptr<Chunk> c);
-    FunctionObject(std::string n, size_t a, NativeFn native_fn);
+    FunctionObject(std::string name, size_t num_args, std::unique_ptr<Chunk> chunk);
+    FunctionObject(std::string name, size_t num_args, uint8_t return_bytes, NativeFn native_fn);
     ~FunctionObject();
 };
 /*
@@ -44,7 +45,8 @@ struct FunctionObject
  */
 
 
-inline std::string ToString(const RuntimeValue& value) {
+inline std::string ToString(const ConstantValue& value)
+{
     return std::visit([]<typename T0>(T0&& arg) -> std::string
     {
         using T = std::decay_t<T0>;
@@ -60,9 +62,9 @@ inline std::string ToString(const RuntimeValue& value) {
 }
 
 template <>
-struct std::formatter<RuntimeValue> : std::formatter<std::string>
+struct std::formatter<ConstantValue> : std::formatter<std::string>
 {
-    auto format(const RuntimeValue& val, std::format_context& ctx) const
+    auto format(const ConstantValue& val, std::format_context& ctx) const
     {
         return std::formatter<std::string>::format(ToString(val), ctx);
     }

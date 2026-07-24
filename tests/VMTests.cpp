@@ -9,7 +9,7 @@
 #include "vm/VM.h"
 
 // Helper function to compile and run code in the VM, then extract a global variable
-static RuntimeValue RunAndGetGlobal(const std::string& source, const std::string& var_name) {
+static ConstantValue RunAndGetGlobal(const std::string& source, const std::string& var_name) {
     Lexer lexer{};
     auto lex_result = lexer.Lex(source);
     REQUIRE(lex_result.has_value());

@@ -47,7 +47,7 @@ void Compiler::CompileExpression(const Expression* expression)
     if(const auto asgn_expr = dynamic_cast<const AssignmentExpression*>(expression)) return CompileAssignmentExpression(asgn_expr);
 }
 
-void Compiler::CompileLiteral(const RuntimeValue& value, const uint32_t line) const
+void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) const
 {
     const int index = current_chunk->AddConstant(value);
     assert(index < 256 && "Too many constants in current scope, overflowing");
@@ -263,7 +263,7 @@ void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
     else
     {
         // add a null value for when it gets popped of the stack
-        current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_NIL);
+        // current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_NIL);
     }
     current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN);
 }
