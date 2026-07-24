@@ -25,6 +25,7 @@ enum class TokenType
     Break,
     Continue,
     Native,
+    Module,
 
     // Types
     IntType,
@@ -109,6 +110,7 @@ struct Token {
         {"String", TokenType::StringType},
         {"void", TokenType::Void},
         {"native", TokenType::Native},
+        {"module", TokenType::Module},
     };
     static std::string TypeToString(TokenType token_type);
 
@@ -120,8 +122,8 @@ struct Token {
 };
 
 template <>
-struct std::formatter<TokenType> : std::formatter<std::string> {
-    // Define the format function
+struct std::formatter<TokenType> : std::formatter<std::string>
+{
     template <typename FormatContext>
     auto format(const TokenType& t, FormatContext& ctx) const {
         return std::formatter<std::string>::format(Token::TypeToString(t), ctx);

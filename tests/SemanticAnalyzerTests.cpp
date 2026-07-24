@@ -13,7 +13,7 @@ static std::expected<void, std::string> Analyze(const std::string_view source)
     auto parse_result = parser.ParseProgram();
     if (!parse_result) return std::unexpected(parse_result.error());
 
-    SemanticAnalyzer analyzer;
+    SemanticAnalyzer analyzer{nullptr};
     return analyzer.Analyze(parse_result.value());
 }
 

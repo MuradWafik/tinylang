@@ -35,6 +35,7 @@ bool Parser::IsAtEnd() const
     return index >= tokens.size() || Peek().type == TokenType::EndOfFile;
 }
 
+// Consumes and returns true if the target if found, otherwise just returns false
 bool Parser::Match(const TokenType target)
 {
     if(IsAtEnd())
@@ -96,6 +97,7 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::LeftBrace: return ParseBodyStatement();
         case TokenType::Break: return ParseBreakStatement();
         case TokenType::Continue: return ParseContinueStatement();
+        case TokenType::Native: return ParseNativeStatement();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -509,6 +511,86 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
     );
 }
 
+ExpectedNodePtr Parser::ParseNativeStatement()
+{
+    Consume(); //  nativekeyword
+
+    if(Match(TokenType::Module))
+    {
+        // Native module declaration
+        auto name = Expect(TokenType::StringLiteral,"Module name expected");
+        if(!name)
+        {
+            return std::unexpected(name.error());
+        }
+
+        if(auto semicolon = Expect(TokenType::Semicolon, "Error in native module declaration");
+            !semicolon)
+        {
+            return std::unexpected(semicolon.error());
+        }
+        return std::make_unique<NativeModuleStatement>(std::move(name->lexeme));
+    }
+
+    if(Match(TokenType::Fn))
+    {
+        auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
+        if(!function_name) return std::unexpected(function_name.error());
+
+        if(auto left_paren = Expect(TokenType::LeftParen, "Error after function name");
+            !left_paren)
+        {
+            return std::unexpected(left_paren.error());
+        }
+
+        auto parameters_result = ParseParameters();
+        if(!parameters_result)
+        {
+            return std::unexpected(parameters_result.error());
+        }
+
+        if(auto right_paren = Expect(TokenType::RightParen, "Error after function parameters");
+            !right_paren)
+        {
+            return std::unexpected(right_paren.error());
+        }
+
+        if(auto arrow = Expect(TokenType::Arrow, "Error after function signature");
+            !arrow)
+        {
+            return std::unexpected(arrow.error());
+        }
+
+        const Token& return_type = Peek();
+
+        // FIXME: allow for other types
+        if(!return_type.IsPrimitiveTypeName())
+        {
+            return std::unexpected(
+                std::format("Expected type name after '->', got '{}' at {}",
+                    return_type.lexeme,
+                    return_type.source_location
+                )
+            );
+        }
+        Consume();
+
+        if(auto semicolon = Expect(TokenType::Semicolon, "");
+            !semicolon)
+        {
+            return std::unexpected(semicolon.error());
+        }
+
+        return std::make_unique<NativeFunctionDeclaration>(
+            function_name->lexeme,
+            std::move(parameters_result.value()),
+            return_type.lexeme
+        );
+    }
+
+    return std::unexpected(std::format("Unknown token after Native keyword '{}'", Peek().type));
+}
+
 Expected<std::vector<Parameter>> Parser::ParseParameters()
 {
     /*
@@ -634,14 +716,14 @@ ExpectedPtr<IfStatement> Parser::ParseIfStatement()
                 std::move(condition.value()),
                 std::move(body.value()),
                 std::move(elif_branch.value()),
-                if_keyword->source_location);
+                if_keyword->source_location
+            );
         }
         auto else_body = ParseBodyStatement();
         if(!else_body)
         {
             return std::unexpected(std::format("Error parsing else statement, {}", else_body.error()));
         }
-
 
         return std::make_unique<IfStatement>(
             std::move(condition.value()),

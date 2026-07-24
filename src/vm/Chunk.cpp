@@ -48,6 +48,16 @@ int Chunk::DisassembleInstruction(int offset) const
             std::println("{:<16} {:4} '{}'", opcode_name, index, variable);
             return offset + 2;
         }
+        case OpCode::OP_LOAD_NATIVE:
+        {
+            const auto path_index = code[offset + 1];
+            const auto name_index = code[offset + 2];
+            const auto num_args   = code[offset + 3];
+            const auto& path = constants[path_index];
+            const auto& name = constants[name_index];
+            std::println("{:<16} {:4} path: '{}', {:4} name: '{}', {:4} args", opcode_name, path_index, path, name_index, name, num_args);
+            return offset + 4;
+        }
         case OpCode::OP_CALL:
         {
             const auto num_args = code[offset + 1];

@@ -178,3 +178,29 @@ struct ContinueStatement final : Statement
 
     explicit ContinueStatement(const SourceLocation loc) { this->source_location = loc; }
 };
+
+
+struct NativeModuleStatement final : Statement
+{
+    std::string name;
+    [[nodiscard]] std::string GetTypeString() const override {
+        return "NativeModuleStatement";
+    }
+
+    explicit NativeModuleStatement(std::string name) : name(std::move(name)) {}
+};
+
+struct NativeFunctionDeclaration final : Statement
+{
+    std::string name;
+    std::vector<Parameter> parameters;
+    std::string return_type;
+
+    [[nodiscard]] std::string GetTypeString() const override {
+        return "NativeFunctionDeclaration";
+    }
+
+    NativeFunctionDeclaration(std::string name, std::vector<Parameter> parameters, std::string return_type) :
+        name(std::move(name)), parameters(std::move(parameters)), return_type(std::move(return_type))
+    {}
+};

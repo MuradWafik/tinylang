@@ -18,7 +18,8 @@ void Run(const int argc, char** argv)
         return;
     }
 
-    auto FileOpenResult = FileReader::Read(argv[1]);
+    const auto source_file_path = argv[1];
+    auto FileOpenResult = FileReader::Read(source_file_path);
     if(!FileOpenResult.has_value())
     {
         std::println(std::cerr, "{}", FileOpenResult.error());
@@ -43,20 +44,26 @@ void Run(const int argc, char** argv)
         return;
     }
 
-    SemanticAnalyzer semantic_analyzer{};
+    auto project_config =  ProjectConfig::FindAndLoad(source_file_path);
+    if(!project_config)
+    {
+        std::println(std::cerr, "Error reading project config: {}", project_config.error());
+        return;
+    }
+
+    SemanticAnalyzer semantic_analyzer{project_config->get()};
+
     if(auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value()); !semantic_analysis_result)
     {
         std::println(std::cerr, "Error in semantic analysis: {}", semantic_analysis_result.error());
         return;
     }
 
-    Compiler compiler;
+    Compiler compiler{project_config->get()};
     std::unique_ptr<Chunk> chunk = compiler.Compile(parse_result.value());
 
-    // 4. Disassemble the compiled chunk to verify it worked
-    chunk->Disassemble("Compiler Test");
+    // chunk->Disassemble("Compiler Test");
 
-    // 5. Run it in the VM!
     VM vm;
     vm.Interpret(chunk.get());
 

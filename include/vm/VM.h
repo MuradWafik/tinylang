@@ -5,6 +5,7 @@
 
 #include "vm/RuntimeValue.h"
 #include "vm/Chunk.h"
+#include "vm/PluginLoader.h"
 
 enum class InterpretResult {
     INTERPRET_OK,
@@ -18,9 +19,19 @@ public:
 
     InterpretResult Interpret(Chunk* chunk);
 
+    void LoadNativeFunction();
+
+    std::optional<RuntimeValue> GetGlobal(const std::string& name) const {
+        if (auto it = globals.find(name); it != globals.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
 private:
     std::vector<RuntimeValue> stack{};
     std::unordered_map<std::string, RuntimeValue> globals{};
+    PluginLoader plugin_loader{};
 
     struct CallFrame
     {

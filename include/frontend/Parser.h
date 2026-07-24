@@ -65,6 +65,7 @@ private:
 
 
     ExpectedStatementPtr ParseFunctionDeclaration();
+    ExpectedNodePtr ParseNativeStatement();
     Expected<std::vector<Parameter>> ParseParameters();
     ExpectedPtr<VariableDeclaration> ParseVariableDeclaration();
     ExpectedPtr<BodyStatement> ParseBodyStatement();

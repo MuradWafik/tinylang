@@ -29,6 +29,8 @@ void Compiler::CompileStatement(const Statement* statement)
     if(const auto expr_stmt = dynamic_cast<const ExpressionStatement*>(statement)) return CompileExpressionStatement(expr_stmt);
     if(const auto cnt_stmt = dynamic_cast<const ContinueStatement*>(statement)) return CompileContinueStatement(cnt_stmt);
     if(const auto brk_stmt = dynamic_cast<const BreakStatement*>(statement)) return CompileBreakStatement(brk_stmt);
+    if(const auto mod_stmt = dynamic_cast<const NativeModuleStatement*>(statement)) return CompileNativeModuleStatement(mod_stmt);
+    if(const auto native_fn_decl = dynamic_cast<const NativeFunctionDeclaration*>(statement)) return CompileNativeFunctionDeclaration(native_fn_decl);
 }
 
 void Compiler::CompileExpression(const Expression* expression)
@@ -63,7 +65,7 @@ void Compiler::CompileLogicalAnd(const BinaryExpression* binary_expression)
 
     CompileExpression(binary_expression->right.get());
 
-    const uint16_t distance = current_chunk->code.size() - jump_index;
+    const uint16_t distance = current_chunk->code.size() - (jump_index + 2);
     current_chunk->code[jump_index] = (distance >> 8) & 0xff; // High byte
     current_chunk->code[jump_index + 1] = distance & 0xff; // Low byte
 }
@@ -79,7 +81,7 @@ void Compiler::CompileLogicalOr(const BinaryExpression* binary_expression)
 
     CompileExpression(binary_expression->right.get());
 
-    const uint16_t distance = current_chunk->code.size() - jump_index;
+    const uint16_t distance = current_chunk->code.size() - (jump_index + 2);
     current_chunk->code[jump_index] = (distance >> 8) & 0xff; // High byte
     current_chunk->code[jump_index + 1] = distance & 0xff; // Low byte
 }
@@ -399,6 +401,26 @@ void Compiler::CompileBreakStatement(const BreakStatement* break_statement)
     // Don't know the location so leave placeholder, the while populates (reminder jump uses 2 bytes);
     current_chunk->WriteInstruction(break_statement->source_location.line_number, OpCode::OP_JUMP, 0, 0);
     break_placeholders.push_back(current_chunk->code.size() - 2);
+}
+
+void Compiler::CompileNativeModuleStatement(const NativeModuleStatement* mod_stmt)
+{
+    current_native_module_path = project_config->ResolvePluginPath(mod_stmt->name);
+}
+
+void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const
+{
+    const auto path_index = current_chunk->AddConstant(current_native_module_path.string());
+    const auto name_index = current_chunk->AddConstant(native_function_declaration->name);
+    const auto num_args= native_function_declaration->parameters.size();
+
+    current_chunk->WriteInstruction(
+        native_function_declaration->source_location.line_number,
+        OpCode::OP_LOAD_NATIVE,
+        path_index,
+        name_index,
+        num_args
+    );
 }
 
 int64_t Compiler::GetLocalVariableIndex(const std::string& name)

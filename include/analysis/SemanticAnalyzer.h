@@ -8,6 +8,7 @@
 
 #include "analysis/Type.h"
 #include "frontend/ASTNode.h"
+#include "frontend/ProjectConfig.h"
 #include "frontend/Statement.h"
 #include "frontend/Token.h"
 #include "utils/Utils.h"
@@ -65,14 +66,19 @@ struct Scope {
 
 class SymbolTable {
 public:
-    inline void PushScope()
+    void PushScope()
     {
         scopes.emplace_back();
     }
     
-    inline void PopScope()
+    void PopScope()
     {
         scopes.pop_back();
+    }
+
+    [[nodiscard]] size_t GetScopeDepth() const
+    {
+        return scopes.size() - 1;
     }
 
     // Variable API
@@ -97,11 +103,15 @@ public:
     const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
     const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
 
+    explicit SemanticAnalyzer(ProjectConfig* project_config) : project_config{project_config}
+    {}
+
 private:
     SymbolTable symbol_table{};
     size_t loop_depth{0};
     std::unordered_map<OperatorSignature, const Type*, OperatorSignatureHash> binary_operators;
     std::unordered_map<UnaryOperatorSignature, const Type*, UnaryOperatorSignatureHash> unary_operators;
+    ProjectConfig* project_config; // non owning
 
     // Has to take ownership of the types since they must be dynamically allocated for dynamic dispatch
     std::vector<std::unique_ptr<Type>> allocated_types;
@@ -110,9 +120,10 @@ private:
     // as return statements have no information of their functions
 
 
+    std::string current_native_module{};
+    // Native functions need to be aware of their native modules and to add them to symbol table
+
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
-
-
 
     std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
     std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
@@ -126,6 +137,8 @@ private:
     std::expected<void, std::string> AnalyzeReturnStatement(const ReturnStatement* return_statement);
     std::expected<void, std::string> AnalyzeBodyStatement(const BodyStatement* body_statement);
     std::expected<void, std::string> AnalyzeExpressionStatement(const ExpressionStatement* expression_statement);
+    std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeModuleStatement* native_module_statement);
+    std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration);
 
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);

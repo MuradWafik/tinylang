@@ -1,14 +1,18 @@
 #pragma once
 #include <cassert>
+#include <filesystem>
 
 #include "frontend/Statement.h"
 #include "vm/Chunk.h"
 #include <memory>
 #include <vector>
 
-class Compiler {
+#include "frontend/ProjectConfig.h"
+
+class Compiler
+{
 public:
-    Compiler() = default;
+    explicit Compiler(ProjectConfig* project_config) : project_config{project_config} {}
 
     std::unique_ptr<Chunk> Compile(const std::vector<std::unique_ptr<ASTNode>>& statements);
 
@@ -23,16 +27,15 @@ private:
     void CompileExpressionStatement(const ExpressionStatement* expression_statement);
     void CompileContinueStatement(const ContinueStatement* continue_statement) const;
     void CompileBreakStatement(const BreakStatement* break_statement);
-
+    void CompileNativeModuleStatement(const NativeModuleStatement* mod_stmt);
+    void CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const;
 
 
 
     void CompileExpression(const Expression* expression);
     void CompileLiteral(const RuntimeValue& value, uint32_t line) const;
-
     void CompileLogicalAnd(const BinaryExpression* binary_expression);
     void CompileLogicalOr(const BinaryExpression* binary_expression);
-
     void CompileBinaryExpression(const BinaryExpression* binary_expression);
     void CompileUnaryExpression(const UnaryExpression* unary_expression);
     void CompileIdentifierExpression(const IdentifierExpression* identifier_expression);
@@ -46,5 +49,8 @@ private:
     std::vector<std::string> locals;
     std::vector<size_t> break_placeholders; // when a break is met, it doesnt know where the body ends, need to update when reached
     std::vector<size_t> loop_starts; // when a continue is met, it doesnt know where the loop starts
+
+    std::filesystem::path current_native_module_path{};
+    ProjectConfig* project_config; // non owning
 
 };

@@ -65,6 +65,8 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* s
     if(const auto* return_stmt = dynamic_cast<ReturnStatement*>(stmt)) return AnalyzeReturnStatement(return_stmt);
     if(const auto* body_stmt = dynamic_cast<BodyStatement*>(stmt)) return AnalyzeBodyStatement(body_stmt);
     if(const auto* expr_stmt = dynamic_cast<ExpressionStatement*>(stmt)) return AnalyzeExpressionStatement(expr_stmt);
+    if(const auto* native_mod_stmt = dynamic_cast<NativeModuleStatement*>(stmt)) return AnalyzeNativeModuleStatement(native_mod_stmt);
+    if(const auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
 
     return std::unexpected(std::format("Unknown statement type '{}'", stmt->GetTypeString()));
 }
@@ -339,6 +341,67 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeExpressionStatement(
     return Analyze(expression_statement->expression.get());
 }
 
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeModuleStatement(const NativeModuleStatement* native_module_statement)
+{
+    if(!current_native_module.empty())
+    {
+        return std::unexpected<std::string>("Only one native module definition is allowed");
+    }
+
+    const auto mod_path = project_config->ResolvePluginPath(native_module_statement->name);
+    if(mod_path.empty())
+    {
+        return std::unexpected(std::format("Unable to locate module '{}'", native_module_statement->name));
+    }
+
+    current_native_module = mod_path.string();;
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration)
+{
+    if(current_native_module.empty())
+    {
+        return std::unexpected(
+            std::format("No native module for native function declaration '{}'", native_function_declaration->name)
+        );
+    }
+
+    if (symbol_table.GetScopeDepth() > 0)
+    {
+        return std::unexpected("Native functions can only be declared at the global scope");
+    }
+
+    if(symbol_table.IsDeclaredInCurrentScope(native_function_declaration->name))
+    {
+        return Return(std::format("Redefinition of variable/function '{}'", native_function_declaration->name));
+    }
+
+    const auto* return_type = symbol_table.LookupType(native_function_declaration->return_type);
+    if(!return_type)
+    {
+        return Return(std::format("Unknown return type '{}'", native_function_declaration->return_type));
+    }
+
+    std::vector<const Type*> parameter_types;
+    for(const auto& [name, type_name]: native_function_declaration->parameters)
+    {
+        auto* type = symbol_table.LookupType(type_name);
+        if(!type)
+        {
+            return Return(std::format("Unknown type '{}' for function parameter '{}'", type_name, name));
+        }
+        parameter_types.push_back(type);
+    }
+
+    auto func_type = std::make_unique<FunctionType>(parameter_types, return_type);
+
+    symbol_table.DefineType(func_type->GetName(), func_type.get());
+    symbol_table.DefineVariable({native_function_declaration->name, func_type.get()});
+
+    allocated_types.push_back(std::move(func_type));
+    return {};
+}
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeBinaryExpression(BinaryExpression* binary_expression)
 {

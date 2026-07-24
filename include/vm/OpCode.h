@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+#include <magic_enum.hpp>
+
 enum class OpCode : uint8_t
 {
     // --- Data & Variables ---
@@ -40,42 +42,15 @@ enum class OpCode : uint8_t
     OP_LOOP,               // [2 byte operand: jump_offset]    | Stack: Unconditionally rewinds IP backwards by offset
 
     // --- Functions ---
+    OP_LOAD_NATIVE,        // [3 byte operand: path_index, name_index, num_args] | Stack: Loads DLL, extracts function, saves as global
     OP_CALL,               // [1 byte operand: num_args]       | Stack: Peeks function at top - num_args, creates CallFrame
     OP_RETURN,             // [No operands]                    | Stack: Pops return_value, erases frame, pushes return_value
 };
 
 
 
-constexpr std::string OpCodeToString(const OpCode op_code)
+
+inline std::string OpCodeToString(const OpCode op_code)
 {
-    switch(op_code)
-    {
-        case OpCode::OP_CONSTANT: return "OP_CONSTANT";
-        case OpCode::OP_NIL: return "OP_NIL";
-        case OpCode::OP_ADD: return "OP_ADD";
-        case OpCode::OP_SUBTRACT: return "OP_SUBTRACT";
-        case OpCode::OP_MULTIPLY: return "OP_MULTIPLY";
-        case OpCode::OP_DIVIDE: return "OP_DIVIDE";
-        case OpCode::OP_NEGATE: return "OP_NEGATE";
-        case OpCode::OP_RETURN: return "OP_RETURN";
-        case OpCode::OP_DEFINE_GLOBAL: return "OP_DEFINE_GLOBAL";
-        case OpCode::OP_GET_GLOBAL: return "OP_GET_GLOBAL";
-        case OpCode::OP_SET_GLOBAL: return "OP_SET_GLOBAL";
-        case OpCode::OP_GET_LOCAL: return "OP_GET_LOCAL";
-        case OpCode::OP_SET_LOCAL: return "OP_SET_LOCAL";
-        case OpCode::OP_POP: return "OP_POP";
-        case OpCode::OP_JUMP_IF_FALSE: return "OP_JUMP_IF_FALSE";
-        case OpCode::OP_JUMP_IF_FALSE_PEEK: return "OP_JUMP_IF_FALSE_PEEK";
-        case OpCode::OP_JUMP_IF_TRUE_PEEK: return "OP_JUMP_IF_TRUE_PEEK";
-        case OpCode::OP_JUMP: return "OP_JUMP";
-        case OpCode::OP_LOOP: return "OP_LOOP";
-        case OpCode::OP_CALL: return "OP_CALL";
-        case OpCode::OP_EQUAL: return "OP_EQUAL";
-        case OpCode::OP_NOT_EQUAL: return "OP_NOT_EQUAL";
-        case OpCode::OP_GREATER: return "OP_GREATER";
-        case OpCode::OP_GREATER_EQUAL: return "OP_GREATER_EQUAL";
-        case OpCode::OP_LESS: return "OP_LESS";
-        case OpCode::OP_LESS_EQUAL: return "OP_LESS_EQUAL";
-        default: return "Unknown";
-    }
+    return std::string(magic_enum::enum_name(op_code));
 }

@@ -3,7 +3,7 @@ add_executable(
         LexerTests.cpp
         ParserTests.cpp
         SemanticAnalyzerTests.cpp
-        InterpreterTests.cpp
+        VMTests.cpp
 )
 
 target_link_libraries(

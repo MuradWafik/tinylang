@@ -5,17 +5,10 @@
 #include <string>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 class Chunk;
-
-struct FunctionObject {
-    std::string name;
-    size_t num_args = 0;
-    std::unique_ptr<Chunk> chunk;
-
-    FunctionObject(std::string n, size_t a, std::unique_ptr<Chunk> c);
-    ~FunctionObject();
-};
+struct FunctionObject;
 
 using RuntimeValue = std::variant<
     int,
@@ -26,6 +19,21 @@ using RuntimeValue = std::variant<
     std::monostate  // void/no value
 >;
 
+using NativeFn = RuntimeValue (*)(const std::vector<RuntimeValue>&);
+
+struct FunctionObject
+{
+    std::string name;
+    size_t num_args = 0;
+    std::unique_ptr<Chunk> chunk{nullptr};
+
+    NativeFn native_fn{nullptr};
+    bool is_native() const { return native_fn != nullptr; }
+
+    FunctionObject(std::string n, size_t a, std::unique_ptr<Chunk> c);
+    FunctionObject(std::string n, size_t a, NativeFn native_fn);
+    ~FunctionObject();
+};
 /*
  * Initially had FunctionObject stored as a unique_ptr but gemini says that won't work, explanation as a reminder why below
  *

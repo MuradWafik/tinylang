@@ -20,6 +20,10 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Return:          return "return";
         case TokenType::True:            return "true";
         case TokenType::False:           return "false";
+        case TokenType::Native:          return "native";
+        case TokenType::Module:          return "module";
+        case TokenType::Continue:        return "continue";
+        case TokenType::Break:           return "break";
 
         // Built-in Types
         case TokenType::IntType:         return "int";

@@ -11,7 +11,7 @@ InterpretResult VM::Interpret(Chunk* chunk)
     return Run();
 }
 
-#define DEBUG_TRACE_EXECUTION
+// #define DEBUG_TRACE_EXECUTION
 
 InterpretResult VM::Run()
 {
@@ -177,6 +177,11 @@ InterpretResult VM::Run()
                 HandleJumpIfTruePeek();
                 break;
             }
+            case OpCode::OP_LOAD_NATIVE:
+            {
+                LoadNativeFunction();
+                break;
+            }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
     }
@@ -236,7 +241,7 @@ void VM::GetGlobal()
 
 void VM::SetGlobal()
 {
-    const auto value = Pop();
+    const auto value = stack.back(); // Peek, don't pop, so assignment expressions return their value!
     globals[std::get<std::string>(ExtractNextConstant())] = value;
 }
 
@@ -254,11 +259,26 @@ void VM::CallFunction()
 
     assert(function_object->num_args == num_args && "Function called with too much arguments");
 
-    call_frames.emplace_back(
-        function_object->chunk.get(),
-        function_object->chunk->code.data(),
-        stack.size() - 1 - num_args
-    );
+    if(function_object->is_native())
+    {
+        std::vector<RuntimeValue> args;
+        for(int i = 0; i < num_args; ++i)
+        {
+            args.push_back( Pop());
+        }
+
+        Pop(); // function
+        const auto result = function_object->native_fn(args);
+        Push(result);
+    }
+    else
+    {
+        call_frames.emplace_back(
+            function_object->chunk.get(),
+            function_object->chunk->code.data(),
+            stack.size() - 1 - num_args
+        );
+    }
 }
 
 RuntimeValue VM::HandleSubtract()
@@ -514,4 +534,18 @@ void VM::HandleJumpIfTruePeek()
     {
         call_frames.back().ip += offset;
     }
+}
+
+void VM::LoadNativeFunction()
+{
+    const std::string& lib_path = std::get<std::string>(ExtractNextConstant());
+    const std::string& symbol_name = std::get<std::string>(ExtractNextConstant());
+    uint8_t num_args   = *(call_frames.back().ip)++;
+    auto result = plugin_loader.LoadSymbol(lib_path, symbol_name);
+    if (!result)
+    {
+        throw std::runtime_error(result.error());
+    }
+
+    globals[symbol_name] = std::make_shared<FunctionObject>(symbol_name, num_args, result.value());
 }
