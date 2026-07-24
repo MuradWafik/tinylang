@@ -2,6 +2,7 @@
 // No longer need stack header
 #include <unordered_map>
 #include <vector>
+#include <iostream>
 
 #include "utils/Utils.h"
 #include "vm/ConstantValue.h"
@@ -37,6 +38,8 @@ private:
     std::vector<uint8_t> stack{};
     std::unordered_map<std::string, ConstantValue> globals{};
     PluginLoader plugin_loader{};
+    std::vector<std::unique_ptr<FunctionObject>> allocated_native_functions;
+    // functions are no longer shared ptrs to work with the raw bytes so need to be managed
 
     struct CallFrame
     {
@@ -80,7 +83,7 @@ private:
     template <fundamental T>
     void GetGlobal()
     {
-        Push<T>(globals[std::get<std::string>(ExtractNextConstant())]);
+        Push<T>(std::get<T>(globals[std::get<std::string>(ExtractNextConstant())]));
     }
 
     template <fundamental T>
@@ -97,20 +100,17 @@ private:
     void SetLocalVariable()
     {
         const auto local_index = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
-        // Peek at the top of the stack, and copy it into the local slot
-
-        const int value = ReadBytes<int32_t>(stack);
-        std::memcpy(stack.data() + call_frames.back().stack_base + local_index, &value, sizeof(int));
+        const T value = ReadBytes<T>(stack);
+        std::memcpy(stack.data() + call_frames.back().stack_base + sizeof(FunctionObject*) + local_index, &value, sizeof(T));
     }
 
     void HandleJumpIfFalse();
 
     template <fundamental T>
-    void VM::GetLocalVariable()
+    void GetLocalVariable()
     {
         const auto local_index = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
-        // stack_base is the function, so +1 jumps to the start of the variables
-        const int value = ReadBytesAbsolute<int32_t>(stack, call_frames.back().stack_base + local_index);
+        const T value = ReadBytesAbsolute<T>(stack, call_frames.back().stack_base + sizeof(FunctionObject*) + local_index);
         Push(value);
     }
 
@@ -118,6 +118,15 @@ private:
     void HandleLoop();
     void HandleJumpIfFalsePeek();
     void HandleJumpIfTruePeek();
+
+
+    template <typename T>
+    T ReadAndPopBytes(std::vector<uint8_t>& vector)
+    {
+        T value = ReadBytes<T>(vector);
+        vector.resize(vector.size() - sizeof(T));
+        return value;
+    }
 
 
     template<fundamental T>

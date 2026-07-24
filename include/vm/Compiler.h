@@ -38,15 +38,20 @@ private:
     void CompileLogicalOr(const BinaryExpression* binary_expression);
     void CompileBinaryExpression(const BinaryExpression* binary_expression);
     void CompileUnaryExpression(const UnaryExpression* unary_expression);
-    void CompileIdentifierExpression(const IdentifierExpression* identifier_expression);
+    void CompileIdentifierExpression(const IdentifierExpression* identifier_expression) const;
     void CompileCallExpression(const CallExpression* call_expression);
     void CompileAssignmentExpression(const AssignmentExpression* assignment_expression);
 
-    int64_t GetLocalVariableIndex(const std::string& name);
+    int64_t GetLocalVariableIndex(const std::string& name) const;
+
+    struct Local {
+        std::string name;
+        const Type* type;
+    };
 
     std::unique_ptr<Chunk> current_chunk;
     size_t scope_depth{0};
-    std::vector<std::string> locals;
+    std::vector<Local> locals;
     std::vector<size_t> break_placeholders; // when a break is met, it doesnt know where the body ends, need to update when reached
     std::vector<size_t> loop_starts; // when a continue is met, it doesnt know where the loop starts
 

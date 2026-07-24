@@ -82,6 +82,12 @@ InterpretResult VM::Run()
                 Push(val);
                 break;
             }
+            case OpCode::OP_CONSTANT_FUNCTION:
+            {
+                const auto val = std::get<FunctionObject*>(ExtractNextConstant());
+                Push(val);
+                break;
+            }
 
             case OpCode::OP_ADD_INT:
             {
@@ -223,6 +229,11 @@ InterpretResult VM::Run()
                 DefineGlobal<bool>();
                 break;
             }
+            case OpCode::OP_DEFINE_GLOBAL_FUNCTION:
+            {
+                DefineGlobal<FunctionObject*>();
+                break;
+            }
 
             case OpCode::OP_GET_GLOBAL_INT:
             {
@@ -237,6 +248,11 @@ InterpretResult VM::Run()
             case OpCode::OP_GET_GLOBAL_BOOL:
             {
                 GetGlobal<bool>();
+                break;
+            }
+            case OpCode::OP_GET_GLOBAL_FUNCTION:
+            {
+                GetGlobal<FunctionObject*>();
                 break;
             }
 
@@ -443,5 +459,6 @@ void VM::LoadNativeFunction()
         throw std::runtime_error(result.error());
     }
 
-    globals[symbol_name] = std::make_shared<FunctionObject>(symbol_name, num_args, return_bytes, result.value());
+    allocated_native_functions.push_back(std::make_unique<FunctionObject>(symbol_name, num_args, return_bytes, result.value()));
+    globals[symbol_name] = allocated_native_functions.back().get();
 }

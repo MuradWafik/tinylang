@@ -9,13 +9,16 @@ enum class OpCode : uint8_t
     OP_CONSTANT_INT,      // [1 byte operand: constant_index] | Stack: Pushes 4 byte int from constants[index]
     OP_CONSTANT_FLOAT,    // [1 byte operand: constant_index] | Stack: Pushes 4 byte float from constants[index]
     OP_CONSTANT_BOOL,     // [1 byte operand: constant_index] | Stack: Pushes 1 byte bool from constants[index]
+    OP_CONSTANT_FUNCTION, // [1 byte operand: constant_index] | Stack: Pushes 8 byte FunctionObject* from constants[index]
     // --- Globals ---
     OP_DEFINE_GLOBAL_INT, // [1 byte operand: name_index]     | Stack: Pops 4 byte int. Defines global variable
     OP_DEFINE_GLOBAL_FLOAT,
     OP_DEFINE_GLOBAL_BOOL,
+    OP_DEFINE_GLOBAL_FUNCTION,
     OP_GET_GLOBAL_INT,    // [1 byte operand: name_index]     | Stack: Pushes 4 byte int of global variable
     OP_GET_GLOBAL_FLOAT,
     OP_GET_GLOBAL_BOOL,
+    OP_GET_GLOBAL_FUNCTION,
     OP_SET_GLOBAL_INT,    // [1 byte operand: name_index]     | Stack: Peeks 4 byte int and sets global variable
     OP_SET_GLOBAL_FLOAT,
     OP_SET_GLOBAL_BOOL,

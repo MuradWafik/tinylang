@@ -38,31 +38,65 @@ int Chunk::DisassembleInstruction(int offset) const
 
     switch(opcode)
     {
-        case OpCode::OP_CONSTANT:
-        case OpCode::OP_DEFINE_GLOBAL:
-        case OpCode::OP_GET_GLOBAL:
-        case OpCode::OP_SET_GLOBAL:
+        case OpCode::OP_CONSTANT_INT:
+        case OpCode::OP_CONSTANT_FLOAT:
+        case OpCode::OP_CONSTANT_BOOL:
+        case OpCode::OP_CONSTANT_FUNCTION:
+        case OpCode::OP_DEFINE_GLOBAL_INT:
+        case OpCode::OP_DEFINE_GLOBAL_FLOAT:
+        case OpCode::OP_DEFINE_GLOBAL_BOOL:
+        case OpCode::OP_DEFINE_GLOBAL_FUNCTION:
+        case OpCode::OP_GET_GLOBAL_INT:
+        case OpCode::OP_GET_GLOBAL_FLOAT:
+        case OpCode::OP_GET_GLOBAL_BOOL:
+        case OpCode::OP_GET_GLOBAL_FUNCTION:
+        case OpCode::OP_SET_GLOBAL_INT:
+        case OpCode::OP_SET_GLOBAL_FLOAT:
+        case OpCode::OP_SET_GLOBAL_BOOL:
         {
             const auto index = code[offset + 1];
             const auto& variable = constants[index];
-            std::println("{:<16} {:4} '{}'", opcode_name, index, variable);
+            std::println("{:<24} {:4} '{}'", opcode_name, index, variable);
             return offset + 2;
+        }
+        case OpCode::OP_GET_LOCAL_INT:
+        case OpCode::OP_GET_LOCAL_FLOAT:
+        case OpCode::OP_GET_LOCAL_BOOL:
+        case OpCode::OP_SET_LOCAL_INT:
+        case OpCode::OP_SET_LOCAL_FLOAT:
+        case OpCode::OP_SET_LOCAL_BOOL:
+        {
+            const uint16_t local_index = (code[offset + 1] << 8) | code[offset + 2];
+            std::println("{:<24} {:4} (byte offset)", opcode_name, local_index);
+            return offset + 3;
+        }
+        case OpCode::OP_JUMP_IF_FALSE:
+        case OpCode::OP_JUMP:
+        case OpCode::OP_LOOP:
+        case OpCode::OP_JUMP_IF_FALSE_PEEK:
+        case OpCode::OP_JUMP_IF_TRUE_PEEK:
+        {
+            const uint16_t jump = (code[offset + 1] << 8) | code[offset + 2];
+            std::println("{:<24} {:4}", opcode_name, jump);
+            return offset + 3;
         }
         case OpCode::OP_LOAD_NATIVE:
         {
             const auto path_index = code[offset + 1];
             const auto name_index = code[offset + 2];
             const auto num_args   = code[offset + 3];
+            const auto return_bytes = code[offset + 4];
             const auto& path = constants[path_index];
             const auto& name = constants[name_index];
-            std::println("{:<16} {:4} path: '{}', {:4} name: '{}', {:4} args", opcode_name, path_index, path, name_index, name, num_args);
-            return offset + 4;
+            std::println("{:<24} path_idx: {:2} '{}', name_idx: {:2} '{}', args: {:2}, ret_bytes: {:2}", 
+                opcode_name, path_index, path, name_index, name, num_args, return_bytes);
+            return offset + 5;
         }
         case OpCode::OP_CALL:
         {
-            const auto num_args = code[offset + 1];
-            std::println("{:<16} {:4} args", opcode_name, num_args);
-            return offset + 2;
+            const uint16_t arg_bytes = (code[offset + 1] << 8) | code[offset + 2];
+            std::println("{:<24} {:4} arg bytes", opcode_name, arg_bytes);
+            return offset + 3;
         }
         default:
         {

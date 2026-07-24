@@ -13,6 +13,9 @@ public:
 
     // Checks if this type can be assigned to another type
     [[nodiscard]] virtual bool IsAssignableTo(const Type* other) const = 0;
+    
+    // Returns the size in bytes of the type
+    [[nodiscard]] virtual uint8_t GetSize() const = 0;
 };
 
 
@@ -36,6 +39,18 @@ public:
         return this == other;
     }
     [[nodiscard]] bool IsIntegral() const;
+    
+    [[nodiscard]] uint8_t GetSize() const override {
+        switch (kind) {
+            case PrimitiveKind::Int: return 4;
+            case PrimitiveKind::Float: return 4;
+            case PrimitiveKind::Bool: return 1;
+            case PrimitiveKind::String: return 8; // pointer
+            case PrimitiveKind::Void: return 0;
+        }
+        return 0;
+    }
+    
     PrimitiveType(const PrimitiveKind k, std::string n) : kind(k), name(std::move(n)) {}
 
     // Singletons for primitives during semantic analysis
@@ -66,6 +81,7 @@ public:
     [[nodiscard]] const Type* GetReturnType() const { return return_type; }
     [[nodiscard]] std::vector<const Type*> GetParameters() const { return arguments; }
     bool IsAssignableTo(const Type* other) const override;
+    [[nodiscard]] uint8_t GetSize() const override { return 8; } // Function pointer size
 
     FunctionType(std::vector<const Type*> arguments, const Type* return_type) :
         arguments{std::move(arguments)},

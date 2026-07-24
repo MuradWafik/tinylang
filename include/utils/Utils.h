@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 
@@ -117,4 +118,4 @@ struct StringHash
 
 
 template<typename T>
-concept fundamental = std::is_fundamental_v<T>;
+concept fundamental = std::is_trivially_copyable_v<T>;

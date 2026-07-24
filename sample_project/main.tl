@@ -1,11 +1,16 @@
 native module "std";
 
-native fn print_int(value: int) -> int;
+native fn print_int(value: int) -> void;
 native fn clock() -> float;
 
-fn main() -> int {
-    print_int(42);
-    return 0;
+
+fn helper(val: int) -> int {
+    return val * 3;
+}
+
+fn main() -> void {
+    print_int(helper(12));
+    return;
 }
 
 main();

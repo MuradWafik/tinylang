@@ -2,6 +2,7 @@
 
 #include <format>
 #include <memory>
+#include <stdfloat>
 #include <string>
 #include <type_traits>
 #include <variant>
@@ -11,11 +12,11 @@ class Chunk;
 struct FunctionObject;
 
 using ConstantValue = std::variant<
-    int,
-    float,
+    int32_t,
+    std::float32_t,
     bool,
     std::string,
-    std::shared_ptr<FunctionObject>,
+    FunctionObject*,
     std::monostate  // void/no value
 >;
 
@@ -50,11 +51,11 @@ inline std::string ToString(const ConstantValue& value)
     return std::visit([]<typename T0>(T0&& arg) -> std::string
     {
         using T = std::decay_t<T0>;
-        if constexpr(std::is_same_v<T, int>) return std::to_string(arg);
-        else if constexpr(std::is_same_v<T, float>) return std::to_string(arg);
+        if constexpr(std::is_same_v<T, int32_t>) return std::to_string(arg);
+        else if constexpr(std::is_same_v<T, std::float32_t>) return std::to_string(arg);
         else if constexpr(std::is_same_v<T, bool>) return arg ? "true" : "false";
         else if constexpr(std::is_same_v<T, std::string>) return arg;
-        else if constexpr(std::is_same_v<T, std::shared_ptr<FunctionObject>>) return std::format("<fn {}>", arg->name);
+        else if constexpr(std::is_same_v<T, FunctionObject*>) return std::format("<fn {}>", arg->name);
         else if constexpr(std::is_same_v<T, std::monostate>) return "void";
         else return "unknown";
     },

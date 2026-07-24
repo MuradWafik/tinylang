@@ -2,6 +2,8 @@
 #include <memory>
 #include <numeric>
 
+class Type;
+
 #include "frontend/Expression.h"
 #include "vm/ConstantValue.h"
 
@@ -118,6 +120,7 @@ struct Parameter
 {
     std::string name;
     std::string type_name;
+    const Type* type_info = nullptr;
 };
 
 struct FunctionDeclaration final : Statement
@@ -125,16 +128,17 @@ struct FunctionDeclaration final : Statement
     std::string name;
     std::vector<Parameter> parameters;
     std::string return_type;
+    const Type* return_type_info = nullptr;
     std::unique_ptr<BodyStatement> body;
 
-    FunctionDeclaration(std::string name,
-                        std::vector<Parameter> params,
-                        std::string ret_type,
-                        std::unique_ptr<BodyStatement> body_node,
-                        const SourceLocation loc)
+    FunctionDeclaration(
+        std::string name, std::vector<Parameter> params,
+        std::string return_type,
+        std::unique_ptr<BodyStatement> body_node,
+        const SourceLocation loc)
         : name(std::move(name)),
           parameters(std::move(params)),
-          return_type(std::move(ret_type)),
+          return_type(std::move(return_type)),
           body(std::move(body_node))
     { this->source_location = loc; }
 
@@ -146,7 +150,7 @@ struct FunctionDeclaration final : Statement
             if (i + 1 < parameters.size()) params_str += ", ";
         }
         return std::format(R"(FunctionDeclaration(name: "{}", params: [{}], return: "{}", body: {}))",
-                           name, params_str, return_type, body.get());
+                           name, params_str, return_type, body ? body->GetTypeString() : "nullptr");
     }
 };
 
@@ -195,12 +199,13 @@ struct NativeFunctionDeclaration final : Statement
     std::string name;
     std::vector<Parameter> parameters;
     std::string return_type;
+    const Type* return_type_info = nullptr;
 
     [[nodiscard]] std::string GetTypeString() const override {
         return "NativeFunctionDeclaration";
     }
 
-    NativeFunctionDeclaration(std::string name, std::vector<Parameter> parameters, std::string return_type) :
-        name(std::move(name)), parameters(std::move(parameters)), return_type(std::move(return_type))
+    NativeFunctionDeclaration(std::string name, std::vector<Parameter> parameters, std::string return_type, const Type* return_type_info = nullptr) :
+        name(std::move(name)), parameters(std::move(parameters)), return_type(std::move(return_type)), return_type_info(return_type_info)
     {}
 };

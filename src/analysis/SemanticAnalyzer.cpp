@@ -238,15 +238,17 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     {
         return Return(std::format("Unknown return type '{}'", function_declaration->return_type));
     }
+    const_cast<FunctionDeclaration*>(function_declaration)->return_type_info = return_type;
 
     std::vector<const Type*> parameter_types;
-    for(const auto& [name, type_name]: function_declaration->parameters)
+    for(auto& param: const_cast<FunctionDeclaration*>(function_declaration)->parameters)
     {
-        auto* type = symbol_table.LookupType(type_name);
+        auto* type = symbol_table.LookupType(param.type_name);
         if(!type)
         {
-            return Return(std::format("Unknown type '{}' for function parameter '{}'", type_name, name));
+            return Return(std::format("Unknown type '{}' for function parameter '{}'", param.type_name, param.name));
         }
+        param.type_info = type;
         parameter_types.push_back(type);
     }
 
@@ -257,11 +259,9 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
 
     // once in the body those variables are in the scope
     symbol_table.PushScope();
-    for(const auto& [param_name, param_type_name]: function_declaration->parameters)
+    for(const auto& param: function_declaration->parameters)
     {
-        // garunteed to exist based on earlier check
-        const auto* param_type = symbol_table.LookupType(param_type_name);
-        symbol_table.DefineVariable({param_name, param_type});
+        symbol_table.DefineVariable({param.name, param.type_info});
     }
 
     current_function_return_type = return_type;
@@ -301,6 +301,15 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeReturnStatement(const 
     if(!current_function_return_type)
     {
         return Return("Return statement outside of function body");
+    }
+
+    if(return_statement->IsVoidReturn())
+    {
+        if(current_function_return_type != PrimitiveType::Void.get())
+        {
+            return Return("Return statement missing value");
+        }
+        return {};
     }
 
     auto return_value = AnalyzeExpression(return_statement->value.get());
@@ -382,15 +391,17 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclarat
     {
         return Return(std::format("Unknown return type '{}'", native_function_declaration->return_type));
     }
+    const_cast<NativeFunctionDeclaration*>(native_function_declaration)->return_type_info = return_type;
 
     std::vector<const Type*> parameter_types;
-    for(const auto& [name, type_name]: native_function_declaration->parameters)
+    for(auto& param: const_cast<NativeFunctionDeclaration*>(native_function_declaration)->parameters)
     {
-        auto* type = symbol_table.LookupType(type_name);
+        auto* type = symbol_table.LookupType(param.type_name);
         if(!type)
         {
-            return Return(std::format("Unknown type '{}' for function parameter '{}'", type_name, name));
+            return Return(std::format("Unknown type '{}' for function parameter '{}'", param.type_name, param.name));
         }
+        param.type_info = type;
         parameter_types.push_back(type);
     }
 
@@ -489,8 +500,10 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpre
         return Return(std::format("Unable to assign type '{}' to '{}'", rhs.value()->GetName(), lhs->type->GetName()));
     }
 
-    return PrimitiveType::Void.get();
+    assignment_expression->type_info = rhs.value(); // We need to set it to rhs so the compiler knows what type to write/cast! Actually, wait! The compiler checks if it's Int.
+
     // According to AI, best to NOT then return the value and instead return void, disallowing chaining `x = y = 10;`
+    return PrimitiveType::Void.get();
 }
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(CallExpression* call_expression)

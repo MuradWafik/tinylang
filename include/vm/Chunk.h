@@ -11,6 +11,7 @@ public:
     std::vector<uint8_t> code;
     std::vector<ConstantValue> constants;
     std::vector<uint32_t> lines;
+    std::vector<std::unique_ptr<FunctionObject>> functions;
 
     Chunk() = default;
 

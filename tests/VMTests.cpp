@@ -18,12 +18,15 @@ static ConstantValue RunAndGetGlobal(const std::string& source, const std::strin
     auto parse_result = parser.ParseProgram();
     REQUIRE(parse_result.has_value());
 
-    SemanticAnalyzer semantic_analyzer{nullptr};
+    ProjectConfig project_config{};
+    project_config.project_root = "/home/murad/CLionProjects/tinylang";
+
+    SemanticAnalyzer semantic_analyzer{&project_config};
     auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value());
     INFO("Semantic Analysis Error: " << (semantic_analysis_result.has_value() ? "" : semantic_analysis_result.error()));
     REQUIRE(semantic_analysis_result.has_value());
 
-    Compiler compiler{nullptr};
+    Compiler compiler{&project_config};
     auto chunk = compiler.Compile(parse_result.value());
     REQUIRE(chunk != nullptr);
 
@@ -55,8 +58,8 @@ TEST_CASE("VM - Basic Arithmetic and Variables", "[VM]") {
             var z: float = x * y;
         )";
         auto val = RunAndGetGlobal(source, "z");
-        REQUIRE(std::holds_alternative<float>(val));
-        REQUIRE_THAT(std::get<float>(val), Catch::Matchers::WithinRel(7.0f, 0.001f));
+        REQUIRE(std::holds_alternative<std::float32_t>(val));
+        REQUIRE_THAT(std::get<std::float32_t>(val), Catch::Matchers::WithinRel(7.0f, 0.001f));
     }
 }
 
@@ -168,6 +171,6 @@ TEST_CASE("VM - Native Functions", "[VM]") {
             var res: float = tinylang_clock();
         )";
         auto val = RunAndGetGlobal(source, "res");
-        REQUIRE(std::get<float>(val) == 42.0f);
+        REQUIRE(std::get<std::float32_t>(val) == 42.0f);
     }
 }
