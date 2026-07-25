@@ -82,11 +82,11 @@ struct UnaryExpression final : Expression
 
 struct CallExpression final : Expression
 {
-    std::string function_name;
+    std::unique_ptr<Expression> callee;
     std::vector<std::unique_ptr<Expression>> arguments;
 
-    CallExpression(std::string name, std::vector<std::unique_ptr<Expression>> args, const SourceLocation loc)
-        : function_name(std::move(name)),
+    CallExpression(std::unique_ptr<Expression> callee, std::vector<std::unique_ptr<Expression>> args, const SourceLocation loc)
+        : callee(std::move(callee)),
           arguments(std::move(args))
     {
         this->source_location = loc;
@@ -99,7 +99,7 @@ struct CallExpression final : Expression
             args_str += arguments[i] ? arguments[i]->GetTypeString() : "nullptr";
             if (i + 1 < arguments.size()) args_str += ", ";
         }
-        return std::format("CallExpression(name: \"{}\", args: [{}])", function_name, args_str);
+        return std::format("CallExpression(callee: {}, args: [{}])", callee->GetTypeString(), args_str);
     }
 };
 
@@ -125,5 +125,55 @@ struct AssignmentExpression final : Expression
     [[nodiscard]] std::string GetTypeString() const override
     {
         return std::format("AssignmentExpression(name: \"{}\", value: {})", name, value.get());
+    }
+};
+
+struct ArrayLiteral final : Expression
+{
+    std::vector<std::unique_ptr<Expression>> elements;
+
+    ArrayLiteral(std::vector<std::unique_ptr<Expression>> elements, const SourceLocation loc)
+        : elements(std::move(elements)) 
+    {
+        this->source_location = loc;
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("ArrayLiteral({} elements)", elements.size());
+    }
+};
+
+struct IndexAccess final : Expression
+{
+    std::unique_ptr<Expression> array_expr;
+    std::unique_ptr<Expression> index_expr;
+
+    IndexAccess(std::unique_ptr<Expression> array, std::unique_ptr<Expression> index, const SourceLocation loc)
+        : array_expr(std::move(array)), index_expr(std::move(index)) 
+    {
+        this->source_location = loc;
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("IndexAccess(array: {}, index: {})", array_expr->GetTypeString(), index_expr->GetTypeString());
+    }
+};
+
+struct PropertyAccess final : Expression
+{
+    std::unique_ptr<Expression> object_expr;
+    std::string property_name;
+
+    PropertyAccess(std::unique_ptr<Expression> obj, std::string prop, const SourceLocation loc)
+        : object_expr(std::move(obj)), property_name(std::move(prop)) 
+    {
+        this->source_location = loc;
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("PropertyAccess(object: {}, property: \"{}\")", object_expr->GetTypeString(), property_name);
     }
 };

@@ -99,6 +99,10 @@ InterpretResult VM::Run()
                 Push(Add<std::float32_t>());
                 break;
             }
+            case OpCode::OP_ADD_STRING:
+            {
+                AddString();
+            }
 
             case OpCode::OP_SUBTRACT_INT:
             {
@@ -356,6 +360,10 @@ InterpretResult VM::Run()
                 LoadNativeFunction();
                 break;
             }
+            case OpCode::OP_ALLOCATE_STRING:
+            {
+                AllocateString();
+            }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
     }
@@ -461,4 +469,21 @@ void VM::LoadNativeFunction()
 
     allocated_native_functions.push_back(std::make_unique<FunctionObject>(symbol_name, num_args, return_bytes, result.value()));
     globals[symbol_name] = allocated_native_functions.back().get();
+}
+
+void VM::AllocateString()
+{
+    const auto index = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto str = std::get<std::string>(call_frames.back().chunk->constants[index]);
+    String* obj = heap.Allocate<String>(str.c_str(), str.length());
+    Push<Object*>(obj);
+}
+
+void VM::AddString()
+{
+    const auto r = static_cast<String*>(Pop<Object*>());
+    const auto l = static_cast<String*>(Pop<Object*>());
+
+    String* obj = heap.Allocate<String>(l, r);
+    Push<Object*>(obj);
 }

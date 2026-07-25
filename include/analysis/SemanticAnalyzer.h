@@ -13,7 +13,8 @@
 #include "frontend/Token.h"
 #include "utils/Utils.h"
 
-struct OperatorSignature {
+struct OperatorSignature
+{
     TokenType op;
     const Type* left;
     const Type* right;
@@ -23,8 +24,10 @@ struct OperatorSignature {
     }
 };
 
-struct OperatorSignatureHash {
-    size_t operator()(const OperatorSignature& sig) const {
+struct OperatorSignatureHash
+{
+    size_t operator()(const OperatorSignature& sig) const
+    {
         const size_t h1 = std::hash<std::underlying_type_t<TokenType>>{}(static_cast<int>(sig.op));
         const size_t h2 = std::hash<const Type*>{}(sig.left);
         const size_t h3 = std::hash<const Type*>{}(sig.right);
@@ -33,38 +36,42 @@ struct OperatorSignatureHash {
 };
 
 
-struct UnaryOperatorSignature {
+struct UnaryOperatorSignature
+{
     TokenType op;
     const Type* operand;
 
-    bool operator==(const UnaryOperatorSignature& other) const {
+    bool operator==(const UnaryOperatorSignature& other) const
+    {
         return op == other.op && operand == other.operand;
     }
 };
 
 
-struct UnaryOperatorSignatureHash {
-    size_t operator()(const UnaryOperatorSignature& sig) const {
+struct UnaryOperatorSignatureHash
+{
+    size_t operator()(const UnaryOperatorSignature& sig) const
+    {
         const size_t h1 = std::hash<int>{}(static_cast<std::underlying_type_t<TokenType>>(sig.op));
         const size_t h2 = std::hash<const Type*>{}(sig.operand);
         return h1 ^ (h2 << 1);
     }
 };
 
-
-
-struct Symbol {
+struct Symbol
+{
     std::string name;
     const Type* type; // non-owning
 };
 
-
-struct Scope {
+struct Scope
+{
     std::unordered_map<std::string, Symbol, StringHash, std::equal_to<>> variables;
     std::unordered_map<std::string, const Type*, StringHash, std::equal_to<>> types;
 };
 
-class SymbolTable {
+class SymbolTable
+{
 public:
     void PushScope()
     {
@@ -96,7 +103,8 @@ private:
 
 
 // walks AST and ensures the code obeys all the semantic rules of the language
-class SemanticAnalyzer {
+class SemanticAnalyzer
+{
 public:
     std::expected<void, std::string> Analyze(const std::vector<std::unique_ptr<ASTNode>>& program);
     std::expected<void, std::string> Analyze(ASTNode* node);

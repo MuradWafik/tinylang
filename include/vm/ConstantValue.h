@@ -15,7 +15,7 @@ using ConstantValue = std::variant<
     int32_t,
     std::float32_t,
     bool,
-    std::string,
+    std::string, // used as a temporary
     FunctionObject*,
     std::monostate  // void/no value
 >;

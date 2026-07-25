@@ -54,6 +54,7 @@ void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) c
     if(std::holds_alternative<int32_t>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, index);
     else if(std::holds_alternative<std::float32_t>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FLOAT, index);
     else if(std::holds_alternative<bool>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_BOOL, index);
+    else if(std::holds_alternative<std::string>(value)) current_chunk->WriteInstruction(line, OpCode::OP_ALLOCATE_STRING, index);
 }
 
 void Compiler::CompileLogicalAnd(const BinaryExpression* binary_expression)
@@ -115,6 +116,7 @@ void Compiler::CompileBinaryExpression(const BinaryExpression* binary_expression
         {
             if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_FLOAT);
+            if(type == PrimitiveType::String.get()) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_STRING);
             break;
         }
         case TokenType::Minus:
@@ -311,24 +313,17 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
     }
 }
 
+
+
 void Compiler::CompileCallExpression(const CallExpression* call_expression)
 {
     const auto line = call_expression->source_location.line_number;
 
-    // find the function
-    if(const int64_t local_index = GetLocalVariableIndex(call_expression->function_name); local_index != -1)
-    {
-        // TODO: OP_GET_LOCAL_FUNCTION doesn't exist yet, we need it if you want local functions!
-        // For now, this will crash at runtime if you try to call a local function because we don't have the opcode.
-        // current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_FUNCTION, local_index);
-    }
-    else
-    {
-        const auto name_index = current_chunk->AddConstant(call_expression->function_name);
-        current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, name_index);
-    }
+    // If it's an Identifier, CompileIdentifierExpression will automatically
+    // emit OP_GET_GLOBAL_FUNCTION or OP_GET_LOCAL.
+    // If it's an array index, it will emit OP_GET_INDEX.
+    CompileExpression(call_expression->callee.get());
 
-    // compile the body
     uint16_t arg_bytes = 0;
     for(const auto& arg : call_expression->arguments)
     {

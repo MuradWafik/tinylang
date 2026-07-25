@@ -4,6 +4,8 @@
 #include "frontend/Token.h"
 #include <vector>
 
+#include "utils/Utils.h"
+
 class Type
 {
 public:
@@ -91,4 +93,38 @@ public:
 private:
     std::vector<const Type*> arguments;
     const Type* return_type{nullptr};
+};
+
+class ArrayType final : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override;
+    [[nodiscard]] const Type* GetElementType() const { return element_type; }
+    bool IsAssignableTo(const Type* other) const override;
+    [[nodiscard]] uint8_t GetSize() const override { return 8; }
+
+    explicit ArrayType(const Type* element_type) :
+        element_type{element_type}
+    { }
+private:
+    const Type* element_type{nullptr};
+};
+
+class StructType final : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override;
+    [[nodiscard]] const Type* GetFieldType(std::string_view name) const;
+    [[nodiscard]] size_t GetNumFields() const { return fields.size(); }
+    [[nodiscard]] auto& GetFields() { return fields; }
+    [[nodiscard]] const auto& GetFields() const  { return fields; }
+    bool IsAssignableTo(const Type* other) const override;
+    [[nodiscard]] uint8_t GetSize() const override { return 8; }
+
+    explicit StructType(std::vector<std::pair<std::string, const Type*>> fields) :
+        fields{std::move(fields)}
+    { }
+
+private:
+    std::vector<std::pair<std::string, const Type*>> fields;
 };

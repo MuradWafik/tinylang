@@ -22,7 +22,7 @@ struct VariableDeclaration final : Statement
     [[nodiscard]] std::string GetTypeString() const override
     {
         if (initializer) {
-            return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: {}))", name, type, initializer.get());
+            return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: {}))", name, type, initializer->GetTypeString());
         }
         return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: nullptr))", name, type);
     }

@@ -213,19 +213,19 @@ std::expected<Token, LexerError>  Lexer::LexSymbol()
         }
         case '{':
         {
-            return ReturnSingleCharSymbol(TokenType::LeftBrace);
+            return ReturnSingleCharSymbol(TokenType::LeftCurlyBrace);
         }
         case '}':
         {
-            return ReturnSingleCharSymbol(TokenType::RightBrace);
+            return ReturnSingleCharSymbol(TokenType::RightCurlyBrace);
         }
         case '[':
         {
-            return ReturnSingleCharSymbol(TokenType::LeftBracket);
+            return ReturnSingleCharSymbol(TokenType::LeftSquareBracket);
         }
         case ']':
         {
-            return ReturnSingleCharSymbol(TokenType::RightBracket);
+            return ReturnSingleCharSymbol(TokenType::RightSquareBracket);
         }
         case ':':
         {
@@ -238,6 +238,10 @@ std::expected<Token, LexerError>  Lexer::LexSymbol()
         case ',':
         {
             return ReturnSingleCharSymbol(TokenType::Comma);
+        }
+        case '.':
+        {
+            return ReturnSingleCharSymbol(TokenType::Dot);
         }
         default:
             const char c = Peek();

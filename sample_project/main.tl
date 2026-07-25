@@ -9,7 +9,8 @@ fn helper(val: int) -> int {
 }
 
 fn main() -> void {
-    print_int(helper(12));
+    // print_int(helper(12));
+    var msg: String = "Hello " + "World";
     return;
 }
 

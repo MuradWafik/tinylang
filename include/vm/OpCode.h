@@ -10,6 +10,17 @@ enum class OpCode : uint8_t
     OP_CONSTANT_FLOAT,    // [1 byte operand: constant_index] | Stack: Pushes 4 byte float from constants[index]
     OP_CONSTANT_BOOL,     // [1 byte operand: constant_index] | Stack: Pushes 1 byte bool from constants[index]
     OP_CONSTANT_FUNCTION, // [1 byte operand: constant_index] | Stack: Pushes 8 byte FunctionObject* from constants[index]
+    
+    // --- Heap Objects ---
+    OP_ALLOCATE_STRING,   // [1 byte operand: constant_index] | Stack: Reads string from constants[index], allocates StringObject on heap, pushes 8 byte Object*
+    OP_ADD_STRING,        // [No operands]                    | Stack: Pops two 8 byte Object* strings, allocates new concatenated StringObject, pushes 8 byte Object*
+    OP_ALLOCATE_ARRAY,    // [2 byte operand: element_count]  | Stack: Pops 'count' elements, allocates ArrayObject on heap, pushes 8 byte Object*
+    OP_ALLOCATE_STRUCT,   // [2 byte operand: field_count]    | Stack: Pops 'count' elements, allocates StructObject on heap, pushes 8 byte Object*
+    OP_GET_PROPERTY,      // [1 byte operand: name_index]     | Stack: Pops 8 byte StructObject*, pushes property value
+    OP_SET_PROPERTY,      // [1 byte operand: name_index]     | Stack: Pops value and 8 byte StructObject*, sets property, pushes value back
+    OP_GET_INDEX,         // [No operands]                    | Stack: Pops 4 byte int index and 8 byte ArrayObject*, pushes array[index]
+    OP_SET_INDEX,         // [No operands]                    | Stack: Pops value, pops 4 byte int index, pops 8 byte ArrayObject*, sets array[index], pushes value back
+
     // --- Globals ---
     OP_DEFINE_GLOBAL_INT, // [1 byte operand: name_index]     | Stack: Pops 4 byte int. Defines global variable
     OP_DEFINE_GLOBAL_FLOAT,

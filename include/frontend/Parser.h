@@ -58,7 +58,7 @@ private:
     ExpectedExpressionPtr ParseAddition();
     ExpectedExpressionPtr ParseMultiplication();
     ExpectedExpressionPtr ParseUnary();
-    ExpectedExpressionPtr ParseFunctionCall();
+    ExpectedExpressionPtr ParseSuffixes();
     ExpectedExpressionPtr ParsePrimary(); // literals/identifiers
     //TODO: Most have the same logic refactor, (potentially a dictionary with the tokens to match and next level)
 

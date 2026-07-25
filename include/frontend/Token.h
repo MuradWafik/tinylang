@@ -26,6 +26,8 @@ enum class TokenType
     Continue,
     Native,
     Module,
+    Struct,
+    Self,
 
     // Types
     IntType,
@@ -55,14 +57,15 @@ enum class TokenType
     // Delimiters
     LeftParen,
     RightParen,
-    LeftBrace,
-    RightBrace,
-    LeftBracket,
-    RightBracket,
+    LeftCurlyBrace,
+    RightCurlyBrace,
+    LeftSquareBracket,
+    RightSquareBracket,
     Colon,
     Semicolon,
     Comma,
     Arrow,
+    Dot,
 
     EndOfFile
 };
@@ -111,6 +114,8 @@ struct Token {
         {"void", TokenType::Void},
         {"native", TokenType::Native},
         {"module", TokenType::Module},
+        {"struct", TokenType::Struct},
+        {"self", TokenType::Self},
     };
     static std::string TypeToString(TokenType token_type);
 

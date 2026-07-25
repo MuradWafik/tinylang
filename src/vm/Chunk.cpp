@@ -42,6 +42,9 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_CONSTANT_FLOAT:
         case OpCode::OP_CONSTANT_BOOL:
         case OpCode::OP_CONSTANT_FUNCTION:
+        case OpCode::OP_ALLOCATE_STRING:
+        case OpCode::OP_GET_PROPERTY:
+        case OpCode::OP_SET_PROPERTY:
         case OpCode::OP_DEFINE_GLOBAL_INT:
         case OpCode::OP_DEFINE_GLOBAL_FLOAT:
         case OpCode::OP_DEFINE_GLOBAL_BOOL:
@@ -68,6 +71,13 @@ int Chunk::DisassembleInstruction(int offset) const
         {
             const uint16_t local_index = (code[offset + 1] << 8) | code[offset + 2];
             std::println("{:<24} {:4} (byte offset)", opcode_name, local_index);
+            return offset + 3;
+        }
+        case OpCode::OP_ALLOCATE_ARRAY:
+        case OpCode::OP_ALLOCATE_STRUCT:
+        {
+            const uint16_t count = (code[offset + 1] << 8) | code[offset + 2];
+            std::println("{:<24} {:4} (element count)", opcode_name, count);
             return offset + 3;
         }
         case OpCode::OP_JUMP_IF_FALSE:

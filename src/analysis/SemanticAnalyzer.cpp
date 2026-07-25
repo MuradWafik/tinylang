@@ -78,6 +78,17 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
     if(auto* id_expr = dynamic_cast<IdentifierExpression*>(expr)) return AnalyzeIdentifierExpression(id_expr);
     if(auto* assign_expr = dynamic_cast<AssignmentExpression*>(expr)) return AnalyzeAssignmentExpression(assign_expr);
     if(auto* call_expr = dynamic_cast<CallExpression*>(expr)) return AnalyzeCallExpression(call_expr);
+    if(auto* array_node = dynamic_cast<ArrayLiteral*>(expr))
+    {
+        const auto type = array_node->type_info;
+        for(const auto& elem: array_node->elements)
+        {
+            if(elem->type_info != type)
+            {
+                return Return("Element type does not match array");
+            }
+        }
+    }
     if(auto* bool_node = dynamic_cast<BoolLiteral*>(expr))
     {
         bool_node->type_info = PrimitiveType::Bool.get();
@@ -508,42 +519,75 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpre
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(CallExpression* call_expression)
 {
-    const auto func = symbol_table.LookupVariable(call_expression->function_name);
-    if(!func)
+    const auto callable = AnalyzeExpression(call_expression->callee.get());
+    // const auto func = symbol_table.LookupVariable(call_expression->function_name);
+    if(!callable)
     {
-        return Return(std::format("Unknown function '{}'", call_expression->function_name));
+        return Return(std::format("Unknown call expression '{}'", call_expression->GetTypeString()));
     }
 
-
-    const auto* func_type = dynamic_cast<const FunctionType*>(func->type);
-    if(!func_type)
+    if(const auto* func_type = dynamic_cast<const FunctionType*>(callable.value()))
     {
-        return Return(std::format("Calling a non-function '{}'", func->name));
-    }
-
-    if (func_type->GetParameters().size() != call_expression->arguments.size()) {
-        return Return(std::format("Argument count mismatch for '{}': expected {}, got {}",
-            call_expression->function_name, func_type->GetParameters().size(), call_expression->arguments.size()));
-    }
-
-
-    for (auto [param, arg] : std::views::zip(func_type->GetParameters(), call_expression->arguments))
-    {
-        auto arg_type = AnalyzeExpression(arg.get());
-        if(!arg_type)
+        std::string function_name = "<anonymous>";
+        if(const auto* real_name = dynamic_cast<IdentifierExpression*>(call_expression->callee.get()))
         {
-            return Return(std::format("Error parsing function parameter expression, {}", arg_type.error()));
+            function_name = real_name->name;
         }
-        if(!arg_type.value()->IsAssignableTo(param))
+
+        if(func_type->GetParameters().size() != call_expression->arguments.size())
         {
-            return Return(
-                std::format("Error calling function '{}', Type '{}' is not assignable to '{}'",
-                    call_expression->function_name, arg_type.value()->GetName(), param->GetName()));
+            return Return(std::format("Argument count mismatch for {}: expected {}, got {}",
+                function_name, func_type->GetParameters().size(), call_expression->arguments.size()));
+        }
+
+        for(auto [param, arg] : std::views::zip(func_type->GetParameters(), call_expression->arguments))
+        {
+            auto arg_type = AnalyzeExpression(arg.get());
+            if(!arg_type)
+            {
+                return Return(std::format(
+                    "Error parsing function '{}' parameter expression, {}",
+                    function_name, arg_type.error()));
+            }
+            if(!arg_type.value()->IsAssignableTo(param))
+            {
+                return Return(
+                    std::format("Error calling function '{}': Type '{}' is not assignable to '{}'",
+                    function_name, arg_type.value()->GetName(), param->GetName()));
+            }
+        }
+
+        call_expression->type_info = func_type->GetReturnType();
+        return func_type->GetReturnType();
+    }
+    else if(const auto* struct_type = dynamic_cast<const StructType*>(callable.value()))
+    {
+        if(call_expression->arguments.size() != struct_type->GetNumFields())
+        {
+            return Return("Too much arguments passed for struct initialization");
+        }
+        for(
+            const auto& [field, expression] :
+            std::ranges::views::zip(struct_type->GetFields(), call_expression->arguments))
+        {
+            auto expression_type = AnalyzeExpression(expression.get());
+            if(!expression_type)
+            {
+                return Return(expression_type.error());
+            }
+            if(expression_type.value() != field.second)
+            {
+                return Return(
+                    std::format("Type mismatch in struct initialization, expected '{}', got '{}' ",
+                        field.second->GetName(), expression_type.value()->GetName())
+                );
+            }
+
+            call_expression->type_info = struct_type;
         }
     }
 
-    call_expression->type_info = func_type->GetReturnType();
-    return func_type->GetReturnType();
+    return Return("Attempted to call a value that is not a function or struct");
 }
 
 void SemanticAnalyzer::RegisterBinaryOperator(const TokenType op, const Type* left, const Type* right, const Type* result)

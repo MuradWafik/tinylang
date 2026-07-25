@@ -13,6 +13,7 @@ add_library(tinylang_lib
         src/vm/Chunk.cpp
         src/vm/Compiler.cpp
         src/vm/VM.cpp
+        src/vm/VMHeap.cpp
         src/vm/PluginLoader.cpp
         src/frontend/ProjectConfig.cpp
 )

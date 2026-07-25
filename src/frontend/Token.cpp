@@ -24,6 +24,8 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Module:          return "module";
         case TokenType::Continue:        return "continue";
         case TokenType::Break:           return "break";
+        case TokenType::Self:            return "self";
+        case TokenType::Struct:          return "struct";
 
         // Built-in Types
         case TokenType::IntType:         return "int";
@@ -53,14 +55,15 @@ std::string Token::TypeToString(const TokenType token_type)
         // Delimiters & Punctuation
         case TokenType::LeftParen:       return "(";
         case TokenType::RightParen:      return ")";
-        case TokenType::LeftBrace:       return "{";
-        case TokenType::RightBrace:      return "}";
-        case TokenType::LeftBracket:     return "[";
-        case TokenType::RightBracket:    return "]";
+        case TokenType::LeftCurlyBrace:       return "{";
+        case TokenType::RightCurlyBrace:      return "}";
+        case TokenType::LeftSquareBracket:     return "[";
+        case TokenType::RightSquareBracket:    return "]";
         case TokenType::Colon:           return ":";
         case TokenType::Semicolon:       return ";";
         case TokenType::Comma:           return ",";
         case TokenType::Arrow:           return "->";
+        case TokenType::Dot:           return ".";
 
         // Special System Tokens
         case TokenType::EndOfFile:       return "end of file";

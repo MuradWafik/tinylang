@@ -78,7 +78,7 @@ TEST_CASE("Parses simple if statement")
     REQUIRE(result.has_value());
     auto& ast = result.value();
     REQUIRE(ast.size() == 1);
-    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Identifier, name("flag"), body: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [Identifier, name("x")]))])))ast");
+    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Identifier, name("flag"), body: BodyStatement([ExpressionStatement(expr: CallExpression(callee: Identifier, name("Print"), args: [Identifier, name("x")]))])))ast");
 }
 
 TEST_CASE("Parses if-else statement")
@@ -88,7 +88,7 @@ TEST_CASE("Parses if-else statement")
     REQUIRE(result.has_value());
     auto& ast = result.value();
     REQUIRE(ast.size() == 1);
-    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Identifier, name("flag"), then: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [Identifier, name("x")]))]), else: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [Identifier, name("y")]))])))ast");
+    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Identifier, name("flag"), then: BodyStatement([ExpressionStatement(expr: CallExpression(callee: Identifier, name("Print"), args: [Identifier, name("x")]))]), else: BodyStatement([ExpressionStatement(expr: CallExpression(callee: Identifier, name("Print"), args: [Identifier, name("y")]))])))ast");
 }
 
 TEST_CASE("Parses if-else-if-else statement")
@@ -98,7 +98,7 @@ TEST_CASE("Parses if-else-if-else statement")
     REQUIRE(result.has_value());
     auto& ast = result.value();
     REQUIRE(ast.size() == 1);
-    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Binary Expression, operator(>), left: Identifier, name("x"), right: IntegerLiteral(0), then: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [IntegerLiteral(1)]))]), else: IfStatement(condition: Binary Expression, operator(<), left: Identifier, name("x"), right: IntegerLiteral(0), then: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [IntegerLiteral(2)]))]), else: BodyStatement([ExpressionStatement(expr: CallExpression(name: "Print", args: [IntegerLiteral(0)]))]))))ast");
+    REQUIRE(ast[0]->GetTypeString() == R"ast(IfStatement(condition: Binary Expression, operator(>), left: Identifier, name("x"), right: IntegerLiteral(0), then: BodyStatement([ExpressionStatement(expr: CallExpression(callee: Identifier, name("Print"), args: [IntegerLiteral(1)]))]), else: IfStatement(condition: Binary Expression, operator(<), left: Identifier, name("x"), right: IntegerLiteral(0), then: BodyStatement([ExpressionStatement(expr: CallExpression(callee: Identifier, name("Print"), args: [IntegerLiteral(2)]))]), else: BodyStatement([ExpressionStatement(expr: CallExpression(callee: Identifier, name("Print"), args: [IntegerLiteral(0)]))]))))ast");
 }
 
 TEST_CASE("Parses break statement")
@@ -119,4 +119,50 @@ TEST_CASE("Parses continue statement")
     auto& ast = result.value();
     REQUIRE(ast.size() == 1);
     REQUIRE(ast[0]->GetTypeString() == "ContinueStatement");
+}
+
+TEST_CASE("Parses array literals")
+{
+    auto result = Parse("var arr = [1, 2, 3];");
+    INFO("Parser Error: " << (result.has_value() ? "" : result.error()));
+    REQUIRE(result.has_value());
+    auto& ast = result.value();
+    REQUIRE(ast.size() == 1);
+    REQUIRE(ast[0]->GetTypeString() == R"(VariableDeclaration(name: "arr", type: "null", initializer: ArrayLiteral(3 elements)))");
+}
+
+TEST_CASE("Parses index access")
+{
+    auto result = Parse("var item = arr[0];");
+    INFO("Parser Error: " << (result.has_value() ? "" : result.error()));
+    REQUIRE(result.has_value());
+    auto& ast = result.value();
+    REQUIRE(ast.size() == 1);
+    REQUIRE(ast[0]->GetTypeString() == R"(VariableDeclaration(name: "item", type: "null", initializer: IndexAccess(array: Identifier, name("arr"), index: IntegerLiteral(0))))");
+}
+
+TEST_CASE("Parses property access")
+{
+    auto result = Parse("var age = user.age;");
+    INFO("Parser Error: " << (result.has_value() ? "" : result.error()));
+    REQUIRE(result.has_value());
+    auto& ast = result.value();
+    REQUIRE(ast.size() == 1);
+    REQUIRE(ast[0]->GetTypeString() == R"(VariableDeclaration(name: "age", type: "null", initializer: PropertyAccess(object: Identifier, name("user"), property: "age")))");
+}
+
+TEST_CASE("Parses chained access and calls")
+{
+    auto result = Parse("var len = get_users()[0].name.length();");
+    INFO("Parser Error: " << (result.has_value() ? "" : result.error()));
+    REQUIRE(result.has_value());
+    auto& ast = result.value();
+    REQUIRE(ast.size() == 1);
+    // The AST wraps inside-out.
+    // get_users() -> CallExpression
+    // [0] -> IndexAccess
+    // .name -> PropertyAccess
+    // .length() -> CallExpression
+    REQUIRE(ast[0]->GetTypeString() == R"(VariableDeclaration(name: "len", type: "null", initializer: CallExpression(callee: PropertyAccess(object: PropertyAccess(object: IndexAccess(array: CallExpression(callee: Identifier, name("get_users"), args: []), index: IntegerLiteral(0)), property: "name"), property: "length"), args: [])))");
+    // We only check the top-level string for the test, but the true AST is deeply nested!
 }

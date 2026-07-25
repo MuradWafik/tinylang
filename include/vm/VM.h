@@ -8,6 +8,7 @@
 #include "vm/ConstantValue.h"
 #include "vm/Chunk.h"
 #include "vm/PluginLoader.h"
+#include "vm/VMHeap.h"
 
 enum class InterpretResult
 {
@@ -22,8 +23,6 @@ public:
     VM() = default;
 
     InterpretResult Interpret(Chunk* chunk);
-
-    void LoadNativeFunction();
 
     std::optional<ConstantValue> GetGlobal(const std::string& name) const
     {
@@ -49,6 +48,7 @@ private:
     };
 
     std::vector<CallFrame> call_frames{};
+    VMHeap heap;
 
 
     template <fundamental T>
@@ -69,8 +69,6 @@ private:
         return ReadBytes<T>(stack);
     }
 
-
-    uint8_t HandleNegate();
 
     template <fundamental T>
     void DefineGlobal()
@@ -93,9 +91,6 @@ private:
         globals[std::get<std::string>(ExtractNextConstant())] = value;
     }
 
-    void CallFunction();
-    void HandleJump();
-
     template <fundamental T>
     void SetLocalVariable()
     {
@@ -103,8 +98,6 @@ private:
         const T value = ReadBytes<T>(stack);
         std::memcpy(stack.data() + call_frames.back().stack_base + sizeof(FunctionObject*) + local_index, &value, sizeof(T));
     }
-
-    void HandleJumpIfFalse();
 
     template <fundamental T>
     void GetLocalVariable()
@@ -115,9 +108,6 @@ private:
     }
 
 
-    void HandleLoop();
-    void HandleJumpIfFalsePeek();
-    void HandleJumpIfTruePeek();
 
 
     template <typename T>
@@ -246,8 +236,18 @@ private:
         return std::nullopt;
     }
 
+    uint8_t HandleNegate();
+    void HandleJump();
+    void HandleLoop();
+    void HandleJumpIfFalsePeek();
+    void HandleJumpIfTruePeek();
+    void HandleJumpIfFalse();
+    void CallFunction();
     InterpretResult Run();
     ConstantValue& ExtractNextConstant();
+    void AddString();
+    void AllocateString();
+    void LoadNativeFunction();
 
     template<typename T0, typename T1, typename Target>
     static constexpr bool AreBoth()
