@@ -30,6 +30,10 @@ static ConstantValue RunAndGetGlobal(const std::string& source, const std::strin
     auto chunk = compiler.Compile(parse_result.value());
     REQUIRE(chunk != nullptr);
 
+    for(size_t offset = 0; offset < chunk->code.size();) {
+        offset = chunk->DisassembleInstruction(offset);
+    }
+
     VM vm{};
     auto vm_result = vm.Interpret(chunk.get());
     REQUIRE(vm_result == InterpretResult::INTERPRET_OK);

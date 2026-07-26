@@ -127,13 +127,17 @@ private:
     const Type* current_function_return_type{nullptr}; // used to track if the return statement type matches
     // as return statements have no information of their functions
 
-
     std::string current_native_module{};
     // Native functions need to be aware of their native modules and to add them to symbol table
+
+    const Type* ResolveType(std::string_view type_name);
 
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
 
     std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
+
+    std::expected<const Type*, std::string> AnalyzeArrayLiteral(IndexAccess* index_access);
+
     std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
 
     std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);

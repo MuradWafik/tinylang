@@ -44,6 +44,8 @@ void Compiler::CompileExpression(const Expression* expression)
     if(const auto iden_expr = dynamic_cast<const IdentifierExpression*>(expression)) return CompileIdentifierExpression(iden_expr);
     if(const auto call_expr = dynamic_cast<const CallExpression*>(expression)) return CompileCallExpression(call_expr);
     if(const auto asgn_expr = dynamic_cast<const AssignmentExpression*>(expression)) return CompileAssignmentExpression(asgn_expr);
+    if(const auto array_lit = dynamic_cast<const ArrayLiteral*>(expression)) return CompileArrayLiteral(array_lit);
+    if(const auto index_access = dynamic_cast<const IndexAccess*>(expression)) return CompileIndexAccess(index_access);
 }
 
 void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) const
@@ -51,17 +53,17 @@ void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) c
     const auto index = current_chunk->AddConstant(value);
     assert(index < 256 && "Too many constants in current scope, overflowing");
     
-    if(std::holds_alternative<int32_t>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, index);
-    else if(std::holds_alternative<std::float32_t>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FLOAT, index);
-    else if(std::holds_alternative<bool>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_BOOL, index);
-    else if(std::holds_alternative<std::string>(value)) current_chunk->WriteInstruction(line, OpCode::OP_ALLOCATE_STRING, index);
+    if(std::holds_alternative<int32_t>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, static_cast<uint8_t>(index));
+    else if(std::holds_alternative<std::float32_t>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FLOAT, static_cast<uint8_t>(index));
+    else if(std::holds_alternative<bool>(value)) current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_BOOL, static_cast<uint8_t>(index));
+    else if(std::holds_alternative<std::string>(value)) current_chunk->WriteInstruction(line, OpCode::OP_ALLOCATE_STRING, static_cast<uint8_t>(index));
 }
 
 void Compiler::CompileLogicalAnd(const BinaryExpression* binary_expression)
 {
     CompileExpression(binary_expression->left.get());
 
-    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_JUMP_IF_FALSE_PEEK, 0, 0);
+    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_JUMP_IF_FALSE_PEEK, static_cast<uint16_t>(0));
     const size_t jump_index = current_chunk->code.size() - 2;
 
     current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_POP_BOOL);
@@ -77,7 +79,7 @@ void Compiler::CompileLogicalOr(const BinaryExpression* binary_expression)
 {
     CompileExpression(binary_expression->left.get());
 
-    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_JUMP_IF_TRUE_PEEK, 0, 0);
+    current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_JUMP_IF_TRUE_PEEK, static_cast<uint16_t>(0));
     const size_t jump_index = current_chunk->code.size() - 2;
 
     current_chunk->WriteInstruction(binary_expression->left->source_location.line_number, OpCode::OP_POP_BOOL);
@@ -200,32 +202,65 @@ void Compiler::CompileUnaryExpression(const UnaryExpression* unary_expression)
 
 void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_declaration)
 {
-    CompileExpression(variable_declaration->initializer.get());
-    // After compiling its value is at the top of the stack
+    const Type* type = variable_declaration->type_info;
+    
+    if(variable_declaration->initializer)
+    {
+        CompileExpression(variable_declaration->initializer.get());
+    }
+    else
+    {
+        const auto line = variable_declaration->source_location.line_number;
+        // No initializer's declares the variable while giving it a default value
+        if(type == PrimitiveType::Int.get())
+        {
+            const auto index = static_cast<uint8_t>(current_chunk->AddConstant(0));
+            current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, index);
+        }
+        else if(type == PrimitiveType::Float.get())
+        {
+            const auto index = static_cast<uint8_t>(current_chunk->AddConstant(0.0f));
+            current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FLOAT, index);
+        }
+        else if(type == PrimitiveType::Bool.get())
+        {
+            const auto index = static_cast<uint8_t>(current_chunk->AddConstant(false));
+            current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_BOOL, index);
+        }
+        else if(const auto* array_type = dynamic_cast<const ArrayType*>(type))
+        {
+            const uint8_t bytes_per_element = array_type->GetElementType()->GetSize();
+            current_chunk->WriteInstruction(line, OpCode::OP_ALLOCATE_ARRAY, static_cast<uint16_t>(0), bytes_per_element);
+        }
+        else
+        {
+            // Struct or unknown
+            const auto index = current_chunk->AddConstant(0);
+            current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, static_cast<uint8_t>(index));
+        }
+    }
 
     if(scope_depth == 0)
     {
-        const auto name_index = current_chunk->AddConstant(variable_declaration->name);
-        const Type* type = variable_declaration->initializer->type_info;
+        const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(variable_declaration->name));
         const auto line = variable_declaration->source_location.line_number;
         
         if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_INT, name_index);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FLOAT, name_index);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_BOOL, name_index);
         else if(dynamic_cast<const FunctionType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FUNCTION, name_index);
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_OBJECT, name_index);
     }
     else
     {
-        locals.push_back({variable_declaration->name, variable_declaration->initializer->type_info});
+        locals.push_back({variable_declaration->name, type});
     }
 }
 
 void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_declaration)
 {
     std::unique_ptr<Chunk> outer_scope = std::move(current_chunk);
-
     current_chunk = std::make_unique<Chunk>();
-
     for(const auto& param: function_declaration->parameters)
     {
         locals.push_back({param.name, param.type_info});
@@ -243,22 +278,21 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     else if(ret_type == PrimitiveType::Int.get())
     {
         const auto index = current_chunk->AddConstant(0);
-        current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, index);
+        current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, static_cast<uint8_t>(index));
         current_chunk->WriteInstruction(line, OpCode::OP_RETURN_INT);
     }
     else if(ret_type == PrimitiveType::Float.get())
     {
         const auto index = current_chunk->AddConstant(0.0f);
-        current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FLOAT, index);
+        current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FLOAT, static_cast<uint8_t>(index));
         current_chunk->WriteInstruction(line, OpCode::OP_RETURN_FLOAT);
     }
     else if(ret_type == PrimitiveType::Bool.get())
     {
         const auto index = current_chunk->AddConstant(false);
-        current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_BOOL, index);
+        current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_BOOL, static_cast<uint8_t>(index));
         current_chunk->WriteInstruction(line, OpCode::OP_RETURN_BOOL);
     }
-
 
     auto function_object = std::make_unique<FunctionObject>(
         function_declaration->name,
@@ -271,12 +305,11 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     const auto name_index = current_chunk->AddConstant(function_object->name);
     current_chunk->functions.push_back(std::move(function_object));
 
-
     // treated as such
     // OP_CONSTANT_FUNCTION function_object_index
     // OP_DEFINE_GLOBAL_FUNCTION name_index
-    current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FUNCTION, declaration_index);
-    current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FUNCTION, name_index);
+    current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FUNCTION, static_cast<uint8_t>(declaration_index));
+    current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FUNCTION, static_cast<uint8_t>(name_index));
 }
 
 
@@ -287,29 +320,32 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
 
     if(scope_depth == 0)
     {
-        const auto name_index = current_chunk->AddConstant(identifier_expression->name);
+        const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(identifier_expression->name));
         // Where to find it when looking in the VM
         if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_INT, name_index);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FLOAT, name_index);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_BOOL, name_index);
         else if(dynamic_cast<const FunctionType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, name_index);
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_OBJECT, name_index);
     }
     else if(const int64_t local_index = GetLocalVariableIndex(identifier_expression->name);
         local_index != -1)
     {
         const auto byte_offset = static_cast<uint16_t>(local_index);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, (byte_offset >> 8) & 0xff, byte_offset & 0xff);
-        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_FLOAT, (byte_offset >> 8) & 0xff, byte_offset & 0xff);
-        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_BOOL, (byte_offset >> 8) & 0xff, byte_offset & 0xff);
+        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, byte_offset);
+        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_FLOAT, byte_offset);
+        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_BOOL, byte_offset);
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_OBJECT, byte_offset);
     }
     else
     {
-        const auto name_index = current_chunk->AddConstant(identifier_expression->name);
+        const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(identifier_expression->name));
         // Where to find it when looking in the VM
         if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_INT, name_index);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FLOAT, name_index);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_BOOL, name_index);
         else if(dynamic_cast<const FunctionType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, name_index);
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_OBJECT, name_index);
     }
 }
 
@@ -332,44 +368,103 @@ void Compiler::CompileCallExpression(const CallExpression* call_expression)
     }
 
     // OP_CALL now takes a 16-bit arg_bytes operand
-    current_chunk->WriteInstruction(line, OpCode::OP_CALL, (arg_bytes >> 8) & 0xff, arg_bytes & 0xff);
+    current_chunk->WriteInstruction(line, OpCode::OP_CALL, arg_bytes);
+}
+
+void Compiler::CompileArrayAssignmentExpression(const AssignmentExpression* assignment_expression, const uint32_t line, const IndexAccess* const index_access)
+{
+    CompileExpression(index_access->array_expr.get()); // Push array to the VM stack
+    CompileExpression(index_access->index_expr.get()); // Push index to the VM stack
+    CompileExpression(assignment_expression->value.get());  // Push rhs value to the VM stack
+
+    // The type of the IndexAccess is the element type
+    const uint8_t bytes_per_elem = index_access->type_info->GetSize();
+    current_chunk->WriteInstruction(line,
+                                    OpCode::OP_SET_INDEX,
+                                    bytes_per_elem);
+}
+
+void Compiler::CompileVariableAssignmentExpression(const AssignmentExpression* assignment_expression, const uint32_t line, const IdentifierExpression* const identifier)
+{
+    // find the variable
+    const Type* type = assignment_expression->type_info;
+
+    CompileExpression(assignment_expression->value.get());
+    if(scope_depth == 0)
+    {
+        const auto name_index = current_chunk->AddConstant(identifier->name);
+        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, static_cast<uint8_t>(name_index));
+        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_FLOAT, static_cast<uint8_t>(name_index));
+        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_BOOL, static_cast<uint8_t>(name_index));
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_OBJECT, static_cast<uint8_t>(name_index));
+    }
+    // the variable being called/assigned to is a local one
+    else if(const int64_t local_index = GetLocalVariableIndex(identifier->name);
+        local_index != -1)
+    {
+        const auto byte_offset = static_cast<uint16_t>(local_index);
+        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_INT, static_cast<uint16_t>(byte_offset ));
+        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_FLOAT, static_cast<uint16_t>(byte_offset ));
+        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_BOOL, static_cast<uint16_t>(byte_offset ));
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_OBJECT, static_cast<uint16_t>(byte_offset ));
+    }
+    else
+    {
+        const auto name_index = current_chunk->AddConstant(identifier->name);
+        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, static_cast<uint8_t>(name_index));
+        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_FLOAT, static_cast<uint8_t>(name_index));
+        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_BOOL, static_cast<uint8_t>(name_index));
+        else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_OBJECT, static_cast<uint8_t>(name_index));
+    }
 }
 
 void Compiler::CompileAssignmentExpression(const AssignmentExpression* assignment_expression)
 {
-    // find the variable
     const auto line = assignment_expression->source_location.line_number;
-    const Type* type = assignment_expression->type_info;
+    if(const auto index_access = dynamic_cast<const IndexAccess*>(assignment_expression->target.get()))
+    {
+        CompileArrayAssignmentExpression(assignment_expression, line, index_access);
+    }
+    else if (const auto identifier = dynamic_cast<const IdentifierExpression*>(assignment_expression->target.get()))
+    {
+        CompileVariableAssignmentExpression(assignment_expression, line, identifier);
+    }
+    // TODO: Property assignment expression
+}
 
-    CompileExpression(assignment_expression->value.get());
-    if(scope_depth == 0 )
+void Compiler::CompileArrayLiteral(const ArrayLiteral* array_literal)
+{
+    // OP_ALLOCATE_ARRAY [2 bytes: element_count] [1 byte: stride]
+    const auto* array_type = dynamic_cast<const ArrayType*>(array_literal->type_info);
+    const Type* element_type = array_type->GetElementType();
+    const uint8_t bytes_per_element = element_type->GetSize();
+
+    const auto num_elements = static_cast<uint16_t>(array_literal->elements.size());
+    for(auto& element: array_literal->elements)
     {
-        const auto name_index = current_chunk->AddConstant(assignment_expression->name);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, name_index);
-        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_FLOAT, name_index);
-        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_BOOL, name_index);
+        CompileExpression(element.get());
     }
-    // the variable being called/assigned to is a local one
-    else if(const int64_t local_index = GetLocalVariableIndex(assignment_expression->name);
-        local_index != -1)
-    {
-        const auto byte_offset = static_cast<uint16_t>(local_index);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_INT, (byte_offset >> 8) & 0xff, byte_offset & 0xff);
-        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_FLOAT, (byte_offset >> 8) & 0xff, byte_offset & 0xff);
-        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_BOOL, (byte_offset >> 8) & 0xff, byte_offset & 0xff);
-    }
-    else
-    {
-        const auto name_index = current_chunk->AddConstant(assignment_expression->name);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, name_index);
-        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_FLOAT, name_index);
-        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_BOOL, name_index);
-    }
+
+    current_chunk->WriteInstruction(array_literal->source_location.line_number, OpCode::OP_ALLOCATE_ARRAY, num_elements, bytes_per_element);
+}
+
+void Compiler::CompileIndexAccess(const IndexAccess* index_access)
+{
+    // the array they are trying to access
+    CompileExpression(index_access->array_expr.get());
+    CompileExpression(index_access->index_expr.get()); // allows arr[someFunc()];
+
+    const uint8_t bytes_per_element = index_access->type_info->GetSize();
+    current_chunk->WriteInstruction(
+        index_access->source_location.line_number,
+        OpCode::OP_GET_INDEX,
+        bytes_per_element
+    );
 }
 
 void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
 {
-    if(auto return_stmt_value = return_statement->value.get())
+    if(const auto return_stmt_value = return_statement->value.get())
     {
         CompileExpression(return_statement->value.get());
         const Type* type = return_stmt_value->type_info;
@@ -414,7 +509,7 @@ void Compiler::CompileIfStatement(const IfStatement* if_statement)
     const auto line = if_statement->source_location.line_number;
 
     // Don't know yet how far the jump is so a placeholder offset is used, and then gets set later after the body is compiled
-    current_chunk->WriteInstruction(line,OpCode::OP_JUMP_IF_FALSE, /*high byte=*/0, /*low byte=*/0);
+    current_chunk->WriteInstruction(line,OpCode::OP_JUMP_IF_FALSE, static_cast<uint16_t>(0));
     // and jumps use 2 bytes for offsets, (design spec by AI)
 
     // -2 to get the index of the high byte
@@ -427,8 +522,7 @@ void Compiler::CompileIfStatement(const IfStatement* if_statement)
         // So emit an unconditional jump right here to skip over what is about to get compiled
         current_chunk->WriteInstruction(
             if_statement->else_branch->source_location.line_number,
-            OpCode::OP_JUMP, 0, 0
-        );
+            OpCode::OP_JUMP, static_cast<uint16_t>(0));
 
         const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
         current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff;
@@ -447,7 +541,6 @@ void Compiler::CompileIfStatement(const IfStatement* if_statement)
         const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
         current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff; // High byte
         current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff; // Low byte
-
     }
 }
 
@@ -463,8 +556,7 @@ void Compiler::CompileWhileStatement(const WhileStatement* while_statement)
     current_chunk->WriteInstruction(
         while_statement->source_location.line_number,
         OpCode::OP_JUMP_IF_FALSE,
-        0, // high byte
-        0 // low byte
+        static_cast<uint16_t>(0)
     );
     // and jumps use 2 bytes for offsets, (design spec by AI)
 
@@ -478,8 +570,7 @@ void Compiler::CompileWhileStatement(const WhileStatement* while_statement)
     current_chunk->WriteInstruction(
         while_statement->body->source_location.line_number,
         OpCode::OP_LOOP,
-        (backward_jump >> 8) & 0xff,
-        backward_jump & 0xff
+        backward_jump
     );
 
     const uint16_t while_jump = current_chunk->code.size() - (placeholder_while_index + 2);
@@ -511,17 +602,18 @@ void Compiler::CompileExpressionStatement(const ExpressionStatement* expression_
 void Compiler::CompileContinueStatement(const ContinueStatement* continue_statement) const
 {
     const size_t loop_start = loop_starts.back();
-    const uint16_t distance =  (current_chunk->code.size() + 3) - loop_start; // offset 3 to not rerun the loop instruction
+    const uint16_t distance = (current_chunk->code.size() + 3) - loop_start; // offset 3 to not rerun the loop instruction
 
     current_chunk->WriteInstruction(
         continue_statement->source_location.line_number, OpCode::OP_LOOP,
-        (distance >> 8) & 0xff, distance & 0xff);
+        distance
+    );
 }
 
 void Compiler::CompileBreakStatement(const BreakStatement* break_statement)
 {
     // Don't know the location so leave placeholder, the while populates (reminder jump uses 2 bytes);
-    current_chunk->WriteInstruction(break_statement->source_location.line_number, OpCode::OP_JUMP, 0, 0);
+    current_chunk->WriteInstruction(break_statement->source_location.line_number, OpCode::OP_JUMP, static_cast<uint16_t>(0));
     break_placeholders.push_back(current_chunk->code.size() - 2);
 }
 
@@ -540,9 +632,9 @@ void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration*
     current_chunk->WriteInstruction(
         native_function_declaration->source_location.line_number,
         OpCode::OP_LOAD_NATIVE,
-        path_index,
-        name_index,
-        num_args,
+        static_cast<uint8_t>(path_index),
+        static_cast<uint8_t>(name_index),
+        static_cast<uint8_t>(num_args),
         return_bytes
     );
 }
@@ -550,10 +642,10 @@ void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration*
 int64_t Compiler::GetLocalVariableIndex(const std::string& name) const
 {
     int64_t offset = 0;
-    for(const auto& local : locals)
+    for(const auto& [local_name, type] : locals)
     {
-        if(local.name == name) return offset;
-        offset += local.type->GetSize();
+        if(local_name == name) return offset;
+        offset += type->GetSize();
     }
     return -1;
 }

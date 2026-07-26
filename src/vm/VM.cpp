@@ -238,6 +238,11 @@ InterpretResult VM::Run()
                 DefineGlobal<FunctionObject*>();
                 break;
             }
+            case OpCode::OP_DEFINE_GLOBAL_OBJECT:
+            {
+                DefineGlobal<Object*>();
+                break;
+            }
 
             case OpCode::OP_GET_GLOBAL_INT:
             {
@@ -259,6 +264,11 @@ InterpretResult VM::Run()
                 GetGlobal<FunctionObject*>();
                 break;
             }
+            case OpCode::OP_GET_GLOBAL_OBJECT:
+            {
+                GetGlobal<Object*>();
+                break;
+            }
 
             case OpCode::OP_SET_GLOBAL_INT:
             {
@@ -273,6 +283,11 @@ InterpretResult VM::Run()
             case OpCode::OP_SET_GLOBAL_BOOL:
             {
                 SetGlobal<bool>();
+                break;
+            }
+            case OpCode::OP_SET_GLOBAL_OBJECT:
+            {
+                SetGlobal<Object*>();
                 break;
             }
 
@@ -297,6 +312,11 @@ InterpretResult VM::Run()
                 GetLocalVariable<bool>();
                 break;
             }
+            case OpCode::OP_GET_LOCAL_OBJECT:
+            {
+                GetLocalVariable<Object*>();
+                break;
+            }
 
             case OpCode::OP_SET_LOCAL_INT:
             {
@@ -311,6 +331,11 @@ InterpretResult VM::Run()
             case OpCode::OP_SET_LOCAL_BOOL:
             {
                 SetLocalVariable<bool>();
+                break;
+            }
+            case OpCode::OP_SET_LOCAL_OBJECT:
+            {
+                SetLocalVariable<Object*>();
                 break;
             }
 
@@ -363,6 +388,22 @@ InterpretResult VM::Run()
             case OpCode::OP_ALLOCATE_STRING:
             {
                 AllocateString();
+                break;
+            }
+            case OpCode::OP_ALLOCATE_ARRAY:
+            {
+                AllocateArray();
+                break;
+            }
+            case OpCode::OP_GET_INDEX:
+            {
+                GetArrayIndex();
+                break;
+            }
+            case OpCode::OP_SET_INDEX:
+            {
+                SetArrayIndex();
+                break;
             }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
@@ -471,19 +512,85 @@ void VM::LoadNativeFunction()
     globals[symbol_name] = allocated_native_functions.back().get();
 }
 
+void VM::AllocateArray()
+{
+    //OP_ALLOCATE_ARRAY [2 bytes: element_count] [1 byte: stride]
+    const auto element_count = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    const size_t total_bytes = element_count * bytes_per_element;
+    
+    const uint8_t* elements_ptr = stack.data() + stack.size() - total_bytes;
+
+    auto* arr = heap.Allocate<Array>(elements_ptr, element_count, bytes_per_element);
+    
+    stack.resize(stack.size() - total_bytes);
+
+    Push<Object*>(arr);
+   /// Stack: Pops (count*stride) bytes, allocates ArrayObject, pushes 8 byte Object*
+}
+
+void VM::GetArrayIndex()
+{
+    // OP_GET_INDEX [1 byte: stride]    | Stack: Pops 4 byte int index, pops 8 byte ArrayObject*, pushes 'stride' bytes
+    const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto index = Pop<int32_t>();
+    const auto* array = dynamic_cast<Array*>(Pop<Object*>());
+
+    if(index < 0 || index >= array->size)
+    {
+        throw std::runtime_error(std::format("Array index out of bounds. Index: {}, Size: {}", index, array->size));
+    }
+
+    const size_t byte_offset = index * bytes_per_element;
+    stack.insert(stack.end(), 
+                 &array->elements[byte_offset], 
+                 &array->elements[byte_offset + bytes_per_element]);
+}
+
+void VM::SetArrayIndex()
+{
+    // OP_SET_INDEX [1 byte: stride]  | Stack: [ArrayObject*] [4 byte int index] ['stride' bytes value]
+    const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    // have to remove the array and index from the stack, but leave the value bytes
+    // So need to read everything using absolute indexing instead of popping
+    const size_t value_start = stack.size() - bytes_per_element;
+    const size_t index_start = value_start - sizeof(int32_t);
+    const size_t array_start = index_start - sizeof(Object*);
+    const auto index = ReadBytesAbsolute<int32_t>(stack, index_start);
+    const auto* array = dynamic_cast<Array*>(ReadBytesAbsolute<Object*>(stack, array_start));
+    
+    if(index < 0 || index >= array->size)
+    {
+        throw std::runtime_error(std::format("Array index out of bounds. Index: {}, Size: {}", index, array->size));
+    }
+
+    const size_t byte_offset = index * bytes_per_element;
+
+    // Copy the full stride of value bytes directly into the array buffer
+    std::memcpy(&array->elements[byte_offset], &stack[value_start], bytes_per_element);
+
+    // shift the value bytes down to overwrite the array and index
+    std::memmove(&stack[array_start], &stack[value_start], bytes_per_element);
+
+    // Shrink the stack (we effectively popped the 8-byte pointer and 4-byte index) (ai rewrite i had this wrong)
+    stack.resize(stack.size() - sizeof(Object*) - sizeof(int32_t));
+}
+
 void VM::AllocateString()
 {
     const auto index = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const auto str = std::get<std::string>(call_frames.back().chunk->constants[index]);
-    String* obj = heap.Allocate<String>(str.c_str(), str.length());
+    auto* obj = heap.Allocate<String>(str.c_str(), str.length());
     Push<Object*>(obj);
 }
 
 void VM::AddString()
 {
-    const auto r = static_cast<String*>(Pop<Object*>());
-    const auto l = static_cast<String*>(Pop<Object*>());
+    const auto r = dynamic_cast<String*>(Pop<Object*>());
+    const auto l = dynamic_cast<String*>(Pop<Object*>());
 
-    String* obj = heap.Allocate<String>(l, r);
+    auto* obj = heap.Allocate<String>(l, r);
     Push<Object*>(obj);
 }

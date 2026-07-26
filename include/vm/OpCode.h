@@ -14,25 +14,28 @@ enum class OpCode : uint8_t
     // --- Heap Objects ---
     OP_ALLOCATE_STRING,   // [1 byte operand: constant_index] | Stack: Reads string from constants[index], allocates StringObject on heap, pushes 8 byte Object*
     OP_ADD_STRING,        // [No operands]                    | Stack: Pops two 8 byte Object* strings, allocates new concatenated StringObject, pushes 8 byte Object*
-    OP_ALLOCATE_ARRAY,    // [2 byte operand: element_count]  | Stack: Pops 'count' elements, allocates ArrayObject on heap, pushes 8 byte Object*
-    OP_ALLOCATE_STRUCT,   // [2 byte operand: field_count]    | Stack: Pops 'count' elements, allocates StructObject on heap, pushes 8 byte Object*
-    OP_GET_PROPERTY,      // [1 byte operand: name_index]     | Stack: Pops 8 byte StructObject*, pushes property value
-    OP_SET_PROPERTY,      // [1 byte operand: name_index]     | Stack: Pops value and 8 byte StructObject*, sets property, pushes value back
-    OP_GET_INDEX,         // [No operands]                    | Stack: Pops 4 byte int index and 8 byte ArrayObject*, pushes array[index]
-    OP_SET_INDEX,         // [No operands]                    | Stack: Pops value, pops 4 byte int index, pops 8 byte ArrayObject*, sets array[index], pushes value back
+    OP_ALLOCATE_ARRAY,    // [2 bytes: element_count] [1 byte: stride] | Stack: Pops (count*stride) bytes, allocates ArrayObject, pushes 8 byte Object*
+    OP_ALLOCATE_STRUCT,   // [2 bytes: total_size]                     | Stack: Pops 'total_size' bytes, allocates StructObject on heap, pushes 8 byte Object*
+    OP_GET_PROPERTY,      // [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
+    OP_SET_PROPERTY,      // [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 'size' bytes, pops 8 byte StructObject*, writes bytes, pushes bytes back
+    OP_GET_INDEX,         // [1 byte: stride]                          | Stack: Pops 4 byte int index, pops 8 byte ArrayObject*, pushes 'stride' bytes
+    OP_SET_INDEX,         // [1 byte: stride]                          | Stack: Pops 'stride' bytes, pops 4 byte int index, pops 8 byte ArrayObject*, writes bytes, pushes bytes back
 
     // --- Globals ---
     OP_DEFINE_GLOBAL_INT, // [1 byte operand: name_index]     | Stack: Pops 4 byte int. Defines global variable
     OP_DEFINE_GLOBAL_FLOAT,
     OP_DEFINE_GLOBAL_BOOL,
     OP_DEFINE_GLOBAL_FUNCTION,
+    OP_DEFINE_GLOBAL_OBJECT,
     OP_GET_GLOBAL_INT,    // [1 byte operand: name_index]     | Stack: Pushes 4 byte int of global variable
     OP_GET_GLOBAL_FLOAT,
     OP_GET_GLOBAL_BOOL,
     OP_GET_GLOBAL_FUNCTION,
+    OP_GET_GLOBAL_OBJECT, // [1 byte operand: name_index]     | Stack: Pushes 8 byte Object* of global variable
     OP_SET_GLOBAL_INT,    // [1 byte operand: name_index]     | Stack: Peeks 4 byte int and sets global variable
     OP_SET_GLOBAL_FLOAT,
     OP_SET_GLOBAL_BOOL,
+    OP_SET_GLOBAL_OBJECT, // [1 byte operand: name_index]     | Stack: Peeks 8 byte Object* and sets global variable
 
     // --- Locals ---
     OP_GET_LOCAL_INT,     // [2 byte operand: byte_offset] | Stack: Pushes 4 byte int from frame_base + offset
@@ -41,6 +44,8 @@ enum class OpCode : uint8_t
     OP_SET_LOCAL_INT,     // [2 byte operand: byte_offset] | Stack: Peeks 4 byte int and copies to frame_base + offset
     OP_SET_LOCAL_FLOAT,   // [2 byte operand: byte_offset] | Stack: Peeks 4 byte float and copies to frame_base + offset
     OP_SET_LOCAL_BOOL,    // [2 byte operand: byte_offset] | Stack: Peeks 1 byte bool and copies to frame_base + offset
+    OP_GET_LOCAL_OBJECT,  // [2 byte operand: byte_offset] | Stack: Pushes 8 byte Object* from frame_base + offset
+    OP_SET_LOCAL_OBJECT,  // [2 byte operand: byte_offset] | Stack: Peeks 8 byte Object* and copies to frame_base + offset
 
     // --- Math ---
     OP_ADD_INT,           // [No operands] | Stack: Pops 4 bytes (right), pops 4 bytes (left), pushes 4 bytes (left + right)

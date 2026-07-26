@@ -33,13 +33,22 @@ std::string FunctionType::GetName() const
 
 std::string ArrayType::GetName() const
 {
-    if(element_type != nullptr) return this->element_type->GetName();
+    if(element_type != nullptr)
+    {
+        return this->element_type->GetName() + "[]";
+    }
     return "Unknown array type";
 }
 
 bool ArrayType::IsAssignableTo(const Type* other) const
 {
-    return this == other;
+    if(this == other) return true;
+    
+    if(const auto* other_array = dynamic_cast<const ArrayType*>(other))
+    {
+        return this->element_type == other_array->element_type;
+    }
+    return false;
 }
 
 

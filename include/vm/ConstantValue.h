@@ -10,6 +10,7 @@
 
 class Chunk;
 struct FunctionObject;
+struct Object;
 
 using ConstantValue = std::variant<
     int32_t,
@@ -17,6 +18,7 @@ using ConstantValue = std::variant<
     bool,
     std::string, // used as a temporary
     FunctionObject*,
+    Object*,
     std::monostate  // void/no value
 >;
 

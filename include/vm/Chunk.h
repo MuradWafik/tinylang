@@ -19,15 +19,24 @@ public:
     void Write(OpCode opcode, uint32_t line);
 
 
-    // Allows to write the OpCode with all its args instead of one by one
+private:
+    template <typename T>
+    void WriteOperand(T operand, uint32_t line)
+    {
+        for (int i = sizeof(T) - 1; i >= 0; --i)
+        {
+            code.push_back(static_cast<uint8_t>((operand >> (i * 8)) & 0xFF));
+            lines.push_back(line);
+        }
+    }
+
+public:
     template <typename... Args>
     void WriteInstruction(const uint32_t line, OpCode opcode, Args... operands)
     {
         code.push_back(static_cast<uint8_t>(opcode));
         lines.push_back(line);
-
-        // AI GENERATED -- LOOK FURTHER INTO *FOLD EXPRESSION*
-        ((code.push_back(static_cast<uint8_t>(operands)), lines.push_back(line)), ...);
+        (WriteOperand(operands, line), ...);
     }
 
     unsigned long AddConstant(ConstantValue value);

@@ -19,9 +19,12 @@ struct VariableDeclaration final : Statement
     std::string name;
     std::string type;
     std::unique_ptr<Expression> initializer;
+    const Type* type_info = nullptr;
+
     [[nodiscard]] std::string GetTypeString() const override
     {
-        if (initializer) {
+        if(initializer)
+        {
             return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: {}))", name, type, initializer->GetTypeString());
         }
         return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: nullptr))", name, type);

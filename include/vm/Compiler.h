@@ -31,7 +31,6 @@ private:
     void CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const;
 
 
-
     void CompileExpression(const Expression* expression);
     void CompileLiteral(const ConstantValue& value, uint32_t line) const;
     void CompileLogicalAnd(const BinaryExpression* binary_expression);
@@ -40,7 +39,17 @@ private:
     void CompileUnaryExpression(const UnaryExpression* unary_expression);
     void CompileIdentifierExpression(const IdentifierExpression* identifier_expression) const;
     void CompileCallExpression(const CallExpression* call_expression);
+
+    void CompileArrayAssignmentExpression(
+            const AssignmentExpression* assignment_expression, uint32_t line, const IndexAccess* index_access);
+
+    void CompileVariableAssignmentExpression(
+            const AssignmentExpression* assignment_expression, uint32_t line, const IdentifierExpression* identifier);
+
     void CompileAssignmentExpression(const AssignmentExpression* assignment_expression);
+    void CompileArrayLiteral(const ArrayLiteral* array_literal);
+    void CompileIndexAccess(const IndexAccess* index_access);
+
 
     int64_t GetLocalVariableIndex(const std::string& name) const;
 

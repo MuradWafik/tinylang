@@ -248,6 +248,9 @@ private:
     void AddString();
     void AllocateString();
     void LoadNativeFunction();
+    void AllocateArray();
+    void GetArrayIndex();
+    void SetArrayIndex();
 
     template<typename T0, typename T1, typename Target>
     static constexpr bool AreBoth()

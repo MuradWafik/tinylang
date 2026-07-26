@@ -8,10 +8,21 @@ fn helper(val: int) -> int {
     return val * 3;
 }
 
-fn main() -> void {
-    // print_int(helper(12));
-    var msg: String = "Hello " + "World";
-    return;
+var arr: int[] = [10, 20, 30, 40];
+
+var i: int = 0;
+while (i < 4) {
+    print_int(arr[i]);
+    i = i + 1;
 }
 
-main();
+// 3. Test Array Set
+arr[0] = 99;
+arr[3] = 77;
+// 4. Verify Set worked (should print 99, 20, 30, 77)
+i = 0;
+while (i < 4)
+{
+    print_int(arr[i]);
+    i = i + 1;
+}

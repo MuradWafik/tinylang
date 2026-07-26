@@ -44,8 +44,9 @@ public:
     
     [[nodiscard]] uint8_t GetSize() const override {
         switch (kind) {
-            case PrimitiveKind::Int: return 4;
-            case PrimitiveKind::Float: return 4;
+            case PrimitiveKind::Int:
+            case PrimitiveKind::Float:
+                return 4;
             case PrimitiveKind::Bool: return 1;
             case PrimitiveKind::String: return 8; // pointer
             case PrimitiveKind::Void: return 0;

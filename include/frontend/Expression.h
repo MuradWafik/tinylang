@@ -116,15 +116,20 @@ struct IdentifierExpression final : Expression
 
 struct AssignmentExpression final : Expression
 {
-    std::string name;
+    std::unique_ptr<Expression> target;
     std::unique_ptr<Expression> value;
-    AssignmentExpression(std::string name, std::unique_ptr<Expression> val, const SourceLocation loc)
-        : name(std::move(name)), value(std::move(val)) {
+    AssignmentExpression(std::unique_ptr<Expression> target, std::unique_ptr<Expression> val, const SourceLocation loc)
+        : target(std::move(target)), value(std::move(val))
+    {
         this->source_location = loc;
     }
+
     [[nodiscard]] std::string GetTypeString() const override
     {
-        return std::format("AssignmentExpression(name: \"{}\", value: {})", name, value.get());
+        if (const auto* id_expr = dynamic_cast<const IdentifierExpression*>(target.get())) {
+            return std::format("AssignmentExpression(name: \"{}\", value: {})", id_expr->name, value->GetTypeString());
+        }
+        return std::format("AssignmentExpression(target: {}, value: {})", target->GetTypeString(), value->GetTypeString());
     }
 };
 

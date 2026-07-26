@@ -111,8 +111,10 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
         return std::unexpected(var.error());
     }
 
-    auto variable_name = Expect(TokenType::Identifier,
-        "Variable name identifier after var keyword");
+    auto variable_name = Expect(
+        TokenType::Identifier,
+        "Variable name identifier after var keyword"
+    );
 
     if(!variable_name)
     {
@@ -120,7 +122,7 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
     }
 
     std::string type_name = "null";
-    if (Match(TokenType::Colon))
+    if(Match(TokenType::Colon))
     {
         const auto& type_name_token = Consume();
         if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
@@ -129,18 +131,28 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
                 std::format("Expected typename for variable declaration got '{}'. {}'", type_name_token.type, type_name_token.source_location));
         }
         type_name = type_name_token.lexeme;
+
+        while(Match(TokenType::LeftSquareBracket))
+        {
+            if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type");
+                !right_bracket)
+            {
+                return std::unexpected(right_bracket.error());
+            }
+            type_name += "[]";
+        }
     }
 
-    if(auto assign = Expect(TokenType::Assign, "Expected assignment for variable");
-        !assign)
-    {
-        return std::unexpected(assign.error());
-    }
+    std::unique_ptr<Expression> initializer = nullptr;
 
-    auto initializer_result = ParseExpression();
-    if (!initializer_result)
+    if(Match(TokenType::Assign))
     {
-        return std::unexpected(initializer_result.error()); // Bubble up parsing errors
+        auto initializer_result = ParseExpression();
+        if(!initializer_result)
+        {
+            return std::unexpected(initializer_result.error()); // Bubble up parsing errors
+        }
+        initializer = std::move(initializer_result.value());
     }
 
     if(
@@ -155,7 +167,7 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
     return std::make_unique<VariableDeclaration>(
         variable_name->lexeme,
         type_name,
-        std::move(initializer_result.value()),
+        std::move(initializer),
         var->source_location);
 }
 
@@ -191,14 +203,16 @@ ExpectedExpressionPtr Parser::ParseAssignment()
         Token op = tokens[index - 1]; // same structure for all the following functions, cache the token of it
         // The left-hand side of an assignment must be a valid identifier
         // something like 10 = 9 should not be allowed
-        const auto* identifier_expr = dynamic_cast<IdentifierExpression*>(left.value().get());
-        if (!identifier_expr)
+
+        Expression* target_expr = left.value().get();
+        // no longer just a string as assigning can be a variable, array index, or struct property
+        const bool is_valid_target = dynamic_cast<IdentifierExpression*>(target_expr) != nullptr ||
+                               dynamic_cast<IndexAccess*>(target_expr) != nullptr ||
+                               dynamic_cast<PropertyAccess*>(target_expr) != nullptr;
+        if(!is_valid_target)
         {
-            return std::unexpected(
-                std::format("Invalid assignment target at {}", op.source_location)
-            );
+            return std::unexpected(std::format("Invalid assignment target at {}", op.source_location));
         }
-        std::string var_name = identifier_expr->name;
 
         // it's a right associative operator, so right must be recursive, not down the chain
         auto right = ParseAssignment();
@@ -206,7 +220,7 @@ ExpectedExpressionPtr Parser::ParseAssignment()
         {
             return std::unexpected(right.error());
         }
-        return std::make_unique<AssignmentExpression>(std::move(var_name), std::move(right.value()), op.source_location);
+        return std::make_unique<AssignmentExpression>(std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
 }

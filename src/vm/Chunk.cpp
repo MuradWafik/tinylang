@@ -23,7 +23,6 @@ size_t Chunk::AddConstant(ConstantValue value)
 int Chunk::DisassembleInstruction(int offset) const
 {
     std::print("{:04} ", offset);
-
     if (offset > 0 && lines[offset] == lines[offset - 1])
     {
         std::print("   | ");
@@ -43,8 +42,7 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_CONSTANT_BOOL:
         case OpCode::OP_CONSTANT_FUNCTION:
         case OpCode::OP_ALLOCATE_STRING:
-        case OpCode::OP_GET_PROPERTY:
-        case OpCode::OP_SET_PROPERTY:
+
         case OpCode::OP_DEFINE_GLOBAL_INT:
         case OpCode::OP_DEFINE_GLOBAL_FLOAT:
         case OpCode::OP_DEFINE_GLOBAL_BOOL:
@@ -73,12 +71,33 @@ int Chunk::DisassembleInstruction(int offset) const
             std::println("{:<24} {:4} (byte offset)", opcode_name, local_index);
             return offset + 3;
         }
-        case OpCode::OP_ALLOCATE_ARRAY:
         case OpCode::OP_ALLOCATE_STRUCT:
         {
-            const uint16_t count = (code[offset + 1] << 8) | code[offset + 2];
-            std::println("{:<24} {:4} (element count)", opcode_name, count);
+            const uint16_t size = (code[offset + 1] << 8) | code[offset + 2];
+            std::println("{:<24} {:4} (bytes)", opcode_name, size);
             return offset + 3;
+        }
+        case OpCode::OP_ALLOCATE_ARRAY:
+        {
+            const uint16_t count = (code[offset + 1] << 8) | code[offset + 2];
+            const uint8_t stride = code[offset + 3];
+            std::println("{:<24} {:4} (count) {:4} (stride)", opcode_name, count, stride);
+            return offset + 4;
+        }
+        case OpCode::OP_GET_PROPERTY:
+        case OpCode::OP_SET_PROPERTY:
+        {
+            const uint16_t byte_offset = (code[offset + 1] << 8) | code[offset + 2];
+            const uint8_t size = code[offset + 3];
+            std::println("{:<24} {:4} (offset) {:4} (size)", opcode_name, byte_offset, size);
+            return offset + 4;
+        }
+        case OpCode::OP_GET_INDEX:
+        case OpCode::OP_SET_INDEX:
+        {
+            const uint8_t stride = code[offset + 1];
+            std::println("{:<24} {:4} (stride)", opcode_name, stride);
+            return offset + 2;
         }
         case OpCode::OP_JUMP_IF_FALSE:
         case OpCode::OP_JUMP:
