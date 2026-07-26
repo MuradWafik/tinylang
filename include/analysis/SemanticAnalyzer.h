@@ -133,11 +133,7 @@ private:
     const Type* ResolveType(std::string_view type_name);
 
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
-
     std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
-
-    std::expected<const Type*, std::string> AnalyzeArrayLiteral(IndexAccess* index_access);
-
     std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
 
     std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);
@@ -151,6 +147,7 @@ private:
     std::expected<void, std::string> AnalyzeExpressionStatement(const ExpressionStatement* expression_statement);
     std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeModuleStatement* native_module_statement);
     std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration);
+    std::expected<void, std::string> AnalyzeStructDeclaration(const StructDeclaration* struct_declaration);
 
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);
@@ -158,6 +155,9 @@ private:
     std::expected<const Type*, std::string> AnalyzeIdentifierExpression(IdentifierExpression* identifier_expression);
     std::expected<const Type*, std::string> AnalyzeAssignmentExpression(AssignmentExpression* assignment_expression);
     std::expected<const Type*, std::string> AnalyzeCallExpression(CallExpression* call_expression);
+    std::expected<const Type*, std::string> AnalyzeIndexAccess(IndexAccess* index_access);
+    std::expected<const Type*, std::string> AnalyzeArrayLiteral(ArrayLiteral* array_node);
+    std::expected<const Type*, std::string> AnalyzePropertyAccess(PropertyAccess* property_access);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);

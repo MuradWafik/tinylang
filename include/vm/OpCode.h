@@ -15,7 +15,7 @@ enum class OpCode : uint8_t
     OP_ALLOCATE_STRING,   // [1 byte operand: constant_index] | Stack: Reads string from constants[index], allocates StringObject on heap, pushes 8 byte Object*
     OP_ADD_STRING,        // [No operands]                    | Stack: Pops two 8 byte Object* strings, allocates new concatenated StringObject, pushes 8 byte Object*
     OP_ALLOCATE_ARRAY,    // [2 bytes: element_count] [1 byte: stride] | Stack: Pops (count*stride) bytes, allocates ArrayObject, pushes 8 byte Object*
-    OP_ALLOCATE_STRUCT,   // [2 bytes: total_size]                     | Stack: Pops 'total_size' bytes, allocates StructObject on heap, pushes 8 byte Object*
+    OP_ALLOCATE_STRUCT,   // [2 bytes: total_size] [1 byte: from_stack] | Stack: Pops 'total_size' bytes (if from_stack is true), allocates StructObject on heap, pushes 8 byte Object*
     OP_GET_PROPERTY,      // [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
     OP_SET_PROPERTY,      // [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 'size' bytes, pops 8 byte StructObject*, writes bytes, pushes bytes back
     OP_GET_INDEX,         // [1 byte: stride]                          | Stack: Pops 4 byte int index, pops 8 byte ArrayObject*, pushes 'stride' bytes

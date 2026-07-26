@@ -98,6 +98,7 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::Break: return ParseBreakStatement();
         case TokenType::Continue: return ParseContinueStatement();
         case TokenType::Native: return ParseNativeStatement();
+        case TokenType::Struct: return ParseStructDeclaration();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -591,7 +592,7 @@ ExpectedNodePtr Parser::ParseNativeStatement()
         {
             return std::unexpected(semicolon.error());
         }
-        return std::make_unique<NativeModuleStatement>(std::move(name->lexeme));
+        return std::make_unique<NativeModuleStatement>(std::move(name->lexeme), name->source_location);
     }
 
     if(Match(TokenType::Fn))
@@ -646,7 +647,8 @@ ExpectedNodePtr Parser::ParseNativeStatement()
         return std::make_unique<NativeFunctionDeclaration>(
             function_name->lexeme,
             std::move(parameters_result.value()),
-            return_type.lexeme
+            return_type.lexeme,
+            function_name->source_location
         );
     }
 
@@ -882,11 +884,83 @@ ExpectedPtr<ContinueStatement> Parser::ParseContinueStatement()
 {
     constexpr std::string_view error_msg = "Error parsing continue statement";
     auto continue_keyword = Expect(TokenType::Continue, error_msg);
-    if(!continue_keyword) {
+    if(!continue_keyword)
+    {
         return std::unexpected(continue_keyword.error());
     }
-    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon) {
+    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
+    {
         return std::unexpected(semi_colon.error());
     }
     return std::make_unique<ContinueStatement>(continue_keyword->source_location);
+}
+
+ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
+{
+    constexpr std::string_view error_msg = "Error parsing struct declaration";
+    Consume();
+    auto struct_name = Expect(TokenType::Identifier, error_msg);
+    if(!struct_name)
+    {
+        return std::unexpected(struct_name.error());
+    }
+
+    if(const auto left_brace = Expect(TokenType::LeftCurlyBrace, error_msg); !left_brace)
+    {
+        return std::unexpected(left_brace.error());
+    }
+
+    std::vector<std::pair<std::string, std::string>> struct_members;
+    do
+    {
+        if(const auto var = Expect(TokenType::Var, error_msg); !var)
+        {
+            return std::unexpected(var.error());
+        }
+
+        const auto var_name = Expect(TokenType::Identifier, error_msg);
+        if(!var_name)
+        {
+            return std::unexpected(var_name.error());
+        }
+
+        if(const auto colon = Expect(TokenType::Colon, error_msg); !colon)
+        {
+            return std::unexpected(colon.error());
+        }
+
+        const auto& type_name_token = Consume();
+        if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
+        {
+            return std::unexpected(std::format(
+                "{}, expected typename got {}",
+                error_msg, Token::TypeToString(type_name_token.type))
+            );
+        }
+        std::string type_name = type_name_token.lexeme;
+
+        // array types
+        while(Match(TokenType::LeftSquareBracket))
+        {
+            if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type"); !right_bracket)
+            {
+                return std::unexpected(right_bracket.error());
+            }
+            type_name += "[]";
+        }
+        struct_members.emplace_back(var_name.value().lexeme, type_name);
+
+        if(const auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
+        {
+            return std::unexpected(semi_colon.error());
+        }
+    }
+    while (!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace);
+
+    if (const auto right_brace = Expect(TokenType::RightCurlyBrace, error_msg); !right_brace)
+    {
+        return std::unexpected(right_brace.error());
+    }
+
+    return std::make_unique<StructDeclaration>(std::move(struct_name.value().lexeme), std::move(struct_members), struct_name->source_location);
 }

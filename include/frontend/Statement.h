@@ -194,7 +194,10 @@ struct NativeModuleStatement final : Statement
         return "NativeModuleStatement";
     }
 
-    explicit NativeModuleStatement(std::string name) : name(std::move(name)) {}
+    explicit NativeModuleStatement(std::string name, const SourceLocation loc) : name(std::move(name))
+    {
+        this->source_location = loc;
+    }
 };
 
 struct NativeFunctionDeclaration final : Statement
@@ -204,11 +207,36 @@ struct NativeFunctionDeclaration final : Statement
     std::string return_type;
     const Type* return_type_info = nullptr;
 
-    [[nodiscard]] std::string GetTypeString() const override {
+    [[nodiscard]] std::string GetTypeString() const override
+    {
         return "NativeFunctionDeclaration";
     }
 
-    NativeFunctionDeclaration(std::string name, std::vector<Parameter> parameters, std::string return_type, const Type* return_type_info = nullptr) :
-        name(std::move(name)), parameters(std::move(parameters)), return_type(std::move(return_type)), return_type_info(return_type_info)
-    {}
+    NativeFunctionDeclaration(
+        std::string name, std::vector<Parameter> parameters,
+        std::string return_type, const SourceLocation loc,
+        const Type* return_type_info = nullptr) :
+    name(std::move(name)), parameters(std::move(parameters)), return_type(std::move(return_type)), return_type_info(return_type_info)
+    {
+        this->source_location = loc;
+    }
+};
+
+struct StructDeclaration final : Statement
+{
+    std::string name;
+    std::vector<std::pair<std::string, std::string>> fields; // {"x", "int"}, {"y", "int"} ...
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return "StructDeclaration";
+    }
+
+    StructDeclaration(
+        std::string name, std::vector<std::pair<std::string, std::string>> fields,
+        const SourceLocation loc) :
+    name(std::move(name)), fields(std::move(fields))
+    {
+        this->source_location = loc;
+    }
 };

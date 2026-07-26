@@ -1,6 +1,7 @@
 #include "analysis/SemanticAnalyzer.h"
 
 #include <ranges>
+#include <unordered_set>
 
 #include "analysis/Type.h"
 #include "frontend/Expression.h"
@@ -67,9 +68,11 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* s
     if(const auto* expr_stmt = dynamic_cast<ExpressionStatement*>(stmt)) return AnalyzeExpressionStatement(expr_stmt);
     if(const auto* native_mod_stmt = dynamic_cast<NativeModuleStatement*>(stmt)) return AnalyzeNativeModuleStatement(native_mod_stmt);
     if(const auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
+    if(const auto* struct_decl = dynamic_cast<StructDeclaration*>(stmt)) return AnalyzeStructDeclaration(struct_decl);
 
     return std::unexpected(std::format("Unknown statement type '{}'", stmt->GetTypeString()));
 }
+
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expression* expr)
 {
@@ -78,39 +81,10 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
     if(auto* id_expr = dynamic_cast<IdentifierExpression*>(expr)) return AnalyzeIdentifierExpression(id_expr);
     if(auto* assign_expr = dynamic_cast<AssignmentExpression*>(expr)) return AnalyzeAssignmentExpression(assign_expr);
     if(auto* call_expr = dynamic_cast<CallExpression*>(expr)) return AnalyzeCallExpression(call_expr);
-    if(auto* array_node = dynamic_cast<ArrayLiteral*>(expr))
-    {
-        if (array_node->elements.empty())
-        {
-            return Return("Cannot infer type of empty array literal");
-        }
+    if(auto* array_node = dynamic_cast<ArrayLiteral*>(expr)) return AnalyzeArrayLiteral(array_node);
+    if(auto* index_access = dynamic_cast<IndexAccess*>(expr)) return AnalyzeIndexAccess(index_access);
+    if(auto* property_access = dynamic_cast<PropertyAccess*>(expr)) return AnalyzePropertyAccess(property_access);
 
-        auto first_type = AnalyzeExpression(array_node->elements[0].get());
-        if (!first_type)
-        {
-            return std::unexpected(first_type.error());
-        }
-
-        for(size_t i = 1; i < array_node->elements.size(); ++i)
-        {
-            auto elem_type = AnalyzeExpression(array_node->elements[i].get());
-            if (!elem_type) return std::unexpected(elem_type.error());
-
-            if(elem_type.value() != first_type.value())
-            {
-                return Return("Array literal elements must all be of the same type");
-            }
-        }
-
-        allocated_types.push_back(std::make_unique<ArrayType>(first_type.value()));
-        array_node->type_info = allocated_types.back().get();
-        return array_node->type_info;
-    }
-
-    if(auto* index_access = dynamic_cast<IndexAccess*>(expr))
-    {
-        return AnalyzeArrayLiteral(index_access);
-    }
     if(auto* bool_node = dynamic_cast<BoolLiteral*>(expr))
     {
         bool_node->type_info = PrimitiveType::Bool.get();
@@ -492,6 +466,45 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclarat
     return {};
 }
 
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(const StructDeclaration* struct_declaration)
+{
+    if(symbol_table.LookupType(struct_declaration->name))
+    {
+        return std::unexpected(std::format("Redefinition of struct '{}'", struct_declaration->name));
+    }
+
+    // to throw an error if 2 variables have the same name in definition
+    std::unordered_set<std::string_view> seen_names;
+    seen_names.reserve(struct_declaration->fields.size());
+    std::vector<std::pair<std::string, const Type*>> result;
+    result.reserve(struct_declaration->fields.size());
+    for(auto& [name, type_name] : struct_declaration->fields)
+    {
+        if (!seen_names.insert(name).second)
+        {
+            return std::unexpected(std::format(
+                "Duplicate field name '{}' in definition of struct '{}'",
+                name, struct_declaration->name)
+            );
+        }
+
+        auto* type = ResolveType(type_name);
+        if(!type)
+        {
+            return std::unexpected(std::format(
+                "Unknown typename '{}' for variable '{}' in definition of struct '{}'",
+                type_name, name, struct_declaration->name)
+            );
+        }
+        result.emplace_back(name, type);
+    }
+
+    allocated_types.push_back(std::make_unique<StructType>(std::move(result)));
+    symbol_table.DefineType(struct_declaration->name, allocated_types.back().get());
+
+    return {};
+}
+
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeBinaryExpression(BinaryExpression* binary_expression)
 {
     const auto left = AnalyzeExpression(binary_expression->left.get());
@@ -736,7 +749,7 @@ void SemanticAnalyzer::InitializeDefaults()
     RegisterUnaryOperator(TokenType::Minus, float_t, float_t);
 }
 
-std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(IndexAccess* index_access)
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIndexAccess(IndexAccess* index_access)
 {
     auto array_type = AnalyzeExpression(index_access->array_expr.get());
     if(!array_type)
@@ -760,4 +773,60 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(In
     // The type of the IndexAccess is the element type
     index_access->type_info = array_t->GetElementType();
     return index_access->type_info;
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(ArrayLiteral* array_node)
+{
+    if (array_node->elements.empty())
+    {
+        return Return("Cannot infer type of empty array literal");
+    }
+
+    auto first_type = AnalyzeExpression(array_node->elements[0].get());
+    if (!first_type)
+    {
+        return std::unexpected(first_type.error());
+    }
+
+    for(size_t i = 1; i < array_node->elements.size(); ++i)
+    {
+        auto elem_type = AnalyzeExpression(array_node->elements[i].get());
+        if (!elem_type) return std::unexpected(elem_type.error());
+
+        if(elem_type.value() != first_type.value())
+        {
+            return Return("Array literal elements must all be of the same type");
+        }
+    }
+
+    allocated_types.push_back(std::make_unique<ArrayType>(first_type.value()));
+    array_node->type_info = allocated_types.back().get();
+    return array_node->type_info;
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(PropertyAccess* property_access)
+{
+    auto lhs = AnalyzeExpression(property_access->object_expr.get());
+    if(!lhs)
+    {
+        return std::unexpected(lhs.error());
+    }
+
+    const auto struct_obj = dynamic_cast<const StructType*>(lhs.value());
+    if( !struct_obj)
+    {
+        return Return(std::format("Trying to do property access on non struct type '{}'", lhs.value()->GetName()));
+    }
+
+    const auto field_type = struct_obj->GetFieldType(property_access->property_name);
+    if(!field_type)
+    {
+        return Return(std::format(
+            "Struct '{}' does not contain field '{}'",
+            struct_obj->GetName(), property_access->property_name)
+        );
+    }
+
+    property_access->type_info = field_type;
+    return field_type;
 }

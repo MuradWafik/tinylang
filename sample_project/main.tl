@@ -3,6 +3,11 @@ native module "std";
 native fn print_int(value: int) -> void;
 native fn clock() -> float;
 
+struct Vector2
+{
+   var x: int;
+   var y: int;
+}
 
 fn helper(val: int) -> int {
     return val * 3;
@@ -26,3 +31,9 @@ while (i < 4)
     print_int(arr[i]);
     i = i + 1;
 }
+
+
+var vec: Vector2;
+vec.x = 20;
+
+print_int(vec.x);

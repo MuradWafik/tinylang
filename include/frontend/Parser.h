@@ -34,7 +34,6 @@ private:
     [[nodiscard]] bool Match(TokenType target);
     Expected<Token> Expect(TokenType expected, std::string_view context_message);
 
-
     ExpectedNodePtr ParseStatement();
     ExpectedNodePtr ParseExpressionStatement();
     ExpectedExpressionPtr ParseExpression();
@@ -74,4 +73,5 @@ private:
     ExpectedPtr<ReturnStatement> ParseReturnStatement();
     ExpectedPtr<BreakStatement> ParseBreakStatement();
     ExpectedPtr<ContinueStatement> ParseContinueStatement();
+    ExpectedPtr<StructDeclaration> ParseStructDeclaration();
 };

@@ -405,10 +405,25 @@ InterpretResult VM::Run()
                 SetArrayIndex();
                 break;
             }
+            case OpCode::OP_ALLOCATE_STRUCT:
+            {
+                AllocateStruct();
+                break;
+            }
+            case OpCode::OP_GET_PROPERTY:
+            {
+                GetProperty();
+                break;
+            }
+            case OpCode::OP_SET_PROPERTY:
+            {
+                SetProperty();
+                break;
+            }
+
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
     }
-    return InterpretResult::INTERPRET_OK;
 }
 
 ConstantValue& VM::ExtractNextConstant()
@@ -576,6 +591,53 @@ void VM::SetArrayIndex()
 
     // Shrink the stack (we effectively popped the 8-byte pointer and 4-byte index) (ai rewrite i had this wrong)
     stack.resize(stack.size() - sizeof(Object*) - sizeof(int32_t));
+}
+
+void VM::AllocateStruct()
+{
+    // OP_ALLOCATE_STRUCT, [2 bytes: total_size] [1 byte: from_stack]
+    const auto heap_size = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto from_stack = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    if (from_stack)
+    {
+        const uint8_t* struct_fields_ptr = stack.data() + stack.size() - heap_size;
+        auto* obj = heap.Allocate<Struct>(struct_fields_ptr, heap_size);
+        stack.resize(stack.size() - heap_size);
+        Push<Object*>(obj);
+    }
+    else
+    {
+        auto* obj = heap.Allocate<Struct>(nullptr, heap_size);
+        Push<Object*>(obj);
+    }
+}
+
+void VM::GetProperty()
+{
+    // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size] | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto* obj = dynamic_cast<Struct*>(Pop<Object*>());
+
+    stack.insert(
+        stack.end(),
+        &obj->fields[offset],
+        &obj->fields[offset + size]
+    );
+}
+
+void VM::SetProperty()
+{
+    // OP_SET_PROPERTY [2 bytes: byte_offset] [1 byte: size] | Stack: Pops 'size' bytes, pops 8 byte StructObject*, writes bytes, pushes bytes back
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    const size_t value_start = stack.size() - size;
+    const size_t struct_start = value_start - sizeof(Object*);
+    auto* obj = dynamic_cast<Struct*>(ReadBytesAbsolute<Object*>(stack, struct_start));
+    // Copies values from the stack to the struct, easier than just popping and manually adding
+    std::memcpy(&obj->fields[offset], &stack[value_start], size);
 }
 
 void VM::AllocateString()

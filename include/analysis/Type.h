@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <ranges>
 #include <string>
 #include "frontend/Token.h"
 #include <vector>
@@ -121,6 +122,15 @@ public:
     [[nodiscard]] const auto& GetFields() const  { return fields; }
     bool IsAssignableTo(const Type* other) const override;
     [[nodiscard]] uint8_t GetSize() const override { return 8; }
+    [[nodiscard]] size_t GetHeapSize() const
+    {
+        size_t total = 0;
+        for (const auto& val: fields | std::views::values)
+        {
+            total += val->GetSize();
+        }
+        return total;
+    }
 
     explicit StructType(std::vector<std::pair<std::string, const Type*>> fields) :
         fields{std::move(fields)}

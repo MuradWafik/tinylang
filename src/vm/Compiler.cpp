@@ -46,6 +46,7 @@ void Compiler::CompileExpression(const Expression* expression)
     if(const auto asgn_expr = dynamic_cast<const AssignmentExpression*>(expression)) return CompileAssignmentExpression(asgn_expr);
     if(const auto array_lit = dynamic_cast<const ArrayLiteral*>(expression)) return CompileArrayLiteral(array_lit);
     if(const auto index_access = dynamic_cast<const IndexAccess*>(expression)) return CompileIndexAccess(index_access);
+    if(const auto property_access = dynamic_cast<const PropertyAccess*>(expression)) return CompilePropertyAccess(property_access);
 }
 
 void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) const
@@ -232,11 +233,13 @@ void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_de
             const uint8_t bytes_per_element = array_type->GetElementType()->GetSize();
             current_chunk->WriteInstruction(line, OpCode::OP_ALLOCATE_ARRAY, static_cast<uint16_t>(0), bytes_per_element);
         }
+        else if(const auto* struct_type = dynamic_cast<const StructType*>(type))
+        {
+            current_chunk->WriteInstruction(line, OpCode::OP_ALLOCATE_STRUCT, static_cast<uint16_t>(struct_type->GetHeapSize()), static_cast<uint8_t>(0));
+        }
         else
         {
-            // Struct or unknown
-            const auto index = current_chunk->AddConstant(0);
-            current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, static_cast<uint8_t>(index));
+            throw std::runtime_error("Declaring unknown variable type");
         }
     }
 
@@ -349,8 +352,6 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
     }
 }
 
-
-
 void Compiler::CompileCallExpression(const CallExpression* call_expression)
 {
     const auto line = call_expression->source_location.line_number;
@@ -418,6 +419,27 @@ void Compiler::CompileVariableAssignmentExpression(const AssignmentExpression* a
     }
 }
 
+void Compiler::CompilePropertyAssignmentExpression(const AssignmentExpression* assignment_expression, const uint32_t line, const PropertyAccess* const property_access)
+{
+    CompileExpression(property_access->object_expr.get());
+    CompileExpression(assignment_expression->value.get());
+
+    const auto* struct_type = dynamic_cast<const StructType*>(property_access->object_expr->type_info);
+    uint16_t byte_offset = 0;
+    uint8_t size = 0;
+
+    for (const auto& [name, type] : struct_type->GetFields())
+    {
+        if (name == property_access->property_name)
+        {
+            size = type->GetSize();
+            break;
+        }
+        byte_offset += type->GetSize();
+    }
+    current_chunk->WriteInstruction(line, OpCode::OP_SET_PROPERTY, byte_offset, size);
+}
+
 void Compiler::CompileAssignmentExpression(const AssignmentExpression* assignment_expression)
 {
     const auto line = assignment_expression->source_location.line_number;
@@ -429,7 +451,10 @@ void Compiler::CompileAssignmentExpression(const AssignmentExpression* assignmen
     {
         CompileVariableAssignmentExpression(assignment_expression, line, identifier);
     }
-    // TODO: Property assignment expression
+    else if (const auto property_access = dynamic_cast<const PropertyAccess*>(assignment_expression->target.get()))
+    {
+        CompilePropertyAssignmentExpression(assignment_expression, line, property_access);
+    }
 }
 
 void Compiler::CompileArrayLiteral(const ArrayLiteral* array_literal)
@@ -460,6 +485,27 @@ void Compiler::CompileIndexAccess(const IndexAccess* index_access)
         OpCode::OP_GET_INDEX,
         bytes_per_element
     );
+}
+
+void Compiler::CompilePropertyAccess(const PropertyAccess* property_access)
+{
+    // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
+    CompileExpression(property_access->object_expr.get()); // allowing someFunc().someProperty;
+
+    const auto* struct_type = dynamic_cast<const StructType*>(property_access->object_expr->type_info);
+    uint16_t byte_offset = 0; // from the start of the struct
+    uint8_t size = 0; // and how much bytes this property is
+
+    for (const auto& [name, type] : struct_type->GetFields())
+    {
+        if (name == property_access->property_name)
+        {
+            size = type->GetSize();
+            break;
+        }
+        byte_offset += type->GetSize();
+    }
+    current_chunk->WriteInstruction(property_access->source_location.line_number, OpCode::OP_GET_PROPERTY, byte_offset, size);
 }
 
 void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
