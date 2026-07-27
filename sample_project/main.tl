@@ -9,6 +9,15 @@ struct Vector2
    var y: int;
 }
 
+fn (self: Vector2) add(other: Vector2) -> Vector2
+{
+    var result: Vector2;
+    result.x = self.x + other.x;
+    result.y = self.y + other.y;
+    return result;
+}
+
+
 fn helper(val: int) -> int {
     return val * 3;
 }
@@ -38,7 +47,14 @@ while (i < arr.length)
 
 var vec: Vector2;
 vec.x = 20;
+vec.y = 10;
 
-print_int(vec.x);
+var vec2: Vector2;
+vec2.x = 5;
+vec2.y = 15;
+
+var vec3 = vec.add(vec2);
+print_int(vec3.x); // Should print 25
+print_int(vec3.y); // Should print 25
 
 }

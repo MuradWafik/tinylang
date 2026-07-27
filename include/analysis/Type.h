@@ -112,7 +112,7 @@ private:
 class StructType final : public Type
 {
 public:
-    [[nodiscard]] std::string GetName() const override;
+    [[nodiscard]] std::string GetName() const override { return name; }
     [[nodiscard]] const Type* GetFieldType(std::string_view name) const;
     [[nodiscard]] size_t GetNumFields() const { return fields.size(); }
     [[nodiscard]] auto& GetFields() { return fields; }
@@ -129,10 +129,11 @@ public:
         return total;
     }
 
-    explicit StructType(std::vector<std::pair<std::string, const Type*>> fields) :
-        fields{std::move(fields)}
+    explicit StructType(std::string name, std::vector<std::pair<std::string, const Type*>> fields) :
+        name{std::move(name)}, fields{std::move(fields)}
     { }
 
 private:
     std::vector<std::pair<std::string, const Type*>> fields;
+    std::string name;
 };

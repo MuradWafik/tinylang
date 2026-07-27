@@ -464,8 +464,9 @@ ExpectedExpressionPtr Parser::ParsePrimary()
             return std::make_unique<BoolLiteral>(false, source_location);
         }
 
-        // 2. Identifiers (Variable evaluation)
+        // Identifiers (Variable evaluation)
         case TokenType::Identifier:
+        case TokenType::Self:
         {
             if(Match(TokenType::LeftParen))
             {
@@ -477,7 +478,7 @@ ExpectedExpressionPtr Parser::ParsePrimary()
             return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme), source_location);
         }
 
-        // 3. Grouped Expressions
+        // Grouped Expressions
         case TokenType::LeftParen:
         {
             Consume(); // eat '('
@@ -523,15 +524,45 @@ ExpectedExpressionPtr Parser::ParsePrimary()
 ExpectedStatementPtr Parser::ParseFunctionDeclaration()
 {
     // function_declaration
-    //    ::= "fn" IDENTIFIER "(" parameters? ")" ":" type block
+    // fn name(vars...? : types...) -> return type { body }
+    // fn (receiver_var: receiver_type) name(vars...? : types...) -> return type { body }
     SourceLocation fn_loc = Peek().source_location;
     Consume(); // fn keyword
 
+    std::optional<Parameter> receiver = std::nullopt;
+    if(Match(TokenType::LeftParen)) // has a receiver
+    {
+        const auto receiver_name = Expect(TokenType::Self, "Expected receiver name");
+        if(!receiver_name) return std::unexpected(receiver_name.error());
+
+        if(const auto colon = Expect(TokenType::Colon, "Parsing receiver in function declaration");
+            !colon)
+        {
+            return std::unexpected(colon.error());
+        }
+
+        const auto& type = Peek();
+        if(!type.IsPrimitiveTypeName() && type.type != TokenType::Identifier)
+        {
+            throw std::runtime_error("Expected a valid type for receiver");
+        }
+        Consume();
+
+        receiver = Parameter(receiver_name.value().lexeme, type.lexeme);
+
+        if(const auto closed = Expect(TokenType::RightParen, "Parsing receiver in function declaration");
+            !closed)
+        {
+            return std::unexpected(closed.error());
+        }
+    }
     auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
     if(!function_name) return std::unexpected(function_name.error());
 
-    auto left_paren = Expect(TokenType::LeftParen, "Error after function name");
-    if(!left_paren) return std::unexpected(left_paren.error());
+    if(auto left_paren = Expect(TokenType::LeftParen, "Error after function name"); !left_paren)
+    {
+        return std::unexpected(left_paren.error());
+    }
 
     auto parameters_result = ParseParameters();
     if(!parameters_result)
@@ -539,16 +570,18 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         return std::unexpected(parameters_result.error());
     }
 
-    auto right_paren = Expect(TokenType::RightParen, "Error after function parameters");
-    if(!right_paren) return std::unexpected(right_paren.error());
+    if(auto right_paren = Expect(TokenType::RightParen, "Error after function parameters"); !right_paren)
+    {
+        return std::unexpected(right_paren.error());
+    }
 
-    auto arrow = Expect(TokenType::Arrow, "Error after function signature");
-    if(!arrow) return std::unexpected(arrow.error());
+    if(auto arrow = Expect(TokenType::Arrow, "Error after function signature"); !arrow)
+    {
+        return std::unexpected(arrow.error());
+    }
 
     const Token& return_type = Peek();
-
-    // FIXME: allow for other types
-    if(!return_type.IsPrimitiveTypeName())
+    if(!return_type.IsPrimitiveTypeName() && return_type.type != TokenType::Identifier)
     {
         return std::unexpected(
             std::format("Expected type name after '->', got '{}' at {}",
@@ -565,11 +598,18 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         return std::unexpected(body.error());
     }
 
+    std::string final_name = function_name->lexeme;
+    if(receiver.has_value())
+    {
+        final_name = receiver->type_name + "_" + final_name;
+    }
+
     return std::make_unique<FunctionDeclaration>(
-        function_name->lexeme,
+        final_name,
         std::move(parameters_result.value()),
         return_type.lexeme,
         std::move(body.value()),
+        receiver,
         fn_loc
     );
 }
@@ -681,10 +721,10 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
         if(!colon) return std::unexpected(colon.error());
 
         const Token& type_name = Peek();
-        if(!type_name.IsPrimitiveTypeName())
+        if(!type_name.IsPrimitiveTypeName() && type_name.type != TokenType::Identifier)
         {
             return std::unexpected(
-                std::format("Expected type name for parameter '{}', got '{}' at {}",
+                std::format("Expected typename for parameter '{}', got '{}' at {}",
                     parameter_name->lexeme,
                     type_name.lexeme,
                     type_name.source_location)

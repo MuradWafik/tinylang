@@ -167,6 +167,11 @@ private:
         return std::unexpected(std::format( "{}", error));
     }
 
+    static std::string MangleMethodName(const PropertyAccess* property_access, const Type* type)
+    {
+        return std::format("{}_{}", type->GetName(), property_access->property_name);
+    }
+
     void InitializeDefaults();
 
 };

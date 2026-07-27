@@ -62,7 +62,7 @@ This document outlines the strategic progression for TinyLang, moving from a bas
     *   `$"Hello {user.name}, you have {count} items"` – Evaluated at compile time by desugaring into string concatenation (`+`) or `format()` calls.
 *   **Compile-Time Traits / Interfaces (CRTP-Style Static Contracts):**
     *   **Goal:** Define contracts (e.g. `interface Printable { fn to_string() -> string; }`) to guarantee that structs implement required methods **without** any dynamic dispatch or vtable overhead.
-    *   **Method Syntax (Go-Style Receivers):** Methods are defined independently from the struct data using a receiver parameter: `fn (self: Vector2) to_string() -> string { ... }`.
+    *   **Method Syntax (Go-Style Receivers) (✅ Completed):** Methods are defined independently from the struct data using a receiver parameter: `fn (self: Vector2) to_string() -> string { ... }`.
     *   **Interface Declaration (C#-Style Explicit):** Structs must explicitly declare the interfaces they implement to enforce strict compile-time checking: `struct Vector2 : Printable { ... }`.
     *   **Implementation:** 100% verified during Semantic Analysis. The VM executes direct function calls with zero runtime lookup penalty by utilizing generic monomorphization.
 

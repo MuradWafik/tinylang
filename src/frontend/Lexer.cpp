@@ -1,8 +1,10 @@
 #include "frontend/Lexer.h"
 
+#ifdef DEBUG_LEXER
+#include <print>
+#endif
 #include <cassert>
 #include <cctype>
-#include <print>
 
 
 bool Lexer::IsAtEnd() const

@@ -278,6 +278,12 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     auto prev_locals = std::move(locals);
     locals.clear();
     
+    if(function_declaration->receiver)
+    {
+        auto& receiver = function_declaration->receiver.value();
+        locals.push_back({receiver.name, receiver.type_info});
+    }
+
     for(const auto& param: function_declaration->parameters)
     {
         locals.push_back({param.name, param.type_info});

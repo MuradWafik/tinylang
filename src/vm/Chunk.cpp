@@ -1,7 +1,5 @@
 #include "vm/Chunk.h"
-
 #include <print>
-
 void Chunk::Write(const uint8_t byte, const uint32_t line)
 {
     code.push_back(byte);

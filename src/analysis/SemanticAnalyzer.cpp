@@ -14,7 +14,7 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std
     symbol_table.PushScope();
     InitializeDefaults();
 
-    for (auto& node : program)
+    for(auto& node : program)
     {
         if(strict_mode)
         {
@@ -31,12 +31,12 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std
             }
         }
 
-        if (auto result = AnalyzeNode(node.get()); !result)
+        if(auto result = AnalyzeNode(node.get()); !result)
         {
             return std::unexpected(result.error());
         }
     }
-    if (strict_mode)
+    if(strict_mode)
     {
         if(const auto main_type = symbol_table.LookupVariable("main"))
         {
@@ -67,9 +67,7 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(ASTNode* node)
     // Initialize global scope
     symbol_table.PushScope();
     InitializeDefaults();
-
     auto result = AnalyzeNode(node);
-
     symbol_table.PopScope();
     return result;
 }
@@ -143,7 +141,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
         return PrimitiveType::String.get();
     }
 
-    return std::unexpected("Unknown expression type");
+    return std::unexpected("Unknown expression type ");
 }
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration)
@@ -329,25 +327,48 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     }
     const_cast<FunctionDeclaration*>(function_declaration)->return_type_info = return_type;
 
+    symbol_table.PushScope();
+
+
     std::vector<const Type*> parameter_types;
-    for(auto& param: const_cast<FunctionDeclaration*>(function_declaration)->parameters)
+    if(function_declaration->receiver)
     {
-        auto* type = ResolveType(param.type_name);
+        auto& [name, type_name, type_info] = const_cast<Parameter&>(function_declaration->receiver.value());
+        auto* resolved_type = ResolveType(type_name);
+        if(!resolved_type)
+        {
+            return Return(std::format("Unknown type '{}' for receiver", type_name));
+        }
+        type_info = resolved_type;
+        parameter_types.push_back(type_info); // receiver has to be the first element
+    }
+
+    // then either way the regular parameters get added to the vector
+    for(auto& [name, type_name, type_info]: const_cast<FunctionDeclaration*>(function_declaration)->parameters)
+    {
+        auto* type = ResolveType(type_name);
         if(!type)
         {
-            return Return(std::format("Unknown type '{}' for function parameter '{}'", param.type_name, param.name));
+            return Return(std::format("Unknown type '{}' for function parameter '{}'", type_name, name));
         }
-        param.type_info = type;
+        type_info = type;
         parameter_types.push_back(type);
     }
 
     auto func_type = std::make_unique<FunctionType>(parameter_types, return_type);
-
     symbol_table.DefineType(func_type->GetName(), func_type.get());
     symbol_table.DefineVariable({function_declaration->name, func_type.get()});
+    allocated_types.push_back(std::move(func_type));
 
-    // once in the body those variables are in the scope
     symbol_table.PushScope();
+    // once in the body those variables are in the scope
+    // also make sure `self` is the first variable for the method
+    if(function_declaration->receiver)
+    {
+        auto& [name, type_name, type_info] = function_declaration->receiver.value();
+        symbol_table.DefineVariable({name, type_info});
+    }
+
     for(const auto& param: function_declaration->parameters)
     {
         symbol_table.DefineVariable({param.name, param.type_info});
@@ -536,7 +557,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(cons
         result.emplace_back(name, type);
     }
 
-    allocated_types.push_back(std::make_unique<StructType>(std::move(result)));
+    allocated_types.push_back(std::make_unique<StructType>(struct_declaration->name, std::move(result)));
     symbol_table.DefineType(struct_declaration->name, allocated_types.back().get());
 
     return {};
@@ -547,13 +568,13 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeBinaryExpressio
     const auto left = AnalyzeExpression(binary_expression->left.get());
     if(!left)
     {
-        return Return("Error in left side of binary expression");
+        return Return(std::format("Error in left side of binary expression: {}", left.error()));
     }
 
     const auto right = AnalyzeExpression(binary_expression->right.get());
     if(!right)
     {
-        return Return("Error in right side of binary expression");
+        return Return(std::format("Error in right side of binary expression: {}", right.error()));
     }
 
     // const auto left_type = symbol_table.LookupType(left.value());
@@ -634,9 +655,37 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpre
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(CallExpression* call_expression)
 {
     const auto callable = AnalyzeExpression(call_expression->callee.get());
-    // const auto func = symbol_table.LookupVariable(call_expression->function_name);
     if(!callable)
     {
+        // calling methods as it resolves to a call expression with a property access
+        if(const auto method_call = dynamic_cast<PropertyAccess*>(call_expression->callee.get()))
+        {
+            auto obj = AnalyzeExpression(method_call->object_expr.get());
+            if(!obj) return std::unexpected(obj.error());
+            const std::string method_name = MangleMethodName(method_call, obj.value());
+            const auto func_type = symbol_table.LookupVariable(method_name);
+            if(!func_type)
+            {
+                return Return(
+                    std::format("Struct '{}' does not have method '{}'", obj.value()->GetName(), method_call->property_name)
+                );
+            }
+
+            // make the `self` the first arguement to the function call
+            call_expression->arguments.insert(
+                call_expression->arguments.begin(),
+                std::move(method_call->object_expr)
+            );
+
+            // Turn the callee into a normal Identifier matching the mangled name
+            call_expression->callee = std::make_unique<IdentifierExpression>(
+                method_name,
+                method_call->source_location
+            );
+            call_expression->callee->type_info = func_type.value().type;
+            return AnalyzeCallExpression(call_expression); // can just run like a regular method call
+        }
+
         return Return(std::format("Unknown call expression '{}'", call_expression->GetTypeString()));
     }
 

@@ -51,18 +51,6 @@ bool ArrayType::IsAssignableTo(const Type* other) const
     return false;
 }
 
-
-std::string StructType::GetName() const
-{
-    std::string result = "Fields(";
-    for(const auto& [name, type]: fields)
-    {
-        result += std::format("{}: {} ", name, type->GetName());
-    }
-    result += ")";
-    return result;
-}
-
 const Type* StructType::GetFieldType(const std::string_view name) const
 {
     for(const auto& [field_name, type]: fields)

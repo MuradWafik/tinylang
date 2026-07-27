@@ -132,16 +132,15 @@ struct FunctionDeclaration final : Statement
     std::vector<Parameter> parameters;
     std::string return_type;
     const Type* return_type_info = nullptr;
+    std::optional<Parameter> receiver; // the self class for methods
     std::unique_ptr<BodyStatement> body;
 
     FunctionDeclaration(
         std::string name, std::vector<Parameter> params,
-        std::string return_type,
-        std::unique_ptr<BodyStatement> body_node,
-        const SourceLocation loc)
-        : name(std::move(name)),
-          parameters(std::move(params)),
-          return_type(std::move(return_type)),
+        std::string return_type, std::unique_ptr<BodyStatement> body_node,
+        std::optional<Parameter> receiver, const SourceLocation loc)
+        : name(std::move(name)), parameters(std::move(params)),
+          return_type(std::move(return_type)), receiver(std::move(receiver)),
           body(std::move(body_node))
     { this->source_location = loc; }
 
