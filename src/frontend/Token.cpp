@@ -26,6 +26,10 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Break:           return "break";
         case TokenType::Self:            return "self";
         case TokenType::Struct:          return "struct";
+        case TokenType::For:             return "for";
+        case TokenType::In:              return "in";
+        case TokenType::Range:           return "range";
+        case TokenType::Enum:            return "enum";
 
         // Built-in Types
         case TokenType::IntType:         return "int";

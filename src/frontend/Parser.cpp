@@ -340,7 +340,7 @@ ExpectedExpressionPtr Parser::ParseMultiplication()
         return std::unexpected(left.error());
     }
 
-    while(Match(TokenType::Star) || Match(TokenType::Slash))
+    while(Match(TokenType::Star) || Match(TokenType::Slash) || Match(TokenType::Modulo))
     {
         const Token& op = tokens[index - 1];
         ExpectedExpressionPtr right = ParseUnary();

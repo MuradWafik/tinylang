@@ -21,7 +21,7 @@ static ConstantValue RunAndGetGlobal(const std::string& source, const std::strin
     ProjectConfig project_config{};
     project_config.project_root = "/home/murad/CLionProjects/tinylang";
 
-    SemanticAnalyzer semantic_analyzer{&project_config};
+    SemanticAnalyzer semantic_analyzer{&project_config, false};
     auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value());
     INFO("Semantic Analysis Error: " << (semantic_analysis_result.has_value() ? "" : semantic_analysis_result.error()));
     REQUIRE(semantic_analysis_result.has_value());

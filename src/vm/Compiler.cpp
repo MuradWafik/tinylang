@@ -140,6 +140,11 @@ void Compiler::CompileBinaryExpression(const BinaryExpression* binary_expression
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_DIVIDE_FLOAT);
             break;
         }
+        case TokenType::Modulo:
+        {
+            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_MOD_INT);
+            break;
+        }
         case TokenType::Greater:
         {
             if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_INT);
@@ -191,10 +196,15 @@ void Compiler::CompileUnaryExpression(const UnaryExpression* unary_expression)
 
     switch(unary_expression->operator_token.type)
     {
-        case TokenType::Negate:
+        case TokenType::Minus:
         {
             if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NEGATE_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NEGATE_FLOAT);
+            break;
+        }
+        case TokenType::Negate:
+        {
+            if(type == PrimitiveType::Bool.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NOT_BOOL);
             break;
         }
         default: assert(false && "Unexpectedly reached default case compiling unary expression");
@@ -264,6 +274,10 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
 {
     std::unique_ptr<Chunk> outer_scope = std::move(current_chunk);
     current_chunk = std::make_unique<Chunk>();
+    
+    auto prev_locals = std::move(locals);
+    locals.clear();
+    
     for(const auto& param: function_declaration->parameters)
     {
         locals.push_back({param.name, param.type_info});
@@ -313,6 +327,8 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     // OP_DEFINE_GLOBAL_FUNCTION name_index
     current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_FUNCTION, static_cast<uint8_t>(declaration_index));
     current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FUNCTION, static_cast<uint8_t>(name_index));
+    
+    locals = std::move(prev_locals);
 }
 
 
@@ -492,6 +508,12 @@ void Compiler::CompilePropertyAccess(const PropertyAccess* property_access)
     // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
     CompileExpression(property_access->object_expr.get()); // allowing someFunc().someProperty;
 
+    if(dynamic_cast<const ArrayType*>(property_access->object_expr->type_info) || property_access->object_expr->type_info == PrimitiveType::String.get())
+    {
+        current_chunk->WriteInstruction(property_access->source_location.line_number, OpCode::OP_GET_LENGTH);
+        return;
+    }
+
     const auto* struct_type = dynamic_cast<const StructType*>(property_access->object_expr->type_info);
     uint16_t byte_offset = 0; // from the start of the struct
     uint8_t size = 0; // and how much bytes this property is
@@ -517,6 +539,7 @@ void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
         if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_INT);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_FLOAT);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_BOOL);
+        else current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_OBJECT);
     }
     else
     {

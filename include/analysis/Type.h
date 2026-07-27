@@ -75,9 +75,6 @@ inline const std::unique_ptr<PrimitiveType> PrimitiveType::Bool = std::make_uniq
 inline const std::unique_ptr<PrimitiveType> PrimitiveType::String = std::make_unique<PrimitiveType>(PrimitiveKind::String, "String");
 inline const std::unique_ptr<PrimitiveType> PrimitiveType::Void = std::make_unique<PrimitiveType>(PrimitiveKind::Void, "void");
 
-
-// TODO: Classes for ArrayType and/or StructType depending on roadmap
-
 class FunctionType final : public Type
 {
 public:

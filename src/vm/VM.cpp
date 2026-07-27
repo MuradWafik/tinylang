@@ -7,6 +7,39 @@
 
 #include "utils/Utils.h"
 
+InterpretResult VM::StartProgram(Chunk* root_chunk)
+{
+    // 1. Run the root chunk to evaluate global functions and variables
+    InterpretResult res = Interpret(root_chunk);
+    if(res != InterpretResult::INTERPRET_OK) return res;
+
+    // 2. Find the main function in the globals table
+    if (!globals.contains("main")) {
+        std::println(std::cerr, "Runtime Error: No 'main' entrypoint found.");
+        return InterpretResult::INTERPRET_RUNTIME_ERROR;
+    }
+
+    auto* main_func_ptr_ptr = std::get_if<FunctionObject*>(&globals["main"]);
+    if(!main_func_ptr_ptr) {
+        std::println(std::cerr, "Runtime Error: 'main' is not a function.");
+        return InterpretResult::INTERPRET_RUNTIME_ERROR;
+    }
+    auto main_func_ptr = *main_func_ptr_ptr;
+    
+    // 3. Push it to the stack (so it acts like the base of the call stack)
+    Push<FunctionObject*>(main_func_ptr);
+    
+    // 4. Create the very first CallFrame, pointing to main's chunk
+    CallFrame main_frame;
+    main_frame.chunk = main_func_ptr->chunk.get();
+    main_frame.ip = main_frame.chunk->code.data();
+    main_frame.stack_base = stack.size() - sizeof(FunctionObject*); // Stack starts here!
+
+    call_frames.push_back(main_frame);
+
+    return Run();
+}
+
 InterpretResult VM::Interpret(Chunk* chunk)
 {
     call_frames.emplace_back(chunk, chunk->code.data(), 0);
@@ -51,6 +84,14 @@ InterpretResult VM::Run()
             case OpCode::OP_RETURN_BOOL:
             {
                 if(const auto terminated = Return<bool>())
+                {
+                    return terminated.value();
+                }
+                break;
+            }
+            case OpCode::OP_RETURN_OBJECT:
+            {
+                if(const auto terminated = Return<Object*>())
                 {
                     return terminated.value();
                 }
@@ -134,6 +175,28 @@ InterpretResult VM::Run()
             case OpCode::OP_DIVIDE_FLOAT:
             {
                 Push(Divide<std::float32_t>());
+                break;
+            }
+            case OpCode::OP_NEGATE_INT:
+            {
+                Push(-Pop<int32_t>());
+                break;
+            }
+            case OpCode::OP_NEGATE_FLOAT:
+            {
+                Push(-Pop<std::float32_t>());
+                break;
+            }
+            case OpCode::OP_MOD_INT:
+            {
+                auto right = Pop<int32_t>();
+                auto left = Pop<int32_t>();
+                Push(left % right);
+                break;
+            }
+            case OpCode::OP_NOT_BOOL:
+            {
+                Push(!Pop<bool>());
                 break;
             }
 
@@ -415,6 +478,11 @@ InterpretResult VM::Run()
                 GetProperty();
                 break;
             }
+            case OpCode::OP_GET_LENGTH:
+            {
+                GetLength();
+                break;
+            }
             case OpCode::OP_SET_PROPERTY:
             {
                 SetProperty();
@@ -534,10 +602,8 @@ void VM::AllocateArray()
     const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
 
     const size_t total_bytes = element_count * bytes_per_element;
-    
     const uint8_t* elements_ptr = stack.data() + stack.size() - total_bytes;
-
-    auto* arr = heap.Allocate<Array>(elements_ptr, element_count, bytes_per_element);
+    auto* arr = AllocateObject<Array>(elements_ptr, element_count, bytes_per_element);
     
     stack.resize(stack.size() - total_bytes);
 
@@ -588,8 +654,6 @@ void VM::SetArrayIndex()
 
     // shift the value bytes down to overwrite the array and index
     std::memmove(&stack[array_start], &stack[value_start], bytes_per_element);
-
-    // Shrink the stack (we effectively popped the 8-byte pointer and 4-byte index) (ai rewrite i had this wrong)
     stack.resize(stack.size() - sizeof(Object*) - sizeof(int32_t));
 }
 
@@ -597,19 +661,34 @@ void VM::AllocateStruct()
 {
     // OP_ALLOCATE_STRUCT, [2 bytes: total_size] [1 byte: from_stack]
     const auto heap_size = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
-    const auto from_stack = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
-
-    if (from_stack)
+    if(const auto from_stack = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip))
     {
         const uint8_t* struct_fields_ptr = stack.data() + stack.size() - heap_size;
-        auto* obj = heap.Allocate<Struct>(struct_fields_ptr, heap_size);
+        auto* obj = AllocateObject<Struct>(struct_fields_ptr, heap_size);
         stack.resize(stack.size() - heap_size);
         Push<Object*>(obj);
     }
     else
     {
-        auto* obj = heap.Allocate<Struct>(nullptr, heap_size);
+        auto* obj = AllocateObject<Struct>(nullptr, heap_size);
         Push<Object*>(obj);
+    }
+}
+
+void VM::GetLength()
+{
+    auto* obj = Pop<Object*>();
+    if(auto* arr = dynamic_cast<Array*>(obj))
+    {
+        Push<int32_t>(static_cast<int32_t>(arr->size));
+    }
+    else if(auto* str = dynamic_cast<String*>(obj))
+    {
+        Push<int32_t>(static_cast<int32_t>(str->length));
+    }
+    else
+    {
+        throw std::runtime_error("Attempted to get length of object that is not an array or string");
     }
 }
 
@@ -636,15 +715,20 @@ void VM::SetProperty()
     const size_t value_start = stack.size() - size;
     const size_t struct_start = value_start - sizeof(Object*);
     auto* obj = dynamic_cast<Struct*>(ReadBytesAbsolute<Object*>(stack, struct_start));
-    // Copies values from the stack to the struct, easier than just popping and manually adding
+    
+    // Copies values from the stack to the struct
     std::memcpy(&obj->fields[offset], &stack[value_start], size);
+    
+    // shift the value bytes down to overwrite the struct pointer
+    std::memmove(&stack[struct_start], &stack[value_start], size);
+    stack.resize(stack.size() - sizeof(Object*));
 }
 
 void VM::AllocateString()
 {
     const auto index = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const auto str = std::get<std::string>(call_frames.back().chunk->constants[index]);
-    auto* obj = heap.Allocate<String>(str.c_str(), str.length());
+    auto* obj = AllocateObject<String>(str.c_str(), str.length());
     Push<Object*>(obj);
 }
 
@@ -653,6 +737,6 @@ void VM::AddString()
     const auto r = dynamic_cast<String*>(Pop<Object*>());
     const auto l = dynamic_cast<String*>(Pop<Object*>());
 
-    auto* obj = heap.Allocate<String>(l, r);
+    auto* obj = AllocateObject<String>(l, r);
     Push<Object*>(obj);
 }

@@ -24,6 +24,10 @@ enum class TokenType
     False,
     Break,
     Continue,
+    For,
+    In,
+    Range,
+    Enum,
     Native,
     Module,
     Struct,
@@ -41,6 +45,7 @@ enum class TokenType
     Minus,
     Star,
     Slash,
+    Modulo,
     Assign,
     Equal,
     Negate,
@@ -116,6 +121,10 @@ struct Token {
         {"module", TokenType::Module},
         {"struct", TokenType::Struct},
         {"self", TokenType::Self},
+        {"for", TokenType::For},
+        {"in", TokenType::In},
+        {"range", TokenType::Range},
+        {"enum", TokenType::Enum},
     };
     static std::string TypeToString(TokenType token_type);
 

@@ -111,12 +111,12 @@ public:
     const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
     const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
 
-    explicit SemanticAnalyzer(ProjectConfig* project_config) : project_config{project_config}
-    {}
+    explicit SemanticAnalyzer(ProjectConfig* project_config, bool strict_mode = true) : project_config{project_config}, strict_mode{strict_mode} {}
 
 private:
     SymbolTable symbol_table{};
     size_t loop_depth{0};
+    bool strict_mode;
     std::unordered_map<OperatorSignature, const Type*, OperatorSignatureHash> binary_operators;
     std::unordered_map<UnaryOperatorSignature, const Type*, UnaryOperatorSignatureHash> unary_operators;
     ProjectConfig* project_config; // non owning

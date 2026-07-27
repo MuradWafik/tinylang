@@ -65,7 +65,7 @@ void Run(const int argc, char** argv)
     // chunk->Disassemble("Compiler Test");
 
     VM vm;
-    vm.Interpret(chunk.get());
+    vm.StartProgram(chunk.get());
 
 }
 int main(const int argc, char** argv)

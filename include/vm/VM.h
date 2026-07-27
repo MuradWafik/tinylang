@@ -22,6 +22,7 @@ class VM
 public:
     VM() = default;
 
+    InterpretResult StartProgram(Chunk* root_chunk);
     InterpretResult Interpret(Chunk* chunk);
 
     std::optional<ConstantValue> GetGlobal(const std::string& name) const
@@ -254,10 +255,24 @@ private:
     void AllocateStruct();
     void GetProperty();
     void SetProperty();
+    void GetLength();
 
     template<typename T0, typename T1, typename Target>
     static constexpr bool AreBoth()
     {
         return std::is_same_v<T0, Target> && std::is_same_v<T1, Target>;
+    }
+
+    template <typename T, typename... Args>
+    T* AllocateObject(Args&&... args)
+    {
+        // 1. Check if we need to run the GC
+        if (heap.Size() >= heap.gc_threshold)
+        {
+            heap.CollectGarbage(stack, globals);
+            heap.gc_threshold = heap.Size() * 2;
+        }
+        // 2. Perform the actual allocation
+        return heap.Allocate<T>(std::forward<Args>(args)...);
     }
 };

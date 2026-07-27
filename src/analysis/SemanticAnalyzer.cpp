@@ -16,11 +16,48 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std
 
     for (auto& node : program)
     {
+        if(strict_mode)
+        {
+            if(auto* stmt = dynamic_cast<Statement*>(node.get()))
+            {
+                if(!dynamic_cast<FunctionDeclaration*>(stmt) && 
+                   !dynamic_cast<StructDeclaration*>(stmt) && 
+                   !dynamic_cast<VariableDeclaration*>(stmt) &&
+                   !dynamic_cast<NativeFunctionDeclaration*>(stmt) &&
+                   !dynamic_cast<NativeModuleStatement*>(stmt))
+                {
+                    return std::unexpected(std::format("Error at line {}: Top-level execution statements are forbidden in strict mode. Use 'fn main()' instead.", stmt->source_location.line_number));
+                }
+            }
+        }
+
         if (auto result = AnalyzeNode(node.get()); !result)
         {
             return std::unexpected(result.error());
         }
     }
+    if (strict_mode)
+    {
+        if(const auto main_type = symbol_table.LookupVariable("main"))
+        {
+            if(auto* func_type = dynamic_cast<const FunctionType*>(main_type.value().type))
+            {
+                if(func_type->GetReturnType() != PrimitiveType::Void.get())
+                {
+                    return std::unexpected("Error: 'main' must return 'void'.");
+                }
+            }
+            else
+            {
+                return std::unexpected("Error: 'main' must be a function, not a variable.");
+            }
+        }
+        else
+        {
+            return std::unexpected("Error: Program must contain a 'fn main()' entrypoint.");
+        }
+    }
+    
     symbol_table.PopScope();
     return {};
 }
@@ -715,6 +752,8 @@ void SemanticAnalyzer::InitializeDefaults()
         RegisterBinaryOperator(op, int_t, int_t, int_t);
         RegisterBinaryOperator(op, float_t, float_t, float_t);
     }
+    
+    RegisterBinaryOperator(TokenType::Modulo, int_t, int_t, int_t);
 
     // String concatenation
     RegisterBinaryOperator(TokenType::Plus, string_t, string_t, string_t);
@@ -811,9 +850,18 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
     {
         return std::unexpected(lhs.error());
     }
+    if(dynamic_cast<const ArrayType*>(lhs.value()) || lhs.value() == PrimitiveType::String.get())
+    {
+        if(property_access->property_name == "length")
+        {
+            property_access->type_info = PrimitiveType::Int.get();
+            return property_access->type_info;
+        }
+        return Return(std::format("Type '{}' only has a 'length' property", lhs.value()->GetName()));
+    }
 
     const auto struct_obj = dynamic_cast<const StructType*>(lhs.value());
-    if( !struct_obj)
+    if(!struct_obj)
     {
         return Return(std::format("Trying to do property access on non struct type '{}'", lhs.value()->GetName()));
     }

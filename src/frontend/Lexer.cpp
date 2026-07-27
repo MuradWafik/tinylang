@@ -191,6 +191,10 @@ std::expected<Token, LexerError>  Lexer::LexSymbol()
         {
             return CheckSymbolForNext('-', '>', TokenType::Arrow, TokenType::Minus);
         }
+        case '%':
+        {
+            return ReturnSingleCharSymbol(TokenType::Modulo);
+        }
         case '/':
         {
             return ReturnSingleCharSymbol(TokenType::Slash);
