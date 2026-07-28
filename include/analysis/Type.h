@@ -2,8 +2,8 @@
 #include <memory>
 #include <ranges>
 #include <string>
-#include "frontend/Token.h"
 #include <vector>
+#include "frontend/Token.h"
 
 #include "utils/Utils.h"
 
@@ -21,7 +21,6 @@ public:
     [[nodiscard]] virtual uint8_t GetSize() const = 0;
 };
 
-
 enum class PrimitiveKind
 {
     Int,
@@ -36,14 +35,14 @@ class PrimitiveType final : public Type
 public:
     [[nodiscard]] std::string GetName() const override { return name; }
     [[nodiscard]] PrimitiveKind GetKind() const { return kind; }
-
-    bool IsAssignableTo(const Type* other) const override {
+    bool IsAssignableTo(const Type* other) const override
+    {
         // A primitive is assignable if the other type is the exact same primitive instance
         return this == other;
     }
     [[nodiscard]] bool IsIntegral() const;
-    
-    [[nodiscard]] uint8_t GetSize() const override {
+    [[nodiscard]] uint8_t GetSize() const override
+    {
         switch (kind) {
             case PrimitiveKind::Int:
             case PrimitiveKind::Float:
@@ -88,7 +87,6 @@ public:
         arguments{std::move(arguments)},
         return_type{return_type}
     { }
-
 private:
     std::vector<const Type*> arguments;
     const Type* return_type{nullptr};
@@ -129,11 +127,30 @@ public:
         return total;
     }
 
-    explicit StructType(std::string name, std::vector<std::pair<std::string, const Type*>> fields) :
-        name{std::move(name)}, fields{std::move(fields)}
+    StructType(std::string name, std::vector<std::pair<std::string, const Type*>> fields) :
+        fields{std::move(fields)}, name{std::move(name)}
     { }
-
 private:
     std::vector<std::pair<std::string, const Type*>> fields;
     std::string name;
+};
+
+class EnumType final : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override { return name; }
+    bool IsAssignableTo(const Type* other) const override;
+    [[nodiscard]] uint8_t GetSize() const override { return sizeof(int32_t); }
+    std::optional<int32_t> Get(const std::string& name) const
+    {
+        if(variants.contains(name)) return variants.at(name);
+        return std::nullopt;
+    }
+
+    EnumType(std::string name, std::unordered_map<std::string, int32_t> variants) :
+     name{std::move(name)}, variants{std::move(variants)}
+    { }
+private:
+    std::string name;
+    std::unordered_map<std::string, int32_t> variants;
 };

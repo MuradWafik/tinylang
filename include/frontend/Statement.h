@@ -34,7 +34,7 @@ struct VariableDeclaration final : Statement
         std::string name,
         std::string type,
         std::unique_ptr<Expression> initializer,
-        SourceLocation loc
+        const SourceLocation loc
         ) :
     name(std::move(name)),
     type(std::move(type)),
@@ -52,7 +52,7 @@ struct ReturnStatement final : Statement
 
     [[nodiscard]] bool IsVoidReturn() const { return value == nullptr; }
 
-    explicit ReturnStatement(std::unique_ptr<Expression> value, SourceLocation loc) : value{std::move(value)}
+    explicit ReturnStatement(std::unique_ptr<Expression> value, const SourceLocation loc) : value{std::move(value)}
     { this->source_location = loc; }
 };
 
@@ -62,18 +62,17 @@ struct BodyStatement final : Statement
 
     [[nodiscard]] std::string GetTypeString() const override
     {
-        if (statements.empty()) return "BodyStatement(empty)";
+        if(statements.empty()) return "BodyStatement(empty)";
 
         std::string inner;
-        for (size_t i = 0; i < statements.size(); ++i)
+        for(size_t i = 0; i < statements.size(); ++i)
         {
             inner += statements[i] ? statements[i]->GetTypeString() : "nullptr";
-            if (i + 1 < statements.size())
+            if(i + 1 < statements.size())
             {
                 inner += ", ";
             }
         }
-
         return std::format("BodyStatement([{}])", inner);
     }
 
@@ -102,7 +101,7 @@ struct IfStatement final : Statement
 
     [[nodiscard]] std::string GetTypeString() const override
     {
-        if (else_branch)
+        if(else_branch)
         {
             return std::format("IfStatement(condition: {}, then: {}, else: {})",
                                condition.get(), body.get(), else_branch.get());
@@ -147,9 +146,10 @@ struct FunctionDeclaration final : Statement
     [[nodiscard]] std::string GetTypeString() const override
     {
         std::string params_str;
-        for (size_t i = 0; i < parameters.size(); ++i) {
+        for(size_t i = 0; i < parameters.size(); ++i)
+        {
             params_str += std::format("{}: {}", parameters[i].name, parameters[i].type_name);
-            if (i + 1 < parameters.size()) params_str += ", ";
+            if(i + 1 < parameters.size()) params_str += ", ";
         }
         return std::format(R"(FunctionDeclaration(name: "{}", params: [{}], return: "{}", body: {}))",
                            name, params_str, return_type, body ? body->GetTypeString() : "nullptr");
@@ -169,7 +169,8 @@ struct ExpressionStatement final : Statement
 
 struct BreakStatement final : Statement
 {
-    [[nodiscard]] std::string GetTypeString() const override {
+    [[nodiscard]] std::string GetTypeString() const override
+    {
         return "BreakStatement";
     }
 
@@ -178,7 +179,8 @@ struct BreakStatement final : Statement
 
 struct ContinueStatement final : Statement
 {
-    [[nodiscard]] std::string GetTypeString() const override {
+    [[nodiscard]] std::string GetTypeString() const override
+    {
         return "ContinueStatement";
     }
 
@@ -235,6 +237,30 @@ struct StructDeclaration final : Statement
         std::string name, std::vector<std::pair<std::string, std::string>> fields,
         const SourceLocation loc) :
     name(std::move(name)), fields(std::move(fields))
+    {
+        this->source_location = loc;
+    }
+};
+
+struct EnumVariant
+{
+    std::string name;
+    std::optional<int32_t> value; // nullptr if they didn't specify '= X', so it has to be a pointer
+};
+
+
+struct EnumDeclaration final : Statement
+{
+    std::string name;
+    std::vector<EnumVariant> variant_names;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return "EnumDeclaration";
+    }
+
+    EnumDeclaration(std::string name, std::vector<EnumVariant> variant_names, const SourceLocation loc) :
+    name(std::move(name)), variant_names(std::move(variant_names))
     {
         this->source_location = loc;
     }

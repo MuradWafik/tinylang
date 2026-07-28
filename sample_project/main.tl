@@ -9,6 +9,12 @@ struct Vector2
    var y: int;
 }
 
+enum Status {
+    Pending,
+    Approved = 5,
+    Rejected
+}
+
 fn (self: Vector2) add(other: Vector2) -> Vector2
 {
     var result: Vector2;
@@ -56,5 +62,16 @@ vec2.y = 15;
 var vec3 = vec.add(vec2);
 print_int(vec3.x); // Should print 25
 print_int(vec3.y); // Should print 25
+
+var s: Status = Status.Approved;
+if (s == Status.Approved) {
+    print_int(5); // We can't print 's' directly because it's strictly typed!
+}
+if (Status.Pending == Status.Pending) {
+    print_int(0); 
+}
+if (Status.Rejected != Status.Approved) {
+    print_int(6);
+}
 
 }

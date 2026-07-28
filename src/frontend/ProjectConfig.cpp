@@ -5,7 +5,6 @@ std::expected<std::unique_ptr<ProjectConfig>, std::string> ProjectConfig::FindAn
 {
     std::filesystem::path current = std::filesystem::absolute(start_dir);
 
-
     while(true)
     {
         if(auto config_path = current / "tinylang.json"; std::filesystem::exists(config_path))
@@ -23,39 +22,39 @@ std::expected<std::unique_ptr<ProjectConfig>, std::string> ProjectConfig::FindAn
 
                 if(j.contains("plugins") && j["plugins"].is_object())
                 {
-                    for (auto& [key, value] : j["plugins"].items())
+                    for(auto& [key, value] : j["plugins"].items())
                     {
-                        if (value.is_string())
+                        if(value.is_string())
                         {
                             config->plugin_mappings[key] = value.get<std::string>();
                         }
                     }
                 }
                 return config;
-
             }
-            catch (const std::exception& e)
+            catch(const std::exception& e)
             {
                 return std::unexpected(e.what());
             }
-            catch (...)
+            catch(...)
             {
                 return std::unexpected("Unknown error encountered parsing project config");
             }
         }
         // keep checking parent dirs looking
-        if (current == current.parent_path()) break;
+        if(current == current.parent_path()) break;
         current = current.parent_path();
     }
     return std::unexpected("tinylang.json config file found");
 }
 
-std::string ProjectConfig::FormatOSPluginFilename(const std::filesystem::path& path) {
+std::string ProjectConfig::FormatOSPluginFilename(const std::filesystem::path& path)
+{
     std::string filename = path.filename().string();
     const std::filesystem::path dir = path.parent_path();
 
     // If it already has an explicit extension, leave it untouched
-    if (path.has_extension())
+    if(path.has_extension())
     {
         return path.string();
     }

@@ -24,7 +24,8 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std
                    !dynamic_cast<StructDeclaration*>(stmt) && 
                    !dynamic_cast<VariableDeclaration*>(stmt) &&
                    !dynamic_cast<NativeFunctionDeclaration*>(stmt) &&
-                   !dynamic_cast<NativeModuleStatement*>(stmt))
+                   !dynamic_cast<NativeModuleStatement*>(stmt) &&
+                   !dynamic_cast<EnumDeclaration*>(stmt))
                 {
                     return std::unexpected(std::format("Error at line {}: Top-level execution statements are forbidden in strict mode. Use 'fn main()' instead.", stmt->source_location.line_number));
                 }
@@ -76,14 +77,14 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(ASTNode* node)
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeNode(ASTNode* node)
 {
     // let statements and expressions handle their own dispatching
-    if (auto* stmt = dynamic_cast<Statement*>(node))
+    if(auto* stmt = dynamic_cast<Statement*>(node))
     {
         return AnalyzeStatement(stmt);
     }
     if(auto* expr = dynamic_cast<Expression*>(node))
     {
         // expressions return an expected type for their recursive chain, can just be ignored here
-        if (auto res = AnalyzeExpression(expr); !res) return std::unexpected(res.error());
+        if(auto res = AnalyzeExpression(expr); !res) return std::unexpected(res.error());
         return {};
     }
     return std::unexpected("Unknown node type");
@@ -104,6 +105,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* s
     if(const auto* native_mod_stmt = dynamic_cast<NativeModuleStatement*>(stmt)) return AnalyzeNativeModuleStatement(native_mod_stmt);
     if(const auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
     if(const auto* struct_decl = dynamic_cast<StructDeclaration*>(stmt)) return AnalyzeStructDeclaration(struct_decl);
+    if(const auto* enum_decl = dynamic_cast<EnumDeclaration*>(stmt)) return AnalyzeEnumDeclaration(enum_decl);
 
     return std::unexpected(std::format("Unknown statement type '{}'", stmt->GetTypeString()));
 }
@@ -148,7 +150,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
 {
     const Type* type = nullptr;
     // with type inference the type defaults to null
-    if (variable_declaration->type != "null")
+    if(variable_declaration->type != "null")
     {
         type = ResolveType(variable_declaration->type);
         if(!type)
@@ -195,7 +197,6 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
     return {};
 }
 
-
 void SymbolTable::DefineVariable(const Symbol& symbol)
 {
     scopes.back().variables[symbol.name] = symbol;
@@ -225,7 +226,7 @@ void SymbolTable::DefineType(const std::string_view name, const Type* type)
 
 const Type* SymbolTable::LookupType(const std::string_view name)
 {
-    for (auto & [variables, types] : std::ranges::reverse_view(scopes))
+    for(auto & [variables, types] : std::ranges::reverse_view(scopes))
     {
         if(auto found = types.find(name); found != types.end())
         {
@@ -254,7 +255,7 @@ const Type* SemanticAnalyzer::ResolveType(const std::string_view type_name)
             return array_type;
         }
     }
-    
+
     return nullptr;
 }
 
@@ -277,13 +278,12 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeIfStatement(const IfSt
         return std::unexpected(std::format("{} {}", error_string, body_analysis.error()));
     }
 
-    if (if_statement->else_branch)
+    if(if_statement->else_branch)
     {
         return AnalyzeNode(if_statement->else_branch.get());
     }
     return {};
 }
-
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeWhileStatement(const WhileStatement* while_statement)
 {
@@ -314,7 +314,6 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
 {
     // cache what the return type was before in case its nested
     const auto* outer_return = current_function_return_type;
-
     if(symbol_table.IsDeclaredInCurrentScope(function_declaration->name))
     {
         return Return(std::format("Redefinition of variable/function '{}'", function_declaration->name));
@@ -328,7 +327,6 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     const_cast<FunctionDeclaration*>(function_declaration)->return_type_info = return_type;
 
     symbol_table.PushScope();
-
 
     std::vector<const Type*> parameter_types;
     if(function_declaration->receiver)
@@ -444,7 +442,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeBodyStatement(const Bo
     symbol_table.PushScope();
     for(const auto& statement: body_statement->statements)
     {
-        if (auto result = AnalyzeNode(statement.get()); !result)
+        if(auto result = AnalyzeNode(statement.get()); !result)
         {
             symbol_table.PopScope();
             return std::unexpected(result.error());
@@ -486,7 +484,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclarat
         );
     }
 
-    if (symbol_table.GetScopeDepth() > 0)
+    if(symbol_table.GetScopeDepth() > 0)
     {
         return std::unexpected("Native functions can only be declared at the global scope");
     }
@@ -504,14 +502,14 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclarat
     const_cast<NativeFunctionDeclaration*>(native_function_declaration)->return_type_info = return_type;
 
     std::vector<const Type*> parameter_types;
-    for(auto& param: const_cast<NativeFunctionDeclaration*>(native_function_declaration)->parameters)
+    for(auto& [name, type_name, type_info]: const_cast<NativeFunctionDeclaration*>(native_function_declaration)->parameters)
     {
-        auto* type = ResolveType(param.type_name);
+        auto* type = ResolveType(type_name);
         if(!type)
         {
-            return Return(std::format("Unknown type '{}' for function parameter '{}'", param.type_name, param.name));
+            return Return(std::format("Unknown type '{}' for function parameter '{}'", type_name, name));
         }
-        param.type_info = type;
+        type_info = type;
         parameter_types.push_back(type);
     }
 
@@ -534,11 +532,13 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(cons
     // to throw an error if 2 variables have the same name in definition
     std::unordered_set<std::string_view> seen_names;
     seen_names.reserve(struct_declaration->fields.size());
+
     std::vector<std::pair<std::string, const Type*>> result;
     result.reserve(struct_declaration->fields.size());
+
     for(auto& [name, type_name] : struct_declaration->fields)
     {
-        if (!seen_names.insert(name).second)
+        if(!seen_names.insert(name).second)
         {
             return std::unexpected(std::format(
                 "Duplicate field name '{}' in definition of struct '{}'",
@@ -560,6 +560,25 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(cons
     allocated_types.push_back(std::make_unique<StructType>(struct_declaration->name, std::move(result)));
     symbol_table.DefineType(struct_declaration->name, allocated_types.back().get());
 
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeEnumDeclaration(const EnumDeclaration* enum_declaration)
+{
+    std::unordered_map<std::string, int32_t> variants;
+    auto variant_value = 0; // default starting value for varint if user did not assign one
+    for(const auto& [name, value]: enum_declaration->variant_names)
+    {
+        if(value)
+        {
+            variant_value = value.value();
+        }
+
+        variants[name] = variant_value;
+        ++variant_value; // increment it as even if it has one it will get overrwitten
+    }
+    allocated_types.push_back(std::make_unique<EnumType>(enum_declaration->name, std::move(variants)));
+    symbol_table.DefineType(enum_declaration->name, allocated_types.back().get());
     return {};
 }
 
@@ -760,7 +779,15 @@ void SemanticAnalyzer::RegisterBinaryOperator(const TokenType op, const Type* le
 
 const Type* SemanticAnalyzer::LookupBinaryOperator(const TokenType op, const Type* left, const Type* right) const
 {
-    if (const auto it = binary_operators.find({op, left, right}); it != binary_operators.end())
+    if(dynamic_cast<const EnumType*>(left) && left == right)
+    {
+        if(op == TokenType::Equal || op == TokenType::NotEqual)
+        {
+            return PrimitiveType::Bool.get();
+        }
+    }
+
+    if(const auto it = binary_operators.find({op, left, right}); it != binary_operators.end())
     {
         return it->second;
     }
@@ -774,7 +801,7 @@ void SemanticAnalyzer::RegisterUnaryOperator(const TokenType op, const Type* ope
 
 const Type* SemanticAnalyzer::LookupUnaryOperator(const TokenType op, const Type* operand) const
 {
-    if (const auto it = unary_operators.find({op, operand}); it != unary_operators.end())
+    if(const auto it = unary_operators.find({op, operand}); it != unary_operators.end())
     {
         return it->second;
     }
@@ -796,25 +823,26 @@ void SemanticAnalyzer::InitializeDefaults()
     const Type* string_t = PrimitiveType::String.get();
 
     // Arithmetic
-    for (const auto op : {TokenType::Plus, TokenType::Minus, TokenType::Star, TokenType::Slash})
+    for(const auto op : {TokenType::Plus, TokenType::Minus, TokenType::Star, TokenType::Slash})
     {
         RegisterBinaryOperator(op, int_t, int_t, int_t);
         RegisterBinaryOperator(op, float_t, float_t, float_t);
     }
-    
-    RegisterBinaryOperator(TokenType::Modulo, int_t, int_t, int_t);
 
+    RegisterBinaryOperator(TokenType::Modulo, int_t, int_t, int_t);
+    // const auto left_type = symbol_table.LookupType(left.value());
+    // const auto right_type = symbol_table.LookupType(right.value());
     // String concatenation
     RegisterBinaryOperator(TokenType::Plus, string_t, string_t, string_t);
 
     // Logical (bool)
-    for (const auto op : {TokenType::OrOr, TokenType::AndAnd})
+    for(const auto op : {TokenType::OrOr, TokenType::AndAnd})
     {
         RegisterBinaryOperator(op, bool_t, bool_t, bool_t);
     }
 
     // Comparison
-    for (const auto op : {TokenType::Less, TokenType::LessEqual, TokenType::Greater, TokenType::GreaterEqual})
+    for(const auto op : {TokenType::Less, TokenType::LessEqual, TokenType::Greater, TokenType::GreaterEqual})
     {
         RegisterBinaryOperator(op, int_t, int_t, bool_t);
         RegisterBinaryOperator(op, float_t, float_t, bool_t);
@@ -823,7 +851,7 @@ void SemanticAnalyzer::InitializeDefaults()
     }
 
     // Equality
-    for (const auto op : {TokenType::Equal, TokenType::NotEqual})
+    for(const auto op : {TokenType::Equal, TokenType::NotEqual})
     {
         RegisterBinaryOperator(op, int_t, int_t, bool_t);
         RegisterBinaryOperator(op, float_t, float_t, bool_t);
@@ -865,13 +893,13 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIndexAccess(Ind
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(ArrayLiteral* array_node)
 {
-    if (array_node->elements.empty())
+    if(array_node->elements.empty())
     {
         return Return("Cannot infer type of empty array literal");
     }
 
     auto first_type = AnalyzeExpression(array_node->elements[0].get());
-    if (!first_type)
+    if(!first_type)
     {
         return std::unexpected(first_type.error());
     }
@@ -879,7 +907,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(Ar
     for(size_t i = 1; i < array_node->elements.size(); ++i)
     {
         auto elem_type = AnalyzeExpression(array_node->elements[i].get());
-        if (!elem_type) return std::unexpected(elem_type.error());
+        if(!elem_type) return std::unexpected(elem_type.error());
 
         if(elem_type.value() != first_type.value())
         {
@@ -894,11 +922,29 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(Ar
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(PropertyAccess* property_access)
 {
-    auto lhs = AnalyzeExpression(property_access->object_expr.get());
-    if(!lhs)
+    // check beforehand if it's an enum as that cant be analyzed as an expression
+    if(auto* id_expr = dynamic_cast<IdentifierExpression*>(property_access->object_expr.get()))
     {
-        return std::unexpected(lhs.error());
+        if(auto* type = symbol_table.LookupType(id_expr->name))
+        {
+            if(auto* enum_type = dynamic_cast<const EnumType*>(type))
+            {
+                if(!enum_type->Get(property_access->property_name))
+                {
+                    return std::unexpected(std::format("Enum '{}' does not have variant '{}'", id_expr->name, property_access->property_name));
+                }
+
+                // cache the int value to use in the compiler
+                property_access->cached_enum_value = enum_type->Get(property_access->property_name);
+                 property_access->type_info = enum_type; // but dont treat it as an int to prevent implicit casts
+                return property_access->type_info;
+            }
+        }
     }
+
+    auto lhs = AnalyzeExpression(property_access->object_expr.get());
+    if(!lhs) return std::unexpected(lhs.error());
+
     if(dynamic_cast<const ArrayType*>(lhs.value()) || lhs.value() == PrimitiveType::String.get())
     {
         if(property_access->property_name == "length")

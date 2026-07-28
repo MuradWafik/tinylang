@@ -299,9 +299,7 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
     this->line = 1;
     this->column = 1;
     this->source = source;
-
     std::vector<Token> tokens;
-
     while (!IsAtEnd())
     {
         // ensure multiple lines of spaces/comments get skipped
@@ -310,16 +308,14 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
         {
             progress = false;
             size_t start_index = index;
-
             SkipWhitespace();
             TrySkipComments();
-
-            if (index > start_index)
+            if(index > start_index)
             {
                 progress = true;
             }
         }
-        if (IsAtEnd())
+        if(IsAtEnd())
         {
             break;
         }
@@ -338,14 +334,14 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
         else if(std::isdigit(static_cast<unsigned char>(cur)))
         {
             auto result = LexNumber();
-            if (!result)
+            if(!result)
             {
                 return std::unexpected(result.error());
             }
 
             tokens.push_back(result.value());
         }
-        else if (cur == '"')
+        else if(cur == '"')
         {
             auto result = LexString();
             if(!result)
@@ -367,10 +363,8 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
     }
 
     tokens.push_back(Token(TokenType::EndOfFile, "", {line, column}));
-
     return tokens;
 }
-
 
 Token Lexer::ReturnSingleCharSymbol(const TokenType token_type)
 {
@@ -402,7 +396,7 @@ Token Lexer::CheckSymbolForNext(
 
 bool Lexer::TrySkipComments()
 {
-    if (IsAtEnd())
+    if(IsAtEnd())
     {
         return false;
     }
@@ -422,7 +416,5 @@ bool Lexer::TrySkipComments()
             break;
         }
     }
-
     return true;
 }
-

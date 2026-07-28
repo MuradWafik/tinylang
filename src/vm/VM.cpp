@@ -9,12 +9,11 @@
 
 InterpretResult VM::StartProgram(Chunk* root_chunk)
 {
-    // 1. Run the root chunk to evaluate global functions and variables
-    InterpretResult res = Interpret(root_chunk);
-    if(res != InterpretResult::INTERPRET_OK) return res;
+    // Run the root chunk to evaluate global functions and variables
+    if(const auto res = Interpret(root_chunk); res != InterpretResult::INTERPRET_OK) return res;
 
-    // 2. Find the main function in the globals table
-    if (!globals.contains("main")) {
+    if(!globals.contains("main"))
+    {
         std::println(std::cerr, "Runtime Error: No 'main' entrypoint found.");
         return InterpretResult::INTERPRET_RUNTIME_ERROR;
     }
@@ -26,15 +25,13 @@ InterpretResult VM::StartProgram(Chunk* root_chunk)
     }
     auto main_func_ptr = *main_func_ptr_ptr;
     
-    // 3. Push it to the stack (so it acts like the base of the call stack)
+    // Push main so it acts as the first call frame
     Push<FunctionObject*>(main_func_ptr);
-    
-    // 4. Create the very first CallFrame, pointing to main's chunk
+
     CallFrame main_frame;
     main_frame.chunk = main_func_ptr->chunk.get();
     main_frame.ip = main_frame.chunk->code.data();
-    main_frame.stack_base = stack.size() - sizeof(FunctionObject*); // Stack starts here!
-
+    main_frame.stack_base = stack.size() - sizeof(FunctionObject*); // stack starts here
     call_frames.push_back(main_frame);
 
     return Run();
@@ -504,7 +501,6 @@ void VM::CallFunction()
 {
     // cant pop since the function itself and its args must remain in scope
     // for recursion and referencing the args
-
     const auto arg_bytes = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     const size_t func_ptr_index = stack.size() - arg_bytes - sizeof(FunctionObject*);
 
@@ -519,7 +515,7 @@ void VM::CallFunction()
 
         stack.resize(func_ptr_index);
         // Push the return value if its not void
-        if (function_object->return_bytes > 0)
+        if(function_object->return_bytes > 0)
         {
             stack.insert(stack.end(), return_buffer, return_buffer + function_object->return_bytes);
         }
@@ -540,7 +536,7 @@ void VM::HandleJumpIfFalse()
 
     // Pop the true/false condition off the stack
     // TODO: If falsey/bool operators get added handle here?
-    if (const auto condition = Pop<bool>(); condition == false)
+    if(const auto condition = Pop<bool>(); condition == false)
     {
         call_frames.back().ip += offset;
     }
@@ -586,7 +582,7 @@ void VM::LoadNativeFunction()
     const auto num_args = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const auto return_bytes = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     auto result = plugin_loader.LoadSymbol(lib_path, symbol_name);
-    if (!result)
+    if(!result)
     {
         throw std::runtime_error(result.error());
     }
@@ -604,7 +600,7 @@ void VM::AllocateArray()
     const size_t total_bytes = element_count * bytes_per_element;
     const uint8_t* elements_ptr = stack.data() + stack.size() - total_bytes;
     auto* arr = AllocateObject<Array>(elements_ptr, element_count, bytes_per_element);
-    
+
     stack.resize(stack.size() - total_bytes);
 
     Push<Object*>(arr);
@@ -641,7 +637,7 @@ void VM::SetArrayIndex()
     const size_t array_start = index_start - sizeof(Object*);
     const auto index = ReadBytesAbsolute<int32_t>(stack, index_start);
     const auto* array = dynamic_cast<Array*>(ReadBytesAbsolute<Object*>(stack, array_start));
-    
+
     if(index < 0 || index >= array->size)
     {
         throw std::runtime_error(std::format("Array index out of bounds. Index: {}, Size: {}", index, array->size));
@@ -678,11 +674,11 @@ void VM::AllocateStruct()
 void VM::GetLength()
 {
     auto* obj = Pop<Object*>();
-    if(auto* arr = dynamic_cast<Array*>(obj))
+    if(const auto* arr = dynamic_cast<Array*>(obj))
     {
         Push<int32_t>(static_cast<int32_t>(arr->size));
     }
-    else if(auto* str = dynamic_cast<String*>(obj))
+    else if(const auto* str = dynamic_cast<String*>(obj))
     {
         Push<int32_t>(static_cast<int32_t>(str->length));
     }
@@ -715,10 +711,10 @@ void VM::SetProperty()
     const size_t value_start = stack.size() - size;
     const size_t struct_start = value_start - sizeof(Object*);
     auto* obj = dynamic_cast<Struct*>(ReadBytesAbsolute<Object*>(stack, struct_start));
-    
+
     // Copies values from the stack to the struct
     std::memcpy(&obj->fields[offset], &stack[value_start], size);
-    
+
     // shift the value bytes down to overwrite the struct pointer
     std::memmove(&stack[struct_start], &stack[value_start], size);
     stack.resize(stack.size() - sizeof(Object*));

@@ -19,10 +19,10 @@ bool FunctionType::IsAssignableTo(const Type* other) const
 std::string FunctionType::GetName() const
 {
     std::string name = "(";
-    for (size_t i = 0; i < arguments.size(); ++i)
+    for(size_t i = 0; i < arguments.size(); ++i)
     {
         name += arguments[i]->GetName();
-        if (i + 1 < arguments.size())
+        if(i + 1 < arguments.size())
         {
             name += ", ";
         }
@@ -65,6 +65,11 @@ const Type* StructType::GetFieldType(const std::string_view name) const
 }
 
 bool StructType::IsAssignableTo(const Type* other) const
+{
+    return this == other;
+}
+
+bool EnumType::IsAssignableTo(const Type* other) const
 {
     return this == other;
 }

@@ -74,4 +74,6 @@ private:
     ExpectedPtr<BreakStatement> ParseBreakStatement();
     ExpectedPtr<ContinueStatement> ParseContinueStatement();
     ExpectedPtr<StructDeclaration> ParseStructDeclaration();
+    ExpectedPtr<EnumDeclaration> ParseEnumDeclaration();
+
 };

@@ -24,10 +24,10 @@ void VMHeap::CollectGarbage(const std::vector<uint8_t>& vm_stack, std::unordered
 {
     ScanMemory(vm_stack.data(), vm_stack.size());
 
-    for (const auto& variant_val: globals | std::views::values)
+    for const auto& variant_val: globals | std::views::values)
     {
         // Check if this global variable holds an Object*
-        if (const auto* obj_ptr = std::get_if<Object*>(&variant_val))
+        if(const auto* obj_ptr = std::get_if<Object*>(&variant_val))
         {
             if(Object* obj = *obj_ptr; objects.contains(obj)
                 && !obj->is_marked)
@@ -69,7 +69,7 @@ void VMHeap::ScanMemory(const uint8_t* memory, const size_t size)
 
         if(objects.contains(potential_object))
         {
-            if (!potential_object->is_marked)
+            if(!potential_object->is_marked)
             {
                 potential_object->is_marked = true;
                 worklist.push_back(potential_object);

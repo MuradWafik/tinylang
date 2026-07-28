@@ -53,7 +53,7 @@ bool Parser::Match(const TokenType target)
 
 Expected<Token> Parser::Expect(const TokenType expected, std::string_view context_message)
 {
-    if (IsAtEnd() || Peek().type != expected)
+    if(IsAtEnd() || Peek().type != expected)
     {
         SourceLocation loc = IsAtEnd() ? SourceLocation{0, 0} : Peek().source_location;
         std::string got = IsAtEnd() ? "EOF" : Peek().lexeme;
@@ -99,6 +99,7 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::Continue: return ParseContinueStatement();
         case TokenType::Native: return ParseNativeStatement();
         case TokenType::Struct: return ParseStructDeclaration();
+        case TokenType::Enum: return ParseEnumDeclaration();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -217,7 +218,7 @@ ExpectedExpressionPtr Parser::ParseAssignment()
 
         // it's a right associative operator, so right must be recursive, not down the chain
         auto right = ParseAssignment();
-        if (!right)
+        if(!right)
         {
             return std::unexpected(right.error());
         }
@@ -355,13 +356,13 @@ ExpectedExpressionPtr Parser::ParseMultiplication()
 
 ExpectedExpressionPtr Parser::ParseUnary()
 {
-    if (Peek().type == TokenType::Minus || Peek().type == TokenType::Negate)
+    if(Peek().type == TokenType::Minus || Peek().type == TokenType::Negate)
     {
         Token op = Consume();
 
         // recursively call `ParseUnary` to allow for nested operators like `!!true`
         ExpectedExpressionPtr right = ParseUnary();
-        if (!right)
+        if(!right)
         {
             return std::unexpected(right.error());
         }
@@ -374,11 +375,11 @@ ExpectedExpressionPtr Parser::ParseUnary()
 ExpectedExpressionPtr Parser::ParseSuffixes()
 {
     ExpectedExpressionPtr expr_result = ParsePrimary();
-    if (!expr_result) return expr_result;
+    if(!expr_result) return expr_result;
 
     std::unique_ptr<Expression> expr = std::move(expr_result.value());
     // Loop continuously to catch chained suffixes like matrix[0][1]()
-    while (true)
+    while(true)
     {
         if(Match(TokenType::LeftParen)) // function call/struct init
         {
@@ -414,7 +415,7 @@ ExpectedExpressionPtr Parser::ParseSuffixes()
 
             expr = std::make_unique<IndexAccess>(std::move(expr), std::move(index_expr.value()), index_expr.value()->source_location);
         }
-        else if (Match(TokenType::Dot)) // property access
+        else if(Match(TokenType::Dot)) // property access
         {
             const auto identifier = Expect(TokenType::Identifier, "Parsing property access");
             if(!identifier)
@@ -423,7 +424,6 @@ ExpectedExpressionPtr Parser::ParseSuffixes()
             }
 
             expr = std::make_unique<PropertyAccess>(std::move(expr), identifier->lexeme, identifier->source_location);
-
         }
         else
         {
@@ -471,21 +471,18 @@ ExpectedExpressionPtr Parser::ParsePrimary()
             if(Match(TokenType::LeftParen))
             {
                 // Struct initialization or function call i.e var p = Point(1, 2);
-
-
             }
             Token idToken = Consume();
             return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme), source_location);
         }
-
         // Grouped Expressions
         case TokenType::LeftParen:
         {
             Consume(); // eat '('
             auto expr = ParseExpression();
-            if (!expr) return expr;
+            if(!expr) return expr;
 
-            if (!Match(TokenType::RightParen))
+            if(!Match(TokenType::RightParen))
             {
                 return std::unexpected(std::format("Expected ')' after expression at {}", Peek().source_location));
             }
@@ -494,21 +491,20 @@ ExpectedExpressionPtr Parser::ParsePrimary()
         case TokenType::LeftSquareBracket:
         {
             Consume(); // eat '['
-
             std::vector<std::unique_ptr<Expression>> values;
-            if (Peek().type != TokenType::RightSquareBracket) 
+            if(Peek().type != TokenType::RightSquareBracket)
             {
                 do
                 {
                     auto expr = ParseExpression();
-                    if (!expr) return expr;
+                    if(!expr) return expr;
 
                     values.push_back(std::move(*expr));
                 }
                 while(Match(TokenType::Comma));
             }
             
-            if (auto closed = Expect(TokenType::RightSquareBracket, "Expected ']' at end of array literal"); !closed)
+            if(auto closed = Expect(TokenType::RightSquareBracket, "Expected ']' at end of array literal"); !closed)
             {
                 return std::unexpected(closed.error());
             }
@@ -617,7 +613,6 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
 ExpectedNodePtr Parser::ParseNativeStatement()
 {
     Consume(); //  native keyword
-
     if(Match(TokenType::Module))
     {
         // Native module declaration
@@ -667,7 +662,7 @@ ExpectedNodePtr Parser::ParseNativeStatement()
         const Token& return_type = Peek();
 
         // FIXME: allow for other types
-        if(!return_type.IsPrimitiveTypeName())
+        if(!return_type.IsPrimitiveTypeName() && return_type.type != TokenType::Identifier)
         {
             return std::unexpected(
                 std::format("Expected type name after '->', got '{}' at {}",
@@ -707,7 +702,7 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
     std::vector<Parameter> parameters{};
 
     // Since parameters are optional, check if there is no parameter list
-    if (Peek().type == TokenType::RightParen)
+    if(Peek().type == TokenType::RightParen)
     {
         return parameters;
     }
@@ -717,8 +712,11 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
         auto parameter_name = Expect(TokenType::Identifier, "Expected parameter name");
         if(!parameter_name) return std::unexpected(parameter_name.error());
 
-        auto colon = Expect(TokenType::Colon, "Error after parameter name");
-        if(!colon) return std::unexpected(colon.error());
+        if(auto colon = Expect(TokenType::Colon, "Error after parameter name");
+            !colon)
+        {
+            return std::unexpected(colon.error());
+        }
 
         const Token& type_name = Peek();
         if(!type_name.IsPrimitiveTypeName() && type_name.type != TokenType::Identifier)
@@ -752,7 +750,6 @@ ExpectedPtr<BodyStatement> Parser::ParseBodyStatement()
 
     SourceLocation loc = starter.source_location;
     auto body = std::make_unique<BodyStatement>(loc);
-
     while(!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace)
     {
         ExpectedNodePtr statement = ParseStatement();
@@ -761,7 +758,7 @@ ExpectedPtr<BodyStatement> Parser::ParseBodyStatement()
         body->statements.push_back(std::move(statement.value()));
     }
 
-    if (!Match(TokenType::RightCurlyBrace))
+    if(!Match(TokenType::RightCurlyBrace))
     {
         return std::unexpected(
             std::format("Unterminated block statement. Expected '{}' to match the opening brace at {}.",
@@ -911,10 +908,12 @@ ExpectedPtr<BreakStatement> Parser::ParseBreakStatement()
 {
     constexpr std::string_view error_msg = "Error parsing break statement";
     auto break_keyword = Expect(TokenType::Break, error_msg);
-    if(!break_keyword) {
+    if(!break_keyword)
+    {
         return std::unexpected(break_keyword.error());
     }
-    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon) {
+    if(auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
+    {
         return std::unexpected(semi_colon.error());
     }
     return std::make_unique<BreakStatement>(break_keyword->source_location);
@@ -951,56 +950,112 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
     }
 
     std::vector<std::pair<std::string, std::string>> struct_members;
-    do
+    
+    if(Peek().type != TokenType::RightCurlyBrace)
     {
-        if(const auto var = Expect(TokenType::Var, error_msg); !var)
+        do
         {
-            return std::unexpected(var.error());
-        }
-
-        const auto var_name = Expect(TokenType::Identifier, error_msg);
-        if(!var_name)
-        {
-            return std::unexpected(var_name.error());
-        }
-
-        if(const auto colon = Expect(TokenType::Colon, error_msg); !colon)
-        {
-            return std::unexpected(colon.error());
-        }
-
-        const auto& type_name_token = Consume();
-        if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
-        {
-            return std::unexpected(std::format(
-                "{}, expected typename got {}",
-                error_msg, Token::TypeToString(type_name_token.type))
-            );
-        }
-        std::string type_name = type_name_token.lexeme;
-
-        // array types
-        while(Match(TokenType::LeftSquareBracket))
-        {
-            if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type"); !right_bracket)
+            if(const auto var = Expect(TokenType::Var, error_msg); !var)
             {
-                return std::unexpected(right_bracket.error());
+                return std::unexpected(var.error());
             }
-            type_name += "[]";
-        }
-        struct_members.emplace_back(var_name.value().lexeme, type_name);
 
-        if(const auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
-        {
-            return std::unexpected(semi_colon.error());
+            const auto var_name = Expect(TokenType::Identifier, error_msg);
+            if(!var_name)
+            {
+                return std::unexpected(var_name.error());
+            }
+
+            if(const auto colon = Expect(TokenType::Colon, error_msg); !colon)
+            {
+                return std::unexpected(colon.error());
+            }
+
+            const auto& type_name_token = Consume();
+            if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
+            {
+                return std::unexpected(std::format(
+                    "{}, expected typename got {}",
+                    error_msg, Token::TypeToString(type_name_token.type))
+                );
+            }
+            std::string type_name = type_name_token.lexeme;
+
+            // array types
+            while(Match(TokenType::LeftSquareBracket))
+            {
+                if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type"); !right_bracket)
+                {
+                    return std::unexpected(right_bracket.error());
+                }
+                type_name += "[]";
+            }
+            struct_members.emplace_back(var_name.value().lexeme, type_name);
+
+            if(const auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
+            {
+                return std::unexpected(semi_colon.error());
+            }
         }
+        while(!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace);
     }
-    while (!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace);
 
-    if (const auto right_brace = Expect(TokenType::RightCurlyBrace, error_msg); !right_brace)
+    if(const auto right_brace = Expect(TokenType::RightCurlyBrace, error_msg); !right_brace)
     {
         return std::unexpected(right_brace.error());
     }
 
     return std::make_unique<StructDeclaration>(std::move(struct_name.value().lexeme), std::move(struct_members), struct_name->source_location);
+}
+
+ExpectedPtr<EnumDeclaration> Parser::ParseEnumDeclaration()
+{
+    constexpr auto error = "Parsing enum declaration";
+    Consume(); // enum keyword
+
+    auto name = Expect(TokenType::Identifier, error);
+    if(!name) return std::unexpected(name.error());
+    if(const auto open = Expect(TokenType::LeftCurlyBrace, error); !open) return std::unexpected(open.error());
+
+    std::vector<EnumVariant> variants{};
+    if(Peek().type != TokenType::RightCurlyBrace)
+    {
+        do
+        {
+            auto name_token = Expect(TokenType::Identifier, error);
+            if(!name_token) return std::unexpected(name_token.error());
+            std::optional<int32_t> assignment_value = std::nullopt;
+            if(Match(TokenType::Assign))
+            {
+                const auto val = Expect(TokenType::IntLiteral, "Parsing enum value requires a compile time int literal");
+                if(!val)
+                {
+                    return std::unexpected(val.error());
+                }
+
+                assignment_value = std::stoi(val->lexeme);
+            }
+
+            variants.emplace_back(std::move(name_token.value().lexeme), assignment_value);
+
+            // redundant but just to read
+            // explicitly allow trailing comms
+            if(Match(TokenType::Comma))
+            {
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        while(!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace);
+    }
+    
+    if(const auto right_brace = Expect(TokenType::RightCurlyBrace, error); !right_brace)
+    {
+        return std::unexpected(right_brace.error());
+    }
+
+    return std::make_unique<EnumDeclaration>(std::move(name.value().lexeme), std::move(variants), name.value().source_location);
 }

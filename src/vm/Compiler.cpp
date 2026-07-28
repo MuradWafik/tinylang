@@ -117,68 +117,68 @@ void Compiler::CompileBinaryExpression(const BinaryExpression* binary_expression
     {
         case TokenType::Plus:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_FLOAT);
             if(type == PrimitiveType::String.get()) return current_chunk->WriteInstruction(line, OpCode::OP_ADD_STRING);
             break;
         }
         case TokenType::Minus:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_SUBTRACT_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_SUBTRACT_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_SUBTRACT_FLOAT);
             break;
         }
         case TokenType::Star:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_MULTIPLY_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_MULTIPLY_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_MULTIPLY_FLOAT);
             break;
         }
         case TokenType::Slash:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_DIVIDE_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_DIVIDE_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_DIVIDE_FLOAT);
             break;
         }
         case TokenType::Modulo:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_MOD_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_MOD_INT);
             break;
         }
         case TokenType::Greater:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_FLOAT);
             break;
         }
         case TokenType::GreaterEqual:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_EQUAL_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_EQUAL_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_GREATER_EQUAL_FLOAT);
             break;
         }
         case TokenType::Less:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_LESS_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_LESS_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_LESS_FLOAT);
             break;
         }
         case TokenType::LessEqual:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_LESS_EQUAL_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_LESS_EQUAL_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_LESS_EQUAL_FLOAT);
             break;
         }
         case TokenType::Equal:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_FLOAT);
             if(type == PrimitiveType::Bool.get()) return current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_BOOL);
             break;
         }
         case TokenType::NotEqual:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NOT_EQUAL_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_NOT_EQUAL_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NOT_EQUAL_FLOAT);
             if(type == PrimitiveType::Bool.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NOT_EQUAL_BOOL);
             break;
@@ -198,7 +198,7 @@ void Compiler::CompileUnaryExpression(const UnaryExpression* unary_expression)
     {
         case TokenType::Minus:
         {
-            if(type == PrimitiveType::Int.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NEGATE_INT);
+            if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) return current_chunk->WriteInstruction(line, OpCode::OP_NEGATE_INT);
             if(type == PrimitiveType::Float.get()) return current_chunk->WriteInstruction(line, OpCode::OP_NEGATE_FLOAT);
             break;
         }
@@ -223,7 +223,7 @@ void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_de
     {
         const auto line = variable_declaration->source_location.line_number;
         // No initializer's declares the variable while giving it a default value
-        if(type == PrimitiveType::Int.get())
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type)))
         {
             const auto index = static_cast<uint8_t>(current_chunk->AddConstant(0));
             current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, index);
@@ -258,7 +258,7 @@ void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_de
         const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(variable_declaration->name));
         const auto line = variable_declaration->source_location.line_number;
         
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_INT, name_index);
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_INT, name_index);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FLOAT, name_index);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_BOOL, name_index);
         else if(dynamic_cast<const FunctionType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_FUNCTION, name_index);
@@ -298,7 +298,7 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     {
         current_chunk->WriteInstruction(line, OpCode::OP_RETURN_VOID);
     }
-    else if(ret_type == PrimitiveType::Int.get())
+    else if(ret_type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(ret_type))
     {
         const auto index = current_chunk->AddConstant(0);
         current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, static_cast<uint8_t>(index));
@@ -347,7 +347,7 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
     {
         const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(identifier_expression->name));
         // Where to find it when looking in the VM
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_INT, name_index);
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_INT, name_index);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FLOAT, name_index);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_BOOL, name_index);
         else if(dynamic_cast<const FunctionType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, name_index);
@@ -357,7 +357,7 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
         local_index != -1)
     {
         const auto byte_offset = static_cast<uint16_t>(local_index);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, byte_offset);
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, byte_offset);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_FLOAT, byte_offset);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_BOOL, byte_offset);
         else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_OBJECT, byte_offset);
@@ -366,7 +366,7 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
     {
         const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(identifier_expression->name));
         // Where to find it when looking in the VM
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_INT, name_index);
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_INT, name_index);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FLOAT, name_index);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_BOOL, name_index);
         else if(dynamic_cast<const FunctionType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, name_index);
@@ -416,7 +416,7 @@ void Compiler::CompileVariableAssignmentExpression(const AssignmentExpression* a
     if(scope_depth == 0)
     {
         const auto name_index = current_chunk->AddConstant(identifier->name);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, static_cast<uint8_t>(name_index));
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, static_cast<uint8_t>(name_index));
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_FLOAT, static_cast<uint8_t>(name_index));
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_BOOL, static_cast<uint8_t>(name_index));
         else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_OBJECT, static_cast<uint8_t>(name_index));
@@ -426,7 +426,7 @@ void Compiler::CompileVariableAssignmentExpression(const AssignmentExpression* a
         local_index != -1)
     {
         const auto byte_offset = static_cast<uint16_t>(local_index);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_INT, static_cast<uint16_t>(byte_offset ));
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_INT, static_cast<uint16_t>(byte_offset ));
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_FLOAT, static_cast<uint16_t>(byte_offset ));
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_BOOL, static_cast<uint16_t>(byte_offset ));
         else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_OBJECT, static_cast<uint16_t>(byte_offset ));
@@ -434,7 +434,7 @@ void Compiler::CompileVariableAssignmentExpression(const AssignmentExpression* a
     else
     {
         const auto name_index = current_chunk->AddConstant(identifier->name);
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, static_cast<uint8_t>(name_index));
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_INT, static_cast<uint8_t>(name_index));
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_FLOAT, static_cast<uint8_t>(name_index));
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_BOOL, static_cast<uint8_t>(name_index));
         else if(dynamic_cast<const ArrayType*>(type) || dynamic_cast<const StructType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_SET_GLOBAL_OBJECT, static_cast<uint8_t>(name_index));
@@ -452,7 +452,7 @@ void Compiler::CompilePropertyAssignmentExpression(const AssignmentExpression* a
 
     for (const auto& [name, type] : struct_type->GetFields())
     {
-        if (name == property_access->property_name)
+        if(name == property_access->property_name)
         {
             size = type->GetSize();
             break;
@@ -469,11 +469,11 @@ void Compiler::CompileAssignmentExpression(const AssignmentExpression* assignmen
     {
         CompileArrayAssignmentExpression(assignment_expression, line, index_access);
     }
-    else if (const auto identifier = dynamic_cast<const IdentifierExpression*>(assignment_expression->target.get()))
+    else if(const auto identifier = dynamic_cast<const IdentifierExpression*>(assignment_expression->target.get()))
     {
         CompileVariableAssignmentExpression(assignment_expression, line, identifier);
     }
-    else if (const auto property_access = dynamic_cast<const PropertyAccess*>(assignment_expression->target.get()))
+    else if(const auto property_access = dynamic_cast<const PropertyAccess*>(assignment_expression->target.get()))
     {
         CompilePropertyAssignmentExpression(assignment_expression, line, property_access);
     }
@@ -512,6 +512,15 @@ void Compiler::CompileIndexAccess(const IndexAccess* index_access)
 void Compiler::CompilePropertyAccess(const PropertyAccess* property_access)
 {
     // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
+
+    // again if its an enum dont treat it as an expression
+    if(property_access->cached_enum_value.has_value())
+    {
+        const auto index = current_chunk->AddConstant(property_access->cached_enum_value.value());
+        current_chunk->WriteInstruction(property_access->source_location.line_number, OpCode::OP_CONSTANT_INT, static_cast<uint8_t>(index));
+        return;
+    }
+
     CompileExpression(property_access->object_expr.get()); // allowing someFunc().someProperty;
 
     if(dynamic_cast<const ArrayType*>(property_access->object_expr->type_info) || property_access->object_expr->type_info == PrimitiveType::String.get())
@@ -526,7 +535,7 @@ void Compiler::CompilePropertyAccess(const PropertyAccess* property_access)
 
     for (const auto& [name, type] : struct_type->GetFields())
     {
-        if (name == property_access->property_name)
+        if(name == property_access->property_name)
         {
             size = type->GetSize();
             break;
@@ -542,7 +551,7 @@ void Compiler::CompileReturnStatement(const ReturnStatement* return_statement)
     {
         CompileExpression(return_statement->value.get());
         const Type* type = return_stmt_value->type_info;
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_INT);
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_INT);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_FLOAT);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_BOOL);
         else current_chunk->WriteInstruction(return_statement->source_location.line_number, OpCode::OP_RETURN_OBJECT);
@@ -569,7 +578,7 @@ void Compiler::CompileBodyStatement(const BodyStatement* body_statement)
     {
         const Type* type = locals[i].type;
         const auto line = body_statement->source_location.line_number;
-        if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_FLOAT);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
     }
@@ -667,9 +676,9 @@ void Compiler::CompileExpressionStatement(const ExpressionStatement* expression_
     CompileExpression(expression_statement->expression.get());
     const Type* type = expression_statement->expression->type_info;
     const auto line = expression_statement->source_location.line_number;
-    
+
     // We only need to pop if it's not a void expression
-    if(type == PrimitiveType::Int.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+    if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
     else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_FLOAT);
     else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
 }

@@ -95,9 +95,10 @@ struct CallExpression final : Expression
     [[nodiscard]] std::string GetTypeString() const override
     {
         std::string args_str;
-        for (size_t i = 0; i < arguments.size(); ++i) {
+        for (size_t i = 0; i < arguments.size(); ++i)
+        {
             args_str += arguments[i] ? arguments[i]->GetTypeString() : "nullptr";
-            if (i + 1 < arguments.size()) args_str += ", ";
+            if(i + 1 < arguments.size()) args_str += ", ";
         }
         return std::format("CallExpression(callee: {}, args: [{}])", callee->GetTypeString(), args_str);
     }
@@ -126,7 +127,8 @@ struct AssignmentExpression final : Expression
 
     [[nodiscard]] std::string GetTypeString() const override
     {
-        if (const auto* id_expr = dynamic_cast<const IdentifierExpression*>(target.get())) {
+        if(const auto* id_expr = dynamic_cast<const IdentifierExpression*>(target.get()))
+        {
             return std::format("AssignmentExpression(name: \"{}\", value: {})", id_expr->name, value->GetTypeString());
         }
         return std::format("AssignmentExpression(target: {}, value: {})", target->GetTypeString(), value->GetTypeString());
@@ -170,9 +172,12 @@ struct PropertyAccess final : Expression
 {
     std::unique_ptr<Expression> object_expr;
     std::string property_name;
+    std::optional<int32_t> cached_enum_value; // tried without this at first, but compiler doesnt have clear way to access the value
 
-    PropertyAccess(std::unique_ptr<Expression> obj, std::string prop, const SourceLocation loc)
-        : object_expr(std::move(obj)), property_name(std::move(prop)) 
+    PropertyAccess(
+        std::unique_ptr<Expression> obj, std::string prop,
+        const SourceLocation loc)
+        : object_expr(std::move(obj)), property_name(std::move(prop))
     {
         this->source_location = loc;
     }

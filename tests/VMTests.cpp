@@ -19,7 +19,7 @@ static ConstantValue RunAndGetGlobal(const std::string& source, const std::strin
     REQUIRE(parse_result.has_value());
 
     ProjectConfig project_config{};
-    project_config.project_root = "/home/murad/CLionProjects/tinylang";
+    project_config.project_root = PROJECT_ROOT_DIR;
 
     SemanticAnalyzer semantic_analyzer{&project_config, false};
     auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value());
@@ -176,5 +176,65 @@ TEST_CASE("VM - Native Functions", "[VM]") {
         )";
         auto val = RunAndGetGlobal(source, "res");
         REQUIRE(std::get<std::float32_t>(val) == 42.0f);
+    }
+}
+
+TEST_CASE("VM - Methods", "[VM]") {
+    SECTION("Can declare and call methods with Go-style receivers") {
+        std::string source = R"(
+            struct Vector2 {
+                var x: int;
+                var y: int;
+            }
+
+            fn (self: Vector2) get_x() -> int {
+                return self.x;
+            }
+
+            var result: int = 0;
+            var vec: Vector2;
+            vec.x = 42;
+            result = vec.get_x();
+        )";
+        auto val = RunAndGetGlobal(source, "result");
+        REQUIRE(std::get<int>(val) == 42);
+    }
+}
+
+TEST_CASE("VM - Enums", "[VM]") {
+    SECTION("Can declare and use simple enums") {
+        std::string source = R"(
+            enum Status {
+                Pending,
+                Approved,
+                Rejected
+            }
+
+            var p: Status = Status.Pending;
+            var a: Status = Status.Approved;
+            var r: Status = Status.Rejected;
+
+            var test1: bool = (p == Status.Pending);
+            var test2: bool = (a == Status.Approved);
+            var test3: bool = (r == Status.Rejected);
+        )";
+        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "test1")) == true);
+        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "test2")) == true);
+        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "test3")) == true);
+    }
+
+    SECTION("Can explicitly assign integer values to enum variants") {
+        std::string source = R"(
+            enum Codes {
+                Ok = 200,
+                NotFound = 404,
+                Error = 500
+            }
+
+            var o: Codes = Codes.Ok;
+            var n: Codes = Codes.NotFound;
+            var is_ok: bool = (o == Codes.Ok);
+        )";
+        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "is_ok")) == true);
     }
 }

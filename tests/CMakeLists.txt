@@ -13,6 +13,12 @@ target_link_libraries(
         Catch2::Catch2WithMain
 )
 
+target_compile_definitions(
+        tinylangTests
+        PRIVATE
+        PROJECT_ROOT_DIR="${CMAKE_SOURCE_DIR}"
+)
+
 include(CTest)
 include(Catch)
 

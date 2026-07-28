@@ -8,7 +8,8 @@ PluginLoader::~PluginLoader()
 {
     for (const auto& handle: loaded_libraries | std::views::values)
     {
-        if (handle) {
+        if(handle)
+        {
             dlclose(handle);
         }
     }
@@ -18,14 +19,14 @@ PluginLoader::~PluginLoader()
 std::expected<NativeFuncPtr, std::string> PluginLoader::LoadSymbol(const std::string& lib_path, const std::string& symbol_name)
 {
     void* handle = nullptr;
-    if (const auto it = loaded_libraries.find(lib_path); it != loaded_libraries.end())
+    if(const auto it = loaded_libraries.find(lib_path); it != loaded_libraries.end())
     {
         handle = it->second;
     }
     else
     {
         handle = dlopen(lib_path.c_str(), RTLD_LAZY);
-        if (!handle)
+        if(!handle)
         {
             return std::unexpected(std::format("Failed to load plugin library '{}': {}", lib_path, dlerror()));
         }
@@ -34,7 +35,7 @@ std::expected<NativeFuncPtr, std::string> PluginLoader::LoadSymbol(const std::st
 
     dlerror(); // Clear any existing errors
     auto symbol = reinterpret_cast<NativeFuncPtr>(dlsym(handle, symbol_name.c_str()));
-    if (const char* dlsym_error = dlerror())
+    if(const char* dlsym_error = dlerror())
     {
         return std::unexpected(std::format("Failed to find symbol '{}' in '{}': {}", symbol_name, lib_path, dlsym_error));
     }

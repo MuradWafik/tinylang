@@ -32,7 +32,7 @@ namespace FileReader
     }
 
     std::ifstream file(file_path);
-    if (!file.is_open())
+    if(!file.is_open())
     {
         return FailType{
             std::format("Unable to open file '{}'", file_path.c_str())
@@ -53,7 +53,7 @@ template <std::integral T>
 T ReadAndAdvanceBytes(uint8_t*& ip) // apparently needs a REFERENCE to the pointer :))
 {
     T result = 0;
-    for (size_t i = 0; i < sizeof(T); ++i)
+    for(size_t i = 0; i < sizeof(T); ++i)
     {
         result = (result << 8) | (*ip++);
     }

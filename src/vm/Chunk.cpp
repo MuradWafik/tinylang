@@ -21,7 +21,7 @@ size_t Chunk::AddConstant(ConstantValue value)
 int Chunk::DisassembleInstruction(int offset) const
 {
     std::print("{:04} ", offset);
-    if (offset > 0 && lines[offset] == lines[offset - 1])
+    if(offset > 0 && lines[offset] == lines[offset - 1])
     {
         std::print("   | ");
     }
@@ -40,7 +40,6 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_CONSTANT_BOOL:
         case OpCode::OP_CONSTANT_FUNCTION:
         case OpCode::OP_ALLOCATE_STRING:
-
         case OpCode::OP_DEFINE_GLOBAL_INT:
         case OpCode::OP_DEFINE_GLOBAL_FLOAT:
         case OpCode::OP_DEFINE_GLOBAL_BOOL:
@@ -52,6 +51,9 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_SET_GLOBAL_INT:
         case OpCode::OP_SET_GLOBAL_FLOAT:
         case OpCode::OP_SET_GLOBAL_BOOL:
+        case OpCode::OP_DEFINE_GLOBAL_OBJECT:
+        case OpCode::OP_GET_GLOBAL_OBJECT:
+        case OpCode::OP_SET_GLOBAL_OBJECT:
         {
             const auto index = code[offset + 1];
             const auto& variable = constants[index];
@@ -61,9 +63,11 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_GET_LOCAL_INT:
         case OpCode::OP_GET_LOCAL_FLOAT:
         case OpCode::OP_GET_LOCAL_BOOL:
+        case OpCode::OP_GET_LOCAL_OBJECT:
         case OpCode::OP_SET_LOCAL_INT:
         case OpCode::OP_SET_LOCAL_FLOAT:
         case OpCode::OP_SET_LOCAL_BOOL:
+        case OpCode::OP_SET_LOCAL_OBJECT:
         {
             const uint16_t local_index = (code[offset + 1] << 8) | code[offset + 2];
             std::println("{:<24} {:4} (byte offset)", opcode_name, local_index);
@@ -72,8 +76,9 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_ALLOCATE_STRUCT:
         {
             const uint16_t size = (code[offset + 1] << 8) | code[offset + 2];
-            std::println("{:<24} {:4} (bytes)", opcode_name, size);
-            return offset + 3;
+            const uint8_t from_stack = code[offset + 3];
+            std::println("{:<24} {:4} (bytes) {:4} (from stack)", opcode_name, size, from_stack);
+            return offset + 4;
         }
         case OpCode::OP_ALLOCATE_ARRAY:
         {

@@ -27,8 +27,8 @@ public:
 
     std::optional<ConstantValue> GetGlobal(const std::string& name) const
     {
-        if (const auto it = globals.find(name); it != globals.end())
-            {
+        if(const auto it = globals.find(name); it != globals.end())
+        {
             return it->second;
         }
         return std::nullopt;
@@ -51,7 +51,6 @@ private:
     std::vector<CallFrame> call_frames{};
     VMHeap heap;
 
-
     template <fundamental T>
     void Push(T value)
     {
@@ -69,7 +68,6 @@ private:
     {
         return ReadBytes<T>(stack);
     }
-
 
     template <fundamental T>
     void DefineGlobal()
@@ -108,9 +106,6 @@ private:
         Push(value);
     }
 
-
-
-
     template <typename T>
     T ReadAndPopBytes(std::vector<uint8_t>& vector)
     {
@@ -118,7 +113,6 @@ private:
         vector.resize(vector.size() - sizeof(T));
         return value;
     }
-
 
     template<fundamental T>
     T Add()
@@ -224,7 +218,7 @@ private:
     std::optional<InterpretResult> Return()
     {
         // If it's the outermost scope, exit
-        if (call_frames.size() == 1)
+        if(call_frames.size() == 1)
         {
             call_frames.pop_back();
             return InterpretResult::INTERPRET_OK;
@@ -266,13 +260,12 @@ private:
     template <typename T, typename... Args>
     T* AllocateObject(Args&&... args)
     {
-        // 1. Check if we need to run the GC
-        if (heap.Size() >= heap.gc_threshold)
+        // Check if gc needs to run before allocations
+        if(heap.Size() >= heap.gc_threshold)
         {
             heap.CollectGarbage(stack, globals);
             heap.gc_threshold = heap.Size() * 2;
         }
-        // 2. Perform the actual allocation
         return heap.Allocate<T>(std::forward<Args>(args)...);
     }
 };

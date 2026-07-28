@@ -148,6 +148,7 @@ private:
     std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeModuleStatement* native_module_statement);
     std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration);
     std::expected<void, std::string> AnalyzeStructDeclaration(const StructDeclaration* struct_declaration);
+    std::expected<void, std::string> AnalyzeEnumDeclaration(const EnumDeclaration* enum_declaration);
 
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);

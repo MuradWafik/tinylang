@@ -14,8 +14,9 @@
   - `[ ]` Write and verify tests for `for` loops.
 
 - `[ ]` **Phase 4B: Simple Enums**
-  - `[x]` Add `enum` token to Lexer.
-  - `[ ]` Parse `enum` declarations in Parser.
-  - `[ ]` Update Semantic Analyzer to register `EnumType` and validate enum accesses.
-  - `[ ]` Update Compiler to treat enum variants as `OP_CONSTANT_INT` internally.
-  - `[ ]` Write and verify tests for Enums.
+  - `[ ]` Add `flags` token to Lexer.
+  - `[ ]` Define `EnumDeclaration` AST node in `Statement.h` (supporting `is_flags` and optional explicit `int32_t` values).
+  - `[ ]` Update `Parser` to parse `[flags] enum Name { Variant [= IntLiteral], ... }`.
+  - `[ ]` Update `SemanticAnalyzer` to register `EnumType`. Auto-assign values (0, 1, 2 for normal; 1, 2, 4 for flags) or use explicit values.
+  - `[ ]` Update `Compiler` to treat enum variants as `OP_CONSTANT_INT` natively.
+  - `[ ]` Write and verify tests for Enums and Flag Enums.
