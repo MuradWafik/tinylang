@@ -199,6 +199,25 @@ TEST_CASE("VM - Methods", "[VM]") {
         auto val = RunAndGetGlobal(source, "result");
         REQUIRE(std::get<int>(val) == 42);
     }
+    SECTION("Can instantiate structs using default and full constructors") {
+        std::string source = R"(
+            struct Vector2 {
+                var x: int;
+                var y: int;
+            }
+
+            var vec1 = Vector2(10, 20);
+            var res1 = vec1.x + vec1.y;
+
+            var vec2 = Vector2();
+            var res2 = vec2.x + vec2.y;
+        )";
+        auto val1 = RunAndGetGlobal(source, "res1");
+        REQUIRE(std::get<int>(val1) == 30);
+
+        auto val2 = RunAndGetGlobal(source, "res2");
+        REQUIRE(std::get<int>(val2) == 0);
+    }
 }
 
 TEST_CASE("VM - Enums", "[VM]") {

@@ -32,6 +32,7 @@ enum class TokenType
     Module,
     Struct,
     Self,
+    Interface,
 
     // Types
     IntType,
@@ -125,6 +126,7 @@ struct Token {
         {"in", TokenType::In},
         {"range", TokenType::Range},
         {"enum", TokenType::Enum},
+        {"interface", TokenType::Interface},
     };
     static std::string TypeToString(TokenType token_type);
 

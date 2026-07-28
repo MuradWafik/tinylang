@@ -60,11 +60,11 @@ This document outlines the strategic progression for TinyLang, moving from a bas
     *   Pairs seamlessly with pattern-matching switch expressions: `shape switch { Circle(r) => 3.14 * r * r, ... }`.
 *   **String Interpolation:**
     *   `$"Hello {user.name}, you have {count} items"` – Evaluated at compile time by desugaring into string concatenation (`+`) or `format()` calls.
-*   **Compile-Time Traits / Interfaces (CRTP-Style Static Contracts):**
-    *   **Goal:** Define contracts (e.g. `interface Printable { fn to_string() -> string; }`) to guarantee that structs implement required methods **without** any dynamic dispatch or vtable overhead.
+*   **Compile-Time Traits / Interfaces (Non-Generic Contracts):**
+    *   **Goal:** Define contracts (e.g. `interface IntIterator { fn has_next() -> bool; }`) to guarantee that structs implement required methods **without** any dynamic dispatch or vtable overhead.
     *   **Method Syntax (Go-Style Receivers) (✅ Completed):** Methods are defined independently from the struct data using a receiver parameter: `fn (self: Vector2) to_string() -> string { ... }`.
-    *   **Interface Declaration (C#-Style Explicit):** Structs must explicitly declare the interfaces they implement to enforce strict compile-time checking: `struct Vector2 : Printable { ... }`.
-    *   **Implementation:** 100% verified during Semantic Analysis. The VM executes direct function calls with zero runtime lookup penalty by utilizing generic monomorphization.
+    *   **Interface Declaration (C#-Style Explicit):** Structs must explicitly declare the interfaces they implement to enforce strict compile-time checking: `struct Range : IntIterator { ... }`.
+    *   **Implementation:** 100% verified during Semantic Analysis. The VM executes direct function calls with zero runtime lookup penalty.
 
 ## Phase 5: Modules, Native Plugins & Project Configuration
 **Priority:** Medium | **Difficulty:** Medium-High

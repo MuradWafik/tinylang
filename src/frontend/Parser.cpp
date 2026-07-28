@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <format>
+#include <print>
 
 #include "frontend/Expression.h"
 
@@ -468,10 +469,6 @@ ExpectedExpressionPtr Parser::ParsePrimary()
         case TokenType::Identifier:
         case TokenType::Self:
         {
-            if(Match(TokenType::LeftParen))
-            {
-                // Struct initialization or function call i.e var p = Point(1, 2);
-            }
             Token idToken = Consume();
             return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme), source_location);
         }

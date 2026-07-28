@@ -90,6 +90,10 @@ public:
         {
             std::memcpy(this->fields, fields_buffer, size);
         }
+        else if(size > 0)
+        {
+            std::memset(this->fields, 0, size);
+        }
     }
 
     ~Struct() override

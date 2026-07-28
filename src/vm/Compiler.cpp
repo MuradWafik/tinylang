@@ -378,6 +378,20 @@ void Compiler::CompileCallExpression(const CallExpression* call_expression)
 {
     const auto line = call_expression->source_location.line_number;
 
+    if(const auto* struct_type = dynamic_cast<const StructType*>(call_expression->type_info))
+    {
+        for(const auto& arg : call_expression->arguments)
+        {
+            CompileExpression(arg.get());
+        }
+        const uint8_t from_stack = call_expression->arguments.empty() ? 0 : 1;
+        current_chunk->WriteInstruction(
+            line, OpCode::OP_ALLOCATE_STRUCT,
+            static_cast<uint16_t>(struct_type->GetHeapSize()), from_stack
+        );
+        return;
+    }
+
     // If it's an Identifier, CompileIdentifierExpression will automatically
     // emit OP_GET_GLOBAL_FUNCTION or OP_GET_LOCAL.
     // If it's an array index, it will emit OP_GET_INDEX.

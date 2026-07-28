@@ -639,13 +639,20 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeUnaryExpression
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpression(
     IdentifierExpression* identifier_expression)
 {
-    const auto& identifier = symbol_table.LookupVariable(identifier_expression->name);
-    if(!identifier)
+    if(const auto& identifier = symbol_table.LookupVariable(identifier_expression->name))
     {
-        return std::unexpected(std::format("Unknown symbol: {}", identifier_expression->name));
+        identifier_expression->type_info = identifier->type;
+        return identifier->type;
     }
-    identifier_expression->type_info = identifier->type;
-    return identifier->type;
+    
+    // check if its a type, for struct instantiation
+    if(const auto type = symbol_table.LookupType(identifier_expression->name))
+    {
+        identifier_expression->type_info = type;
+        return type;
+    }
+
+    return std::unexpected(std::format("Unknown symbol: {}", identifier_expression->name));
 }
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpression(
@@ -744,6 +751,12 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
     }
     else if(const auto* struct_type = dynamic_cast<const StructType*>(callable.value()))
     {
+        if(call_expression->arguments.empty())
+        {
+            call_expression->type_info = struct_type;
+            return struct_type;
+        }
+
         if(call_expression->arguments.size() != struct_type->GetNumFields())
         {
             return Return("Too much arguments passed for struct initialization");
@@ -767,6 +780,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
 
             call_expression->type_info = struct_type;
         }
+        return struct_type;
     }
 
     return Return("Attempted to call a value that is not a function or struct");
