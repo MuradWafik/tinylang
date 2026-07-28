@@ -63,7 +63,12 @@ var vec3 = vec.add(vec2);
 print_int(vec3.x); // Should print 25
 print_int(vec3.y); // Should print 25
 
-var s: Status = Status.Approved;
+
+fn GetStatus() -> Status
+{
+    return Status.Pending;
+}
+var s: Status = GetStatus();
 if (s == Status.Approved) {
     print_int(5); // We can't print 's' directly because it's strictly typed!
 }

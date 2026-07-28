@@ -24,7 +24,7 @@ void VMHeap::CollectGarbage(const std::vector<uint8_t>& vm_stack, std::unordered
 {
     ScanMemory(vm_stack.data(), vm_stack.size());
 
-    for const auto& variant_val: globals | std::views::values)
+    for(const auto& variant_val: globals | std::views::values)
     {
         // Check if this global variable holds an Object*
         if(const auto* obj_ptr = std::get_if<Object*>(&variant_val))
