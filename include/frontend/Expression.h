@@ -84,6 +84,7 @@ struct CallExpression final : Expression
 {
     std::unique_ptr<Expression> callee;
     std::vector<std::unique_ptr<Expression>> arguments;
+    bool is_constructor_call = false;
 
     CallExpression(std::unique_ptr<Expression> callee, std::vector<std::unique_ptr<Expression>> args, const SourceLocation loc)
         : callee(std::move(callee)),

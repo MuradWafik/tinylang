@@ -11,4 +11,7 @@ For a complete and up-to-date look at the language's planned features (including
 * Strict Semantic Analyzer (Type Checker)
 * Stack-based Bytecode Virtual Machine
 * Reference Types (Arrays, Structs, Strings)
+* Method Syntax (Go-Style Receivers)
+* Compile-Time Traits / Interfaces
+* Simple Enums
 * Conservative Mark-and-Sweep Garbage Collector

@@ -130,6 +130,14 @@ private:
     std::string current_native_module{};
     // Native functions need to be aware of their native modules and to add them to symbol table
 
+    struct PendingInterfaceCheck
+    {
+        const StructType* struct_type;
+        const InterfaceType* interface_type;
+        SourceLocation location;
+    };
+    std::vector<PendingInterfaceCheck> pending_interface_checks;
+
     const Type* ResolveType(std::string_view type_name);
 
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
@@ -159,6 +167,7 @@ private:
     std::expected<const Type*, std::string> AnalyzeIndexAccess(IndexAccess* index_access);
     std::expected<const Type*, std::string> AnalyzeArrayLiteral(ArrayLiteral* array_node);
     std::expected<const Type*, std::string> AnalyzePropertyAccess(PropertyAccess* property_access);
+    std::expected<void, std::string> AnalyzeInterfaceDeclaration(const InterfaceDeclaration* interface_declaration);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);
@@ -168,11 +177,12 @@ private:
         return std::unexpected(std::format( "{}", error));
     }
 
-    static std::string MangleMethodName(const PropertyAccess* property_access, const Type* type)
+    static std::string MangleMethodName(const std::string& method_name, const Type* type)
     {
-        return std::format("{}_{}", type->GetName(), property_access->property_name);
+        return std::format("{}${}", type->GetName(), method_name);
     }
 
     void InitializeDefaults();
+    std::expected<void, std::string> EnsureInterfacesImplemented();
 
 };

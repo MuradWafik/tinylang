@@ -19,9 +19,9 @@
   - `[x]` Update Compiler to treat enum variants as `OP_CONSTANT_INT` internally.
   - `[x]` Write and verify tests for Enums.
 
-- `[ ]` **Phase 4B: Interfaces (Non-Generic)**
-  - `[ ]` Add `interface` token to Lexer.
-  - `[ ]` Update Parser to parse `InterfaceDeclaration` and interface inheritance in `StructDeclaration`.
-  - `[ ]` Update Semantic Analyzer with `InterfaceType` to enforce method contracts on structs.
-  - `[ ]` Create `IntIterator` interface and `Range` struct in standard library.
-  - `[ ]` Write and verify tests for Interfaces.
+- `[x]` **Phase 4B: Interfaces (Non-Generic)**
+  - `[x]` Add `interface` token to Lexer.
+  - `[x]` Update Parser to parse `InterfaceDeclaration` and interface inheritance in `StructDeclaration`.
+  - `[x]` Update Semantic Analyzer with `InterfaceType` to enforce method contracts on structs.
+  - `[x]` Create `IntIterator` interface and `Range` struct in standard library.
+  - `[x]` Write and verify tests for Interfaces.

@@ -75,5 +75,7 @@ private:
     ExpectedPtr<ContinueStatement> ParseContinueStatement();
     ExpectedPtr<StructDeclaration> ParseStructDeclaration();
     ExpectedPtr<EnumDeclaration> ParseEnumDeclaration();
+    ExpectedPtr<InterfaceDeclaration> ParseInterfaceDeclaration();
 
+    std::expected<MethodSignature, std::string> ParseMethodSignature();
 };

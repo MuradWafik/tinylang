@@ -211,3 +211,127 @@ TEST_CASE("Semantic: Functions and Calls")
         REQUIRE(result.has_value());
     }
 }
+
+TEST_CASE("Semantic: Interface Conformance and Type Strictness")
+{
+    SECTION("Cannot use Interface as a concrete variable type") {
+        auto result = Analyze(R"(
+            interface Logger {
+                fn log() -> void;
+            }
+            var x: Logger;
+        )");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().find("Cannot use interface") != std::string::npos);
+    }
+
+    SECTION("Cannot use void as a concrete variable type") {
+        auto result = Analyze(R"(
+            var x: void;
+        )");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().find("Cannot use 'void' as a type") != std::string::npos);
+    }
+
+    SECTION("Self-referencing struct is allowed") {
+        auto result = Analyze(R"(
+            struct Node {
+                var next: Node;
+                var value: int;
+            }
+        )");
+        INFO("Semantic Error: " << (result.has_value() ? "" : result.error()));
+        REQUIRE(result.has_value());
+    }
+
+    SECTION("Successful interface implementation") {
+        auto result = Analyze(R"(
+            interface Iterator {
+                fn has_next() -> bool;
+                fn next() -> int;
+            }
+
+            struct Range : Iterator {
+                var start: int;
+                var end: int;
+            }
+
+            fn (self: Range) has_next() -> bool {
+                return self.start < self.end;
+            }
+
+            fn (self: Range) next() -> int {
+                var current: int = self.start;
+                self.start = self.start + 1;
+                return current;
+            }
+        )");
+        INFO("Semantic Error: " << (result.has_value() ? "" : result.error()));
+        REQUIRE(result.has_value());
+    }
+
+    SECTION("Missing method in interface implementation") {
+        auto result = Analyze(R"(
+            interface Iterator {
+                fn has_next() -> bool;
+                fn next() -> int;
+            }
+
+            struct Range : Iterator {
+                var start: int;
+                var end: int;
+            }
+
+            fn (self: Range) has_next() -> bool {
+                return true;
+            }
+        )");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().find("does not implement") != std::string::npos);
+    }
+
+    SECTION("Incorrect return type in interface implementation") {
+        auto result = Analyze(R"(
+            interface Iterator {
+                fn next() -> int;
+            }
+
+            struct Range : Iterator { }
+
+            fn (self: Range) next() -> float {
+                return 0.0;
+            }
+        )");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().find("has return type 'float' but interface 'Iterator' expects 'int'") != std::string::npos);
+    }
+
+    SECTION("Incorrect parameter type in interface implementation") {
+        auto result = Analyze(R"(
+            interface Processor {
+                fn process(data: int) -> void;
+            }
+
+            struct DataProcessor : Processor { }
+
+            fn (self: DataProcessor) process(data: float) -> void { }
+        )");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().find("Parameter 1 of method 'process' on type 'DataProcessor' has type 'float', but interface 'Processor' expects 'int'") != std::string::npos);
+    }
+
+    SECTION("Incorrect parameter count in interface implementation") {
+        auto result = Analyze(R"(
+            interface Processor {
+                fn process(data: int) -> void;
+            }
+
+            struct DataProcessor : Processor { }
+
+            fn (self: DataProcessor) process() -> void { }
+        )");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().find("has 0 parameters, but interface 'Processor' expects 1") != std::string::npos);
+    }
+}
+

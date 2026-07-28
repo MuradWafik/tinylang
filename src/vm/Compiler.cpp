@@ -255,7 +255,7 @@ void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_de
 
     if(scope_depth == 0)
     {
-        const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(variable_declaration->name));
+        const auto name_index = static_cast<uint8_t>(current_chunk->AddConstant(variable_declaration->name.lexeme));
         const auto line = variable_declaration->source_location.line_number;
         
         if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_DEFINE_GLOBAL_INT, name_index);
@@ -266,7 +266,7 @@ void Compiler::CompileVariableDeclaration(const VariableDeclaration* variable_de
     }
     else
     {
-        locals.push_back({variable_declaration->name, type});
+        locals.push_back({variable_declaration->name.lexeme, type});
     }
 }
 
@@ -281,17 +281,17 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     if(function_declaration->receiver)
     {
         auto& receiver = function_declaration->receiver.value();
-        locals.push_back({receiver.name, receiver.type_info});
+        locals.push_back({receiver.name.lexeme, receiver.type_info});
     }
 
-    for(const auto& param: function_declaration->parameters)
+    for(const auto& param: function_declaration->method_signature.parameters)
     {
-        locals.push_back({param.name, param.type_info});
+        locals.push_back({param.name.lexeme, param.type_info});
     }
 
     CompileStatement(function_declaration->body.get());
 
-    const Type* ret_type = function_declaration->return_type_info;
+    const Type* ret_type = function_declaration->method_signature.return_type_info;
     const auto line = function_declaration->body->source_location.line_number;
     
     if(ret_type == PrimitiveType::Void.get())
@@ -318,8 +318,8 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
     }
 
     auto function_object = std::make_unique<FunctionObject>(
-        function_declaration->name,
-        function_declaration->parameters.size(),
+        function_declaration->method_signature.name.lexeme,
+        function_declaration->method_signature.parameters.size(),
         std::move(current_chunk)
     );
 
@@ -378,8 +378,9 @@ void Compiler::CompileCallExpression(const CallExpression* call_expression)
 {
     const auto line = call_expression->source_location.line_number;
 
-    if(const auto* struct_type = dynamic_cast<const StructType*>(call_expression->type_info))
+    if(call_expression->is_constructor_call)
     {
+        const auto* struct_type = dynamic_cast<const StructType*>(call_expression->type_info);
         for(const auto& arg : call_expression->arguments)
         {
             CompileExpression(arg.get());
@@ -717,15 +718,15 @@ void Compiler::CompileBreakStatement(const BreakStatement* break_statement)
 
 void Compiler::CompileNativeModuleStatement(const NativeModuleStatement* mod_stmt)
 {
-    current_native_module_path = project_config->ResolvePluginPath(mod_stmt->name);
+    current_native_module_path = project_config->ResolvePluginPath(mod_stmt->name.lexeme);
 }
 
 void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const
 {
     const auto path_index = current_chunk->AddConstant(current_native_module_path.string());
-    const auto name_index = current_chunk->AddConstant(native_function_declaration->name);
-    const auto num_args = native_function_declaration->parameters.size();
-    const auto return_bytes = native_function_declaration->return_type_info->GetSize();
+    const auto name_index = current_chunk->AddConstant(native_function_declaration->method_signature.name.lexeme);
+    const auto num_args = native_function_declaration->method_signature.parameters.size();
+    const auto return_bytes = native_function_declaration->method_signature.return_type_info->GetSize();
 
     current_chunk->WriteInstruction(
         native_function_declaration->source_location.line_number,

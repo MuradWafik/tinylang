@@ -3,6 +3,8 @@
 #include <ranges>
 #include <string>
 #include <vector>
+
+
 #include "frontend/Token.h"
 
 #include "utils/Utils.h"
@@ -130,6 +132,11 @@ public:
     StructType(std::string name, std::vector<std::pair<std::string, const Type*>> fields) :
         fields{std::move(fields)}, name{std::move(name)}
     { }
+
+    void SetFields(std::vector<std::pair<std::string, const Type*>> new_fields)
+    {
+        fields = std::move(new_fields);
+    }
 private:
     std::vector<std::pair<std::string, const Type*>> fields;
     std::string name;
@@ -153,4 +160,21 @@ public:
 private:
     std::string name;
     std::unordered_map<std::string, int32_t> variants;
+};
+
+class InterfaceType final : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override { return name; }
+    [[nodiscard]] auto& GetExpectedMethods() const { return expected_methods; }
+    bool IsAssignableTo(const Type* other) const override;
+    [[nodiscard]] uint8_t GetSize() const override { return 8; }
+
+    InterfaceType(std::string name, std::vector<std::pair<std::string, const FunctionType*>> expected_methods) :
+    name{std::move(name)}, expected_methods{std::move(expected_methods)}
+    { }
+
+private:
+    std::string name;
+    std::vector<std::pair<std::string, const FunctionType*>> expected_methods;
 };

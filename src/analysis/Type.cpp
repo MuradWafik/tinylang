@@ -74,3 +74,8 @@ bool EnumType::IsAssignableTo(const Type* other) const
     return this == other;
 }
 
+bool InterfaceType::IsAssignableTo(const Type* other) const
+{
+    return this == other;
+}
+

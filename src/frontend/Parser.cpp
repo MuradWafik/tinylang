@@ -2,10 +2,8 @@
 
 #include <cassert>
 #include <format>
-#include <print>
 
 #include "frontend/Expression.h"
-
 
 const Token& Parser::Consume()
 {
@@ -101,6 +99,7 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::Native: return ParseNativeStatement();
         case TokenType::Struct: return ParseStructDeclaration();
         case TokenType::Enum: return ParseEnumDeclaration();
+        case TokenType::Interface: return ParseInterfaceDeclaration();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -124,16 +123,15 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
         return std::unexpected(variable_name.error());
     }
 
-    std::string type_name = "null";
+    std::optional<Token> type_name = std::nullopt;
     if(Match(TokenType::Colon))
     {
-        const auto& type_name_token = Consume();
+        auto type_name_token = Consume();
         if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
         {
             return std::unexpected(
                 std::format("Expected typename for variable declaration got '{}'. {}'", type_name_token.type, type_name_token.source_location));
         }
-        type_name = type_name_token.lexeme;
 
         while(Match(TokenType::LeftSquareBracket))
         {
@@ -142,8 +140,9 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
             {
                 return std::unexpected(right_bracket.error());
             }
-            type_name += "[]";
+            type_name_token.lexeme += "[]";
         }
+        type_name = type_name_token;
     }
 
     std::unique_ptr<Expression> initializer = nullptr;
@@ -168,7 +167,7 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
 
 
     return std::make_unique<VariableDeclaration>(
-        variable_name->lexeme,
+        *variable_name,
         type_name,
         std::move(initializer),
         var->source_location);
@@ -541,7 +540,7 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         }
         Consume();
 
-        receiver = Parameter(receiver_name.value().lexeme, type.lexeme);
+        receiver = Parameter(*receiver_name, type);
 
         if(const auto closed = Expect(TokenType::RightParen, "Parsing receiver in function declaration");
             !closed)
@@ -549,41 +548,9 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
             return std::unexpected(closed.error());
         }
     }
-    auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
-    if(!function_name) return std::unexpected(function_name.error());
 
-    if(auto left_paren = Expect(TokenType::LeftParen, "Error after function name"); !left_paren)
-    {
-        return std::unexpected(left_paren.error());
-    }
-
-    auto parameters_result = ParseParameters();
-    if(!parameters_result)
-    {
-        return std::unexpected(parameters_result.error());
-    }
-
-    if(auto right_paren = Expect(TokenType::RightParen, "Error after function parameters"); !right_paren)
-    {
-        return std::unexpected(right_paren.error());
-    }
-
-    if(auto arrow = Expect(TokenType::Arrow, "Error after function signature"); !arrow)
-    {
-        return std::unexpected(arrow.error());
-    }
-
-    const Token& return_type = Peek();
-    if(!return_type.IsPrimitiveTypeName() && return_type.type != TokenType::Identifier)
-    {
-        return std::unexpected(
-            std::format("Expected type name after '->', got '{}' at {}",
-                return_type.lexeme,
-                return_type.source_location
-            )
-        );
-    }
-    Consume();
+    auto method_signature = ParseMethodSignature();
+    if(!method_signature) return std::unexpected(method_signature.error());
 
     Expected<std::unique_ptr<BodyStatement>> body = ParseBodyStatement();
     if(!body)
@@ -591,16 +558,13 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         return std::unexpected(body.error());
     }
 
-    std::string final_name = function_name->lexeme;
     if(receiver.has_value())
     {
-        final_name = receiver->type_name + "_" + final_name;
+        method_signature->name.lexeme = receiver->type_name.lexeme + "$" + method_signature->name.lexeme;
     }
 
     return std::make_unique<FunctionDeclaration>(
-        final_name,
-        std::move(parameters_result.value()),
-        return_type.lexeme,
+        std::move(method_signature.value()),
         std::move(body.value()),
         receiver,
         fn_loc
@@ -609,7 +573,7 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
 
 ExpectedNodePtr Parser::ParseNativeStatement()
 {
-    Consume(); //  native keyword
+    auto& native = Consume(); //  native keyword
     if(Match(TokenType::Module))
     {
         // Native module declaration
@@ -624,63 +588,23 @@ ExpectedNodePtr Parser::ParseNativeStatement()
         {
             return std::unexpected(semicolon.error());
         }
-        return std::make_unique<NativeModuleStatement>(std::move(name->lexeme), name->source_location);
+        return std::make_unique<NativeModuleStatement>(*name, name->source_location);
     }
 
-    if(Match(TokenType::Fn))
+    if(Match(TokenType::Fn)) // native function
     {
-        auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
-        if(!function_name) return std::unexpected(function_name.error());
-
-        if(auto left_paren = Expect(TokenType::LeftParen, "Error after function name");
-            !left_paren)
-        {
-            return std::unexpected(left_paren.error());
-        }
-
-        auto parameters_result = ParseParameters();
-        if(!parameters_result)
-        {
-            return std::unexpected(parameters_result.error());
-        }
-
-        if(auto right_paren = Expect(TokenType::RightParen, "Error after function parameters");
-            !right_paren)
-        {
-            return std::unexpected(right_paren.error());
-        }
-
-        if(auto arrow = Expect(TokenType::Arrow, "Error after function signature");
-            !arrow)
-        {
-            return std::unexpected(arrow.error());
-        }
-
-        const Token& return_type = Peek();
-
-        // FIXME: allow for other types
-        if(!return_type.IsPrimitiveTypeName() && return_type.type != TokenType::Identifier)
-        {
-            return std::unexpected(
-                std::format("Expected type name after '->', got '{}' at {}",
-                    return_type.lexeme,
-                    return_type.source_location
-                )
-            );
-        }
-        Consume();
-
+        auto method_signature = ParseMethodSignature();
+        if(!method_signature) return std::unexpected(method_signature.error());
         if(auto semicolon = Expect(TokenType::Semicolon, "");
             !semicolon)
         {
             return std::unexpected(semicolon.error());
         }
 
+
         return std::make_unique<NativeFunctionDeclaration>(
-            function_name->lexeme,
-            std::move(parameters_result.value()),
-            return_type.lexeme,
-            function_name->source_location
+            std::move(method_signature.value()),
+            native.source_location
         );
     }
 
@@ -715,7 +639,7 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
             return std::unexpected(colon.error());
         }
 
-        const Token& type_name = Peek();
+        auto type_name = Consume();
         if(!type_name.IsPrimitiveTypeName() && type_name.type != TokenType::Identifier)
         {
             return std::unexpected(
@@ -725,9 +649,8 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
                     type_name.source_location)
             );
         }
-        Consume();
 
-        parameters.emplace_back(parameter_name->lexeme, type_name.lexeme);
+        parameters.emplace_back(*parameter_name, type_name);
     } while(Match(TokenType::Comma));
 
     return parameters;
@@ -941,12 +864,24 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
         return std::unexpected(struct_name.error());
     }
 
+    std::vector<Token> implemented_interfaces;
+    if(Match(TokenType::Colon))
+    {
+        do
+        {
+            auto interface_name = Expect(TokenType::Identifier, "Expected interface name");
+            if(!interface_name) return std::unexpected(interface_name.error());
+            implemented_interfaces.push_back(interface_name.value());
+        }
+        while(Match(TokenType::Comma));
+    }
+
     if(const auto left_brace = Expect(TokenType::LeftCurlyBrace, error_msg); !left_brace)
     {
         return std::unexpected(left_brace.error());
     }
 
-    std::vector<std::pair<std::string, std::string>> struct_members;
+    std::vector<std::pair<Token, Token>> struct_members;
     
     if(Peek().type != TokenType::RightCurlyBrace)
     {
@@ -968,7 +903,7 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
                 return std::unexpected(colon.error());
             }
 
-            const auto& type_name_token = Consume();
+            auto type_name_token = Consume();
             if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
             {
                 return std::unexpected(std::format(
@@ -976,7 +911,6 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
                     error_msg, Token::TypeToString(type_name_token.type))
                 );
             }
-            std::string type_name = type_name_token.lexeme;
 
             // array types
             while(Match(TokenType::LeftSquareBracket))
@@ -985,9 +919,9 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
                 {
                     return std::unexpected(right_bracket.error());
                 }
-                type_name += "[]";
+                type_name_token.lexeme += "[]";
             }
-            struct_members.emplace_back(var_name.value().lexeme, type_name);
+            struct_members.emplace_back(*var_name, type_name_token);
 
             if(const auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
             {
@@ -1002,7 +936,7 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
         return std::unexpected(right_brace.error());
     }
 
-    return std::make_unique<StructDeclaration>(std::move(struct_name.value().lexeme), std::move(struct_members), struct_name->source_location);
+    return std::make_unique<StructDeclaration>(*struct_name, std::move(struct_members), std::move(implemented_interfaces), struct_name->source_location);
 }
 
 ExpectedPtr<EnumDeclaration> Parser::ParseEnumDeclaration()
@@ -1033,7 +967,7 @@ ExpectedPtr<EnumDeclaration> Parser::ParseEnumDeclaration()
                 assignment_value = std::stoi(val->lexeme);
             }
 
-            variants.emplace_back(std::move(name_token.value().lexeme), assignment_value);
+            variants.emplace_back(*name_token, assignment_value);
 
             // redundant but just to read
             // explicitly allow trailing comms
@@ -1054,5 +988,90 @@ ExpectedPtr<EnumDeclaration> Parser::ParseEnumDeclaration()
         return std::unexpected(right_brace.error());
     }
 
-    return std::make_unique<EnumDeclaration>(std::move(name.value().lexeme), std::move(variants), name.value().source_location);
+    return std::make_unique<EnumDeclaration>(*name, std::move(variants), name->source_location);
+}
+
+ExpectedPtr<InterfaceDeclaration> Parser::ParseInterfaceDeclaration()
+{
+    auto keyword = Consume(); // interface keyword
+
+    auto name = Expect(TokenType::Identifier, "In interface declaration");
+    if(!name) return std::unexpected(name.error());
+
+    if(auto opened = Expect(TokenType::LeftCurlyBrace, "Starting interface declaration");
+        !opened)
+    {
+        return std::unexpected(opened.error());
+    }
+
+    std::vector<MethodSignature> methods;
+    while(!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace)
+    {
+        if(auto fn_keyword = Expect(TokenType::Fn, "For function declaration in interface");
+            !fn_keyword)
+        {
+            return std::unexpected(fn_keyword.error());
+        }
+
+        auto signature = ParseMethodSignature();
+        if(!signature) return std::unexpected(signature.error());
+
+        if(auto semicolon = Expect(TokenType::Semicolon, "To separate interface's methods");
+            !semicolon)
+        {
+            return std::unexpected(semicolon.error());
+        }
+        methods.push_back(std::move(signature.value()));
+    }
+
+    if(auto closed = Expect(TokenType::RightCurlyBrace, "Ending interface declaration");
+        !closed)
+    {
+        return std::unexpected(closed.error());
+    }
+    return std::make_unique<InterfaceDeclaration>(*name, std::move(methods), keyword.source_location);
+}
+
+std::expected<MethodSignature, std::string> Parser::ParseMethodSignature()
+{
+    auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
+    if(!function_name) return std::unexpected(function_name.error());
+
+    if(auto left_paren = Expect(TokenType::LeftParen, "Error after function name"); !left_paren)
+    {
+        return std::unexpected(left_paren.error());
+    }
+
+    auto parameters_result = ParseParameters();
+    if(!parameters_result)
+    {
+        return std::unexpected(parameters_result.error());
+    }
+
+    if(auto right_paren = Expect(TokenType::RightParen, "Error after function parameters"); !right_paren)
+    {
+        return std::unexpected(right_paren.error());
+    }
+
+    if(auto arrow = Expect(TokenType::Arrow, "Error after function signature"); !arrow)
+    {
+        return std::unexpected(arrow.error());
+    }
+
+    auto return_type = Consume();
+    if(!return_type.IsPrimitiveTypeName() && return_type.type != TokenType::Identifier)
+    {
+        return std::unexpected(
+            std::format("Expected type name after '->', got '{}' at {}",
+                return_type.lexeme,
+                return_type.source_location
+            )
+        );
+    }
+
+    return MethodSignature{
+        .name = *function_name,
+        .parameters = std::move(parameters_result.value()),
+        .return_type = return_type
+    };
 }

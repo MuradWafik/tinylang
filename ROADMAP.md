@@ -55,7 +55,7 @@ This document outlines the strategic progression for TinyLang, moving from a bas
         ```
     *   **Pattern Matching:** Match on constants, types, tuple contents, and struct fields.
 *   **Enums (Simple & Payload / Tagged Unions):**
-    *   **Simple Enums:** `enum Status { Pending, Approved, Rejected }`
+    *   **Simple Enums (✅ Completed):** `enum Status { Pending, Approved, Rejected }`
     *   **Payload Enums:** Enums that hold data (Rust/Swift style): `enum Shape { Circle(float), Rectangle(float, float) }`.
     *   Pairs seamlessly with pattern-matching switch expressions: `shape switch { Circle(r) => 3.14 * r * r, ... }`.
 *   **String Interpolation:**
@@ -63,8 +63,8 @@ This document outlines the strategic progression for TinyLang, moving from a bas
 *   **Compile-Time Traits / Interfaces (Non-Generic Contracts):**
     *   **Goal:** Define contracts (e.g. `interface IntIterator { fn has_next() -> bool; }`) to guarantee that structs implement required methods **without** any dynamic dispatch or vtable overhead.
     *   **Method Syntax (Go-Style Receivers) (✅ Completed):** Methods are defined independently from the struct data using a receiver parameter: `fn (self: Vector2) to_string() -> string { ... }`.
-    *   **Interface Declaration (C#-Style Explicit):** Structs must explicitly declare the interfaces they implement to enforce strict compile-time checking: `struct Range : IntIterator { ... }`.
-    *   **Implementation:** 100% verified during Semantic Analysis. The VM executes direct function calls with zero runtime lookup penalty.
+    *   **Interface Declaration (C#-Style Explicit) (✅ Completed):** Structs must explicitly declare the interfaces they implement to enforce strict compile-time checking: `struct Range : IntIterator { ... }`.
+    *   **Implementation (✅ Completed):** 100% verified during Semantic Analysis. The VM executes direct function calls with zero runtime lookup penalty.
 
 ## Phase 5: Modules, Native Plugins & Project Configuration
 **Priority:** Medium | **Difficulty:** Medium-High

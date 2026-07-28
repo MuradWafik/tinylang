@@ -16,23 +16,24 @@ struct Statement : ASTNode
 
 struct VariableDeclaration final : Statement
 {
-    std::string name;
-    std::string type;
+    Token name;
+    std::optional<Token> type;
     std::unique_ptr<Expression> initializer;
     const Type* type_info = nullptr;
 
     [[nodiscard]] std::string GetTypeString() const override
     {
+        std::string type_str = type ? type->lexeme : "null";
         if(initializer)
         {
-            return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: {}))", name, type, initializer->GetTypeString());
+            return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: {}))", name.lexeme, type_str, initializer->GetTypeString());
         }
-        return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: nullptr))", name, type);
+        return std::format(R"(VariableDeclaration(name: "{}", type: "{}", initializer: nullptr))", name.lexeme, type_str);
     }
 
     VariableDeclaration(
-        std::string name,
-        std::string type,
+        Token name,
+        std::optional<Token> type,
         std::unique_ptr<Expression> initializer,
         const SourceLocation loc
         ) :
@@ -120,46 +121,52 @@ struct IfStatement final : Statement
 
 struct Parameter
 {
-    std::string name;
-    std::string type_name;
+    Token name;
+    Token type_name;
     const Type* type_info = nullptr;
+};
+
+
+struct MethodSignature
+{
+    Token name;
+    std::vector<Parameter> parameters;
+    std::optional<Token> return_type;
+    const Type* return_type_info = nullptr;
 };
 
 struct FunctionDeclaration final : Statement
 {
-    std::string name;
-    std::vector<Parameter> parameters;
-    std::string return_type;
-    const Type* return_type_info = nullptr;
+    MethodSignature method_signature;
     std::optional<Parameter> receiver; // the self class for methods
     std::unique_ptr<BodyStatement> body;
 
     FunctionDeclaration(
-        std::string name, std::vector<Parameter> params,
-        std::string return_type, std::unique_ptr<BodyStatement> body_node,
+        MethodSignature method_signature, std::unique_ptr<BodyStatement> body_node,
         std::optional<Parameter> receiver, const SourceLocation loc)
-        : name(std::move(name)), parameters(std::move(params)),
-          return_type(std::move(return_type)), receiver(std::move(receiver)),
+        : method_signature{std::move(method_signature)},
+          receiver(std::move(receiver)),
           body(std::move(body_node))
     { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override
     {
         std::string params_str;
-        for(size_t i = 0; i < parameters.size(); ++i)
+        for(size_t i = 0; i < method_signature.parameters.size(); ++i)
         {
-            params_str += std::format("{}: {}", parameters[i].name, parameters[i].type_name);
-            if(i + 1 < parameters.size()) params_str += ", ";
+            params_str += std::format("{}: {}", method_signature.parameters[i].name.lexeme, method_signature.parameters[i].type_name.lexeme);
+            if(i + 1 < method_signature.parameters.size()) params_str += ", ";
         }
+        std::string ret_type = method_signature.return_type ? method_signature.return_type->lexeme : "void";
         return std::format(R"(FunctionDeclaration(name: "{}", params: [{}], return: "{}", body: {}))",
-                           name, params_str, return_type, body ? body->GetTypeString() : "nullptr");
+                           method_signature.name.lexeme, params_str, ret_type, body ? body->GetTypeString() : "nullptr");
     }
 };
 
 struct ExpressionStatement final : Statement
 {
     std::unique_ptr<Expression> expression;
-    explicit ExpressionStatement(std::unique_ptr<Expression>&& expr, const SourceLocation loc)
+    ExpressionStatement(std::unique_ptr<Expression> expr, const SourceLocation loc)
         : expression(std::move(expr)) { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override {
@@ -190,12 +197,12 @@ struct ContinueStatement final : Statement
 
 struct NativeModuleStatement final : Statement
 {
-    std::string name;
+    Token name;
     [[nodiscard]] std::string GetTypeString() const override {
         return "NativeModuleStatement";
     }
 
-    explicit NativeModuleStatement(std::string name, const SourceLocation loc) : name(std::move(name))
+    explicit NativeModuleStatement(Token name, const SourceLocation loc) : name(std::move(name))
     {
         this->source_location = loc;
     }
@@ -203,21 +210,15 @@ struct NativeModuleStatement final : Statement
 
 struct NativeFunctionDeclaration final : Statement
 {
-    std::string name;
-    std::vector<Parameter> parameters;
-    std::string return_type;
-    const Type* return_type_info = nullptr;
+    MethodSignature method_signature;
 
     [[nodiscard]] std::string GetTypeString() const override
     {
         return "NativeFunctionDeclaration";
     }
 
-    NativeFunctionDeclaration(
-        std::string name, std::vector<Parameter> parameters,
-        std::string return_type, const SourceLocation loc,
-        const Type* return_type_info = nullptr) :
-    name(std::move(name)), parameters(std::move(parameters)), return_type(std::move(return_type)), return_type_info(return_type_info)
+    NativeFunctionDeclaration(MethodSignature method_signature, const SourceLocation loc) :
+    method_signature{std::move(method_signature)}
     {
         this->source_location = loc;
     }
@@ -225,8 +226,9 @@ struct NativeFunctionDeclaration final : Statement
 
 struct StructDeclaration final : Statement
 {
-    std::string name;
-    std::vector<std::pair<std::string, std::string>> fields; // {"x", "int"}, {"y", "int"} ...
+    Token name;
+    std::vector<std::pair<Token, Token>> fields; // {"x", "int"}, {"y", "int"} ...
+    std::vector<Token> implemented_interfaces;
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -234,9 +236,9 @@ struct StructDeclaration final : Statement
     }
 
     StructDeclaration(
-        std::string name, std::vector<std::pair<std::string, std::string>> fields,
+        Token name, std::vector<std::pair<Token, Token>> fields, std::vector<Token> implemented_interfaces,
         const SourceLocation loc) :
-    name(std::move(name)), fields(std::move(fields))
+    name(std::move(name)), fields(std::move(fields)), implemented_interfaces(std::move(implemented_interfaces))
     {
         this->source_location = loc;
     }
@@ -244,14 +246,14 @@ struct StructDeclaration final : Statement
 
 struct EnumVariant
 {
-    std::string name;
+    Token name;
     std::optional<int32_t> value; // nullptr if they didn't specify '= X', so it has to be a pointer
 };
 
 
 struct EnumDeclaration final : Statement
 {
-    std::string name;
+    Token name;
     std::vector<EnumVariant> variant_names;
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -259,8 +261,25 @@ struct EnumDeclaration final : Statement
         return "EnumDeclaration";
     }
 
-    EnumDeclaration(std::string name, std::vector<EnumVariant> variant_names, const SourceLocation loc) :
+    EnumDeclaration(Token name, std::vector<EnumVariant> variant_names, const SourceLocation loc) :
     name(std::move(name)), variant_names(std::move(variant_names))
+    {
+        this->source_location = loc;
+    }
+};
+
+struct InterfaceDeclaration final : Statement
+{
+    Token name;
+    std::vector<MethodSignature> methods;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return "InterfaceDeclaration";
+    }
+
+    InterfaceDeclaration(Token name, std::vector<MethodSignature> methods, const SourceLocation loc) :
+    name(std::move(name)), methods(std::move(methods))
     {
         this->source_location = loc;
     }
