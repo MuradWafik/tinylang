@@ -18,12 +18,13 @@ InterpretResult VM::StartProgram(Chunk* root_chunk)
         return InterpretResult::INTERPRET_RUNTIME_ERROR;
     }
 
-    auto* main_func_ptr_ptr = std::get_if<FunctionObject*>(&globals["main"]);
-    if(!main_func_ptr_ptr) {
+    const auto* main_func_ptr_ptr = std::get_if<FunctionObject*>(&globals["main"]);
+    if(!main_func_ptr_ptr)
+    {
         std::println(std::cerr, "Runtime Error: 'main' is not a function.");
         return InterpretResult::INTERPRET_RUNTIME_ERROR;
     }
-    auto main_func_ptr = *main_func_ptr_ptr;
+    const auto main_func_ptr = *main_func_ptr_ptr;
     
     // Push main so it acts as the first call frame
     Push<FunctionObject*>(main_func_ptr);
@@ -39,6 +40,8 @@ InterpretResult VM::StartProgram(Chunk* root_chunk)
 
 InterpretResult VM::Interpret(Chunk* chunk)
 {
+    // when in function local scope adds the offset but this needs to be done before main runs
+    Push<Object*>(nullptr);
     call_frames.emplace_back(chunk, chunk->code.data(), 0);
     return Run();
 }
@@ -412,6 +415,11 @@ InterpretResult VM::Run()
             case OpCode::OP_POP_BOOL:
             {
                 Pop<bool>();
+                break;
+            }
+            case OpCode::OP_POP_OBJECT:
+            {
+                Pop<Object*>();
                 break;
             }
 

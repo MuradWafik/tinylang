@@ -251,9 +251,10 @@ std::expected<Token, LexerError>  Lexer::LexSymbol()
         }
         default:
             const char c = Peek();
-            SourceLocation source_location{line, column};
+            const SourceLocation source_location{line, column};
             Consume();
-            return std::unexpected<LexerError>{
+            return std::unexpected<LexerError>
+            {
                 {
                     std::format("Unexpected symbol character: {}", c),
                     source_location

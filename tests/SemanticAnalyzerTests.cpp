@@ -251,10 +251,11 @@ TEST_CASE("Semantic: Interface Conformance and Type Strictness")
                 fn next() -> int;
             }
 
-            struct Range : Iterator {
+            struct Range {
                 var start: int;
                 var end: int;
             }
+            extend Range : Iterator;
 
             fn (self: Range) has_next() -> bool {
                 return self.start < self.end;
@@ -277,10 +278,11 @@ TEST_CASE("Semantic: Interface Conformance and Type Strictness")
                 fn next() -> int;
             }
 
-            struct Range : Iterator {
+            struct Range {
                 var start: int;
                 var end: int;
             }
+            extend Range : Iterator;
 
             fn (self: Range) has_next() -> bool {
                 return true;
@@ -296,7 +298,10 @@ TEST_CASE("Semantic: Interface Conformance and Type Strictness")
                 fn next() -> int;
             }
 
-            struct Range : Iterator { }
+            struct Range {
+ 
+            }
+            extend Range : Iterator;
 
             fn (self: Range) next() -> float {
                 return 0.0;
@@ -312,7 +317,10 @@ TEST_CASE("Semantic: Interface Conformance and Type Strictness")
                 fn process(data: int) -> void;
             }
 
-            struct DataProcessor : Processor { }
+            struct DataProcessor {
+ 
+            }
+            extend DataProcessor : Processor;
 
             fn (self: DataProcessor) process(data: float) -> void { }
         )");
@@ -326,7 +334,10 @@ TEST_CASE("Semantic: Interface Conformance and Type Strictness")
                 fn process(data: int) -> void;
             }
 
-            struct DataProcessor : Processor { }
+            struct DataProcessor {
+ 
+            }
+            extend DataProcessor : Processor;
 
             fn (self: DataProcessor) process() -> void { }
         )");

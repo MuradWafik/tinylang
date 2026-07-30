@@ -14,4 +14,6 @@ For a complete and up-to-date look at the language's planned features (including
 * Method Syntax (Go-Style Receivers)
 * Compile-Time Traits / Interfaces
 * Simple Enums
+* Extension Blocks & Primitive Methods
+* Collection & Range Iteration (`for ... in`)
 * Conservative Mark-and-Sweep Garbage Collector

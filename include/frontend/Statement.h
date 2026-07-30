@@ -228,17 +228,14 @@ struct StructDeclaration final : Statement
 {
     Token name;
     std::vector<std::pair<Token, Token>> fields; // {"x", "int"}, {"y", "int"} ...
-    std::vector<Token> implemented_interfaces;
 
     [[nodiscard]] std::string GetTypeString() const override
     {
         return "StructDeclaration";
     }
 
-    StructDeclaration(
-        Token name, std::vector<std::pair<Token, Token>> fields, std::vector<Token> implemented_interfaces,
-        const SourceLocation loc) :
-    name(std::move(name)), fields(std::move(fields)), implemented_interfaces(std::move(implemented_interfaces))
+    StructDeclaration(Token name, std::vector<std::pair<Token, Token>> fields, const SourceLocation loc) :
+    name(std::move(name)), fields(std::move(fields))
     {
         this->source_location = loc;
     }
@@ -283,4 +280,57 @@ struct InterfaceDeclaration final : Statement
     {
         this->source_location = loc;
     }
+};
+
+
+struct ForLoop final : Statement
+{
+    Token iterator_name;
+    std::unique_ptr<Expression> iterable;
+    std::unique_ptr<BodyStatement> body;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("ForLoop(iterator: '{}', iterable: {}, body: {})",
+            iterator_name.lexeme,
+            iterable ? iterable->GetTypeString() : "null",
+            body ? body->GetTypeString() : "null");
+    }
+
+    ForLoop(
+        Token iterator_name,
+        std::unique_ptr<Expression> iterable,
+        std::unique_ptr<BodyStatement> body,
+        const SourceLocation loc
+    ) :
+        iterator_name(std::move(iterator_name)),
+        iterable{std::move(iterable)},
+        body{std::move(body)}
+    {
+        this->source_location = loc;
+    }
+};
+
+
+struct ExtendStatement final : Statement
+{
+    Token target_struct;
+    Token interface_extending;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format(
+            "ExtendStatement(target: '{}', interface: '{}')",
+            target_struct.lexeme,
+            interface_extending.lexeme
+        );
+    }
+
+    ExtendStatement(Token target_struct, Token interface_extending, SourceLocation loc)
+    : target_struct{std::move(target_struct)}, interface_extending{std::move(interface_extending)}
+    {
+        this->source_location = loc;
+    }
+
+
 };

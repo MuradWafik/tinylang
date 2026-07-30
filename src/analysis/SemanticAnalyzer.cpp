@@ -6,6 +6,7 @@
 #include "analysis/Type.h"
 #include "frontend/Expression.h"
 #include "frontend/Statement.h"
+#include "utils/Constants.h"
 
 
 std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std::unique_ptr<ASTNode>>& program)
@@ -26,7 +27,8 @@ std::expected<void, std::string> SemanticAnalyzer::Analyze(const std::vector<std
                    !dynamic_cast<NativeFunctionDeclaration*>(stmt) &&
                    !dynamic_cast<NativeModuleStatement*>(stmt) &&
                    !dynamic_cast<EnumDeclaration*>(stmt) &&
-                   !dynamic_cast<InterfaceDeclaration*>(stmt)
+                   !dynamic_cast<InterfaceDeclaration*>(stmt) &&
+                   !dynamic_cast<ExtendStatement*>(stmt)
                 )
                 {
                     return std::unexpected(std::format("Error at line {}: Top-level execution statements are forbidden in strict mode. Use 'fn main()' instead.", stmt->source_location.line_number));
@@ -103,17 +105,19 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* s
     if(const auto* var_decl = dynamic_cast<VariableDeclaration*>(stmt)) return AnalyzeVariableDeclaration(var_decl);
     if(const auto* if_stmt = dynamic_cast<IfStatement*>(stmt)) return AnalyzeIfStatement(if_stmt);
     if(const auto* while_stmt = dynamic_cast<WhileStatement*>(stmt)) return AnalyzeWhileStatement(while_stmt);
-    if(const auto* fn_declaration = dynamic_cast<FunctionDeclaration*>(stmt)) return AnalyzeFunctionDeclaration(fn_declaration);
+    if(auto* fn_declaration = dynamic_cast<FunctionDeclaration*>(stmt)) return AnalyzeFunctionDeclaration(fn_declaration);
     if(const auto* break_stmt = dynamic_cast<BreakStatement*>(stmt)) return AnalyzeBreakStatement(break_stmt);
     if(const auto* continue_stmt = dynamic_cast<ContinueStatement*>(stmt)) return AnalyzeContinueStatement(continue_stmt);
     if(const auto* return_stmt = dynamic_cast<ReturnStatement*>(stmt)) return AnalyzeReturnStatement(return_stmt);
     if(const auto* body_stmt = dynamic_cast<BodyStatement*>(stmt)) return AnalyzeBodyStatement(body_stmt);
     if(const auto* expr_stmt = dynamic_cast<ExpressionStatement*>(stmt)) return AnalyzeExpressionStatement(expr_stmt);
     if(const auto* native_mod_stmt = dynamic_cast<NativeModuleStatement*>(stmt)) return AnalyzeNativeModuleStatement(native_mod_stmt);
-    if(const auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
-    if(const auto* struct_decl = dynamic_cast<StructDeclaration*>(stmt)) return AnalyzeStructDeclaration(struct_decl);
+    if(auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
+    if(auto* struct_decl = dynamic_cast<StructDeclaration*>(stmt)) return AnalyzeStructDeclaration(struct_decl);
     if(const auto* enum_decl = dynamic_cast<EnumDeclaration*>(stmt)) return AnalyzeEnumDeclaration(enum_decl);
-    if(const auto* interface_decl = dynamic_cast<InterfaceDeclaration*>(stmt)) return AnalyzeInterfaceDeclaration(interface_decl);
+    if(auto* interface_decl = dynamic_cast<InterfaceDeclaration*>(stmt)) return AnalyzeInterfaceDeclaration(interface_decl);
+    if(const auto* for_loop = dynamic_cast<ForLoop*>(stmt)) return AnalyzeForLoop(for_loop);
+    if(const auto* extend_stmt = dynamic_cast<ExtendStatement*>(stmt)) return AnalyzeExtendStatement(extend_stmt);
 
     return std::unexpected(std::format("Unknown statement type '{}'", stmt->GetTypeString()));
 }
@@ -326,9 +330,17 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeWhileStatement(const W
 }
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
-    const FunctionDeclaration* function_declaration)
+        FunctionDeclaration* function_declaration)
 {
+    // kept as a reference when registering it at the end, as the actual name gets mangled if its a method
+    const std::string unmangled_name = function_declaration->method_signature.name.lexeme;
     auto& name = function_declaration->method_signature.name.lexeme;
+    
+    if(function_declaration->receiver.has_value())
+    {
+        name = function_declaration->receiver->type_name.lexeme + "$" + name;
+    }
+
     // cache what the return type was before in case its nested
     const auto* outer_return = current_function_return_type;
     if(symbol_table.IsDeclaredInCurrentScope(name))
@@ -346,36 +358,43 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
         }
         if(dynamic_cast<const InterfaceType*>(return_type))
         {
-            return Return(std::format("Cannot use interface '{}' as a concrete return type at {}", function_declaration->method_signature.return_type->lexeme, function_declaration->method_signature.return_type->source_location));
+            return Return(std::format(
+                "Cannot use interface '{}' as a concrete return type at {}",
+                function_declaration->method_signature.return_type->lexeme,
+                function_declaration->method_signature.return_type->source_location));
         }
     }
-    const_cast<FunctionDeclaration*>(function_declaration)->method_signature.return_type_info = return_type;
+    function_declaration->method_signature.return_type_info = return_type;
 
     symbol_table.PushScope();
 
     std::vector<const Type*> parameter_types;
+    const Type* receiver_type = nullptr; // once the reciever is handled, can register the method with the type afterwards
     if(function_declaration->receiver)
     {
-        auto& [recv_name, type_name, type_info] = const_cast<FunctionDeclaration*>(function_declaration)->receiver.value();
-        auto* resolved_type = ResolveType(type_name.lexeme);
-        if(!resolved_type)
+        auto& [recv_name, type_name, type_info] = function_declaration->receiver.value();
+        auto* self = ResolveType(type_name.lexeme);
+        if(!self)
         {
             return Return(std::format("Unknown type '{}' for receiver at {}", type_name.lexeme, type_name.source_location));
         }
-        if(dynamic_cast<const InterfaceType*>(resolved_type))
+        if(dynamic_cast<const InterfaceType*>(self))
         {
             return Return(std::format("Cannot use interface '{}' as a receiver at {}", type_name.lexeme, type_name.source_location));
         }
-        if(resolved_type == PrimitiveType::Void.get())
+        if(self == PrimitiveType::Void.get())
         {
             return Return(std::format("Cannot use 'void' as a receiver at {}", type_name.source_location));
         }
-        type_info = resolved_type;
+        type_info = self;
         parameter_types.push_back(type_info); // receiver has to be the first element
+
+        receiver_type = self;
+
     }
 
     // then either way the regular parameters get added to the vector
-    for(auto& [param_name, type_name, type_info]: const_cast<FunctionDeclaration*>(function_declaration)->method_signature.parameters)
+    for(auto& [param_name, type_name, type_info]: function_declaration->method_signature.parameters)
     {
         auto* type = ResolveType(type_name.lexeme);
         if(!type)
@@ -395,8 +414,9 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     }
 
     auto func_type = std::make_unique<FunctionType>(parameter_types, return_type);
-    symbol_table.DefineType(func_type->GetName(), func_type.get());
-    symbol_table.DefineVariable({name, func_type.get()});
+    auto* func_ptr = func_type.get();
+    symbol_table.DefineType(func_ptr->GetName(), func_ptr);
+    symbol_table.DefineVariable({name, func_ptr});
     allocated_types.push_back(std::move(func_type));
 
     symbol_table.PushScope();
@@ -406,6 +426,10 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     {
         auto& [recv_name, type_name, type_info] = function_declaration->receiver.value();
         symbol_table.DefineVariable({recv_name.lexeme, type_info});
+        const_cast<Type*>(receiver_type)->RegisterMethod(
+            unmangled_name,
+            func_ptr
+        );
     }
 
     for(const auto& param: function_declaration->method_signature.parameters)
@@ -517,7 +541,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeModuleStatement(
     return {};
 }
 
-std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration)
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclaration(NativeFunctionDeclaration* native_function_declaration)
 {
     auto& name = native_function_declaration->method_signature.name.lexeme;
     if(current_native_module.empty())
@@ -550,10 +574,10 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclarat
             return Return(std::format("Cannot use interface '{}' as a concrete return type at {}", native_function_declaration->method_signature.return_type->lexeme, native_function_declaration->method_signature.return_type->source_location));
         }
     }
-    const_cast<NativeFunctionDeclaration*>(native_function_declaration)->method_signature.return_type_info = return_type;
+    native_function_declaration->method_signature.return_type_info = return_type;
 
     std::vector<const Type*> parameter_types;
-    for(auto& [param_name, type_name, type_info]: const_cast<NativeFunctionDeclaration*>(native_function_declaration)->method_signature.parameters)
+    for(auto& [param_name, type_name, type_info]: native_function_declaration->method_signature.parameters)
     {
         auto* type = ResolveType(type_name.lexeme);
         if(!type)
@@ -581,7 +605,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNativeFunctionDeclarat
     return {};
 }
 
-std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(const StructDeclaration* struct_declaration)
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(StructDeclaration* struct_declaration)
 {
     if(symbol_table.LookupType(struct_declaration->name.lexeme))
     {
@@ -600,26 +624,6 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(cons
 
     std::vector<std::pair<std::string, const Type*>> result;
     result.reserve(struct_declaration->fields.size());
-
-
-    for(const auto& interface : struct_declaration->implemented_interfaces)
-    {
-        auto* interface_type = ResolveType(interface.lexeme);
-        if(!interface_type)
-        {
-            return std::unexpected(std::format("Unknown interface '{}' at {}", interface.lexeme, interface.source_location));
-        }
-        if(!dynamic_cast<const InterfaceType*>(interface_type))
-        {
-            return std::unexpected(std::format("'{}' is not an interface at {}", interface.lexeme, interface.source_location));
-        }
-
-        pending_interface_checks.push_back({
-            struct_ptr,
-            static_cast<const InterfaceType*>(interface_type),
-            interface.source_location
-        });
-    }
 
     for(auto& [field_name, type_name] : struct_declaration->fields)
     {
@@ -1017,7 +1021,9 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(Ar
 
         if(elem_type.value() != first_type.value())
         {
-            return Return("Array literal elements must all be of the same type");
+            return Return(std::format(
+                "Array literal elements must all be of the same type, expected type '{}' got type '{}' at {}",
+                first_type.value()->GetName(), elem_type.value()->GetName(), array_node->elements[i]->source_location));
         }
     }
 
@@ -1081,59 +1087,68 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
 }
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeInterfaceDeclaration(
-        const InterfaceDeclaration* interface_declaration)
+        InterfaceDeclaration* interface_declaration)
 {
     std::vector<std::pair<std::string, const FunctionType*>> expected_methods;
     expected_methods.reserve(interface_declaration->methods.size());
 
     // if(symbol_table.LookupVariable()) // allow redefinition?
-    for(auto& method: const_cast<InterfaceDeclaration*>(interface_declaration)->methods)
+    for(auto& [name, parameters, return_type, return_type_info]: interface_declaration->methods)
     {
-        const Type* return_type = PrimitiveType::Void.get();
-        if(method.return_type.has_value())
+        const Type* cur_return_type = PrimitiveType::Void.get();
+        if(return_type.has_value())
         {
-            return_type = symbol_table.LookupType(method.return_type->lexeme);
-            if(!return_type)
+            cur_return_type = symbol_table.LookupType(return_type->lexeme);
+            if(!cur_return_type)
             {
                 return Return(std::format(
                     "Unknown return type '{}' for interface method '{}'",
-                    method.return_type->lexeme, method.name.lexeme)
+                    return_type->lexeme, name.lexeme)
                 );
             }
-            if(dynamic_cast<const InterfaceType*>(return_type))
+            if(dynamic_cast<const InterfaceType*>(cur_return_type))
             {
-                return Return(std::format("Cannot use interface '{}' as a concrete return type for interface method '{}' at {}", method.return_type->lexeme, method.name.lexeme, method.return_type->source_location));
+                return Return(std::format(
+                    "Cannot use interface '{}' as a concrete return type for interface method '{}' at {}",
+                    return_type->lexeme, name.lexeme, return_type->source_location)
+                );
             }
         }
-        method.return_type_info = return_type;
+        return_type_info = cur_return_type;
 
         std::vector<const Type*> param_types;
-        param_types.reserve(method.parameters.size());
+        param_types.reserve(parameters.size());
 
-        for(auto& parameter: method.parameters)
+        for(auto& [name, type_name, type_info]: parameters)
         {
-            const auto* param_type = symbol_table.LookupType(parameter.type_name.lexeme);
+            const auto* param_type = symbol_table.LookupType(type_name.lexeme);
             if(!param_type)
             {
                 return Return(std::format(
                     "Unknown parameter type '{}' for interface method '{}'",
-                    parameter.type_name.lexeme, method.name.lexeme)
+                    type_name.lexeme, name.lexeme)
                 );
             }
             if(dynamic_cast<const InterfaceType*>(param_type))
             {
-                return Return(std::format("Cannot use interface '{}' as a concrete type for parameter '{}' of interface method '{}' at {}", parameter.type_name.lexeme, parameter.name.lexeme, method.name.lexeme, parameter.type_name.source_location));
+                return Return(std::format(
+                    "Cannot use interface '{}' as a concrete type for parameter '{}' of interface method '{}' at {}",
+                    type_name.lexeme, name.lexeme, name.lexeme, type_name.source_location)
+                );
             }
             if(param_type == PrimitiveType::Void.get())
             {
-                return Return(std::format("Cannot use 'void' as a type for parameter '{}' of interface method '{}' at {}", parameter.name.lexeme, method.name.lexeme, parameter.type_name.source_location));
+                return Return(
+                    std::format("Cannot use 'void' as a type for parameter '{}' of interface method '{}' at {}",
+                        name.lexeme, name.lexeme, type_name.source_location)
+                );
             }
-            parameter.type_info = param_type;
+            type_info = param_type;
             param_types.push_back(param_type);
         }
 
-        auto func_type = std::make_unique<FunctionType>(std::move(param_types), return_type);
-        expected_methods.emplace_back(method.name.lexeme, func_type.get());
+        auto func_type = std::make_unique<FunctionType>(std::move(param_types), cur_return_type);
+        expected_methods.emplace_back(name.lexeme, func_type.get());
         allocated_types.push_back(std::move(func_type));
     }
 
@@ -1144,38 +1159,120 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeInterfaceDeclaration(
 
 }
 
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeForLoop(const ForLoop* for_loop)
+{
+    auto iterable_type = AnalyzeExpression(for_loop->iterable.get());
+    if(!iterable_type) return std::unexpected(iterable_type.error());
+
+    // check if the struct has the iterator interface
+    if(auto* struct_type = dynamic_cast<const StructType*>(iterable_type.value()); struct_type)
+    {
+        if(!struct_type->ImplementsInterface(std::string(constants::ITERABLE_INT_INTERFACE)))
+        {
+            return Return(std::format(
+                "Struct '{}' must implement {} to loop over, {}",
+                struct_type->GetName(), constants::ITERABLE_INT_INTERFACE, for_loop->source_location));
+        }
+
+
+    }
+    else if(auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()); array_type)
+    {
+        // nothing?
+    }
+    else
+    {
+        return Return("Iterable must be a struct type or an array");
+    }
+
+
+    auto& iterator = for_loop->iterator_name;
+    const Type* iter_var_type = PrimitiveType::Int.get();
+
+    if (auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()))
+    {
+        iter_var_type = array_type->GetElementType();
+    }
+
+    symbol_table.PushScope();
+    symbol_table.DefineVariable({iterator.lexeme, iter_var_type});
+
+    ++loop_depth;
+    if(auto body = AnalyzeStatement(for_loop->body.get());
+        !body)
+    {
+        return std::unexpected(body.error());
+    }
+    --loop_depth;
+
+    symbol_table.PopScope();
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeExtendStatement(const ExtendStatement* extend_statement)
+{
+    auto* type = symbol_table.LookupType(extend_statement->target_struct.lexeme);
+    if(!type)
+    {
+        return Return(std::format(
+            "Unknown type '{}' in extend statement at {}",
+            extend_statement->target_struct.lexeme, extend_statement->source_location));
+    }
+
+    const auto* interface_type = symbol_table.LookupType(extend_statement->interface_extending.lexeme);
+    if(!interface_type)
+    {
+        return Return(std::format(
+            "Unknown interface '{}' at {}", extend_statement->interface_extending.lexeme, extend_statement->source_location));
+    }
+
+    auto* iface = dynamic_cast<const InterfaceType*>(interface_type);
+    if(!iface)
+    {
+        return std::unexpected(std::format(
+            "Type '{}' is not an interface at {}",
+            extend_statement->interface_extending.lexeme, extend_statement->interface_extending.source_location)
+        );
+    }
+    pending_interface_checks.emplace_back(
+        type,
+        iface,
+        extend_statement->source_location
+    );
+
+    const_cast<Type*>(type)->AddImplementedInterface(iface);
+    return {};
+}
+
 std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented()
 {
     for (const auto& check : pending_interface_checks)
     {
         for (const auto& [method_name, function] : check.interface_type->GetExpectedMethods())
         {
-            const auto mangled_name = MangleMethodName(method_name, check.struct_type);
-
-            const auto implemented = symbol_table.LookupVariable(mangled_name);
+            const auto* implemented = check.type->GetMethod(method_name);
             if(!implemented)
             {
                 return Return(std::format(
                     "Type '{}' does not implement interface '{}' method '{}'",
-                    check.struct_type->GetName(), check.interface_type->GetName(), method_name
+                    check.type->GetName(), check.interface_type->GetName(), method_name
                 ));
             }
 
-            auto* implemented_func_type = dynamic_cast<const FunctionType*>(implemented->type);
             const auto* expected_func_type = function;
 
-            if(implemented_func_type->GetReturnType() != expected_func_type->GetReturnType())
+            if(implemented->GetReturnType() != expected_func_type->GetReturnType())
             {
                 return Return(std::format(
                     "Method '{}' on type '{}' has return type '{}' but interface '{}' expects '{}'",
-                    method_name, check.struct_type->GetName(),
-                    implemented_func_type->GetReturnType()->GetName(),
+                    method_name, check.type->GetName(),
+                    implemented->GetReturnType()->GetName(),
                     check.interface_type->GetName(),
                     expected_func_type->GetReturnType()->GetName()
                 ));
             }
 
-            const auto& impl_params = implemented_func_type->GetParameters();
+            const auto& impl_params = implemented->GetParameters();
             const auto& expected_params = expected_func_type->GetParameters();
 
             // impl params has the self at the start
@@ -1183,7 +1280,7 @@ std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented()
             {
                 return Return(std::format(
                     "Method '{}' on type '{}' has {} parameters, but interface '{}' expects {}",
-                    method_name, check.struct_type->GetName(),
+                    method_name, check.type->GetName(),
                     impl_params.size() - 1, check.interface_type->GetName(), expected_params.size()
                 ));
             }
@@ -1195,7 +1292,7 @@ std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented()
                 {
                     return Return(std::format(
                         "Parameter {} of method '{}' on type '{}' has type '{}', but interface '{}' expects '{}'",
-                        i + 1, method_name, check.struct_type->GetName(),
+                        i + 1, method_name, check.type->GetName(),
                         impl_params[i + 1]->GetName(), check.interface_type->GetName(), expected_params[i]->GetName()
                     ));
                 }

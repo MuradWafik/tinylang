@@ -82,6 +82,7 @@ enum class OpCode : uint8_t
     OP_POP_INT,            // Pops 4 bytes
     OP_POP_FLOAT,          // Pops 4 bytes
     OP_POP_BOOL,           // Pops 1 byte
+    OP_POP_OBJECT,         // Pops 8 bytes (pointer)
     OP_JUMP_IF_FALSE,      // [2 byte operand: jump_offset]    | Stack: Pops condition. If false, advances IP by offset
     OP_JUMP_IF_FALSE_PEEK, // [2 byte operand: jump_offset]    | Stack: Peeks condition. If false, advances IP by offset
     OP_JUMP_IF_TRUE_PEEK,  // [2 byte operand: jump_offset]    | Stack: Peeks condition. If true, advances IP by offset

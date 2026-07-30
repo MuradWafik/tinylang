@@ -25,10 +25,11 @@ private:
     void CompileIfStatement(const IfStatement* if_statement);
     void CompileWhileStatement(const WhileStatement* while_statement);
     void CompileExpressionStatement(const ExpressionStatement* expression_statement);
-    void CompileContinueStatement(const ContinueStatement* continue_statement) const;
+    void CompileContinueStatement(const ContinueStatement* continue_statement);
     void CompileBreakStatement(const BreakStatement* break_statement);
     void CompileNativeModuleStatement(const NativeModuleStatement* mod_stmt);
     void CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const;
+    void CompileForLoop(const ForLoop* for_loop);
 
 
     void CompileExpression(const Expression* expression);
@@ -49,6 +50,10 @@ private:
     void CompileIndexAccess(const IndexAccess* index_access);
     void CompilePropertyAccess(const PropertyAccess* property_access);
 
+
+    void ForLoopIterableStruct(const ForLoop* for_loop, uint32_t line, const StructType* struct_type);
+    void ForLoopArray(const ForLoop* for_loop, uint32_t line, const ArrayType* array);
+
     int64_t GetLocalVariableIndex(const std::string& name) const;
 
     struct Local {
@@ -61,6 +66,7 @@ private:
     std::vector<Local> locals;
     std::vector<size_t> break_placeholders; // when a break is met, it doesnt know where the body ends, need to update when reached
     std::vector<size_t> loop_starts; // when a continue is met, it doesnt know where the loop starts
+    std::vector<size_t> loop_local_counts; // tracks number of locals at the start of each loop to properly pop on break/continue
 
     std::filesystem::path current_native_module_path{};
     ProjectConfig* project_config; // non owning

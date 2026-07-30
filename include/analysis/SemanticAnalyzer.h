@@ -132,7 +132,7 @@ private:
 
     struct PendingInterfaceCheck
     {
-        const StructType* struct_type;
+        const Type* type;
         const InterfaceType* interface_type;
         SourceLocation location;
     };
@@ -147,16 +147,20 @@ private:
     std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);
     std::expected<void, std::string> AnalyzeIfStatement(const IfStatement* if_statement);
     std::expected<void, std::string> AnalyzeWhileStatement(const WhileStatement* while_statement);
-    std::expected<void, std::string> AnalyzeFunctionDeclaration(const FunctionDeclaration* function_declaration);
+    std::expected<void, std::string> AnalyzeFunctionDeclaration(FunctionDeclaration* function_declaration);
     std::expected<void, std::string> AnalyzeBreakStatement(const BreakStatement* break_statement) const;
     std::expected<void, std::string> AnalyzeContinueStatement(const ContinueStatement* continue_statement) const;
     std::expected<void, std::string> AnalyzeReturnStatement(const ReturnStatement* return_statement);
     std::expected<void, std::string> AnalyzeBodyStatement(const BodyStatement* body_statement);
     std::expected<void, std::string> AnalyzeExpressionStatement(const ExpressionStatement* expression_statement);
     std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeModuleStatement* native_module_statement);
-    std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration);
-    std::expected<void, std::string> AnalyzeStructDeclaration(const StructDeclaration* struct_declaration);
+    std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(NativeFunctionDeclaration* native_function_declaration);
+    std::expected<void, std::string> AnalyzeStructDeclaration(StructDeclaration* struct_declaration);
     std::expected<void, std::string> AnalyzeEnumDeclaration(const EnumDeclaration* enum_declaration);
+    std::expected<void, std::string> AnalyzeInterfaceDeclaration(InterfaceDeclaration* interface_declaration);
+    std::expected<void, std::string> AnalyzeForLoop(const ForLoop* for_loop);
+    std::expected<void, std::string> AnalyzeExtendStatement(const ExtendStatement* extend_statement);
+
 
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);
@@ -167,7 +171,6 @@ private:
     std::expected<const Type*, std::string> AnalyzeIndexAccess(IndexAccess* index_access);
     std::expected<const Type*, std::string> AnalyzeArrayLiteral(ArrayLiteral* array_node);
     std::expected<const Type*, std::string> AnalyzePropertyAccess(PropertyAccess* property_access);
-    std::expected<void, std::string> AnalyzeInterfaceDeclaration(const InterfaceDeclaration* interface_declaration);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);
@@ -177,10 +180,6 @@ private:
         return std::unexpected(std::format( "{}", error));
     }
 
-    static std::string MangleMethodName(const std::string& method_name, const Type* type)
-    {
-        return std::format("{}${}", type->GetName(), method_name);
-    }
 
     void InitializeDefaults();
     std::expected<void, std::string> EnsureInterfacesImplemented();

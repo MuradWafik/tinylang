@@ -19,6 +19,7 @@ statement ::=
     | if_statement
     | expression_statement
     | block
+    | extend_statement
 ```
 
 ### Variable Declaration
@@ -82,6 +83,13 @@ block
 
 ```
 > Important note that it is comprised of statements, not expressions
+
+### Extend Statement
+```
+extend_statement
+    ::= "extend" type ":" IDENTIFIER ";"
+```
+> Allows a user to declare that an existing type (even a primitive or array) implements an interface, enabling methods on primitive types.
 
 ## Expressions
 

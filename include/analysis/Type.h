@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -8,6 +9,9 @@
 #include "frontend/Token.h"
 
 #include "utils/Utils.h"
+
+class InterfaceType;
+class FunctionType;
 
 class Type
 {
@@ -21,6 +25,22 @@ public:
     
     // Returns the size in bytes of the type
     [[nodiscard]] virtual uint8_t GetSize() const = 0;
+
+    void AddImplementedInterface(const InterfaceType* interface_type){ implemented_interfaces.push_back(interface_type); }
+
+    bool ImplementsInterface(const std::string& interface_name) const;
+
+    void RegisterMethod(const std::string& method_name, const FunctionType* func_type){ methods[method_name] = func_type; }
+
+    const FunctionType* GetMethod(const std::string& method_name) const
+    {
+        if(methods.contains(method_name)) return methods.at(method_name);
+        return nullptr;
+    }
+
+protected:
+    std::vector<const InterfaceType*> implemented_interfaces;
+    std::unordered_map<std::string, const FunctionType*> methods;
 };
 
 enum class PrimitiveKind
@@ -109,38 +129,6 @@ private:
     const Type* element_type{nullptr};
 };
 
-class StructType final : public Type
-{
-public:
-    [[nodiscard]] std::string GetName() const override { return name; }
-    [[nodiscard]] const Type* GetFieldType(std::string_view name) const;
-    [[nodiscard]] size_t GetNumFields() const { return fields.size(); }
-    [[nodiscard]] auto& GetFields() { return fields; }
-    [[nodiscard]] const auto& GetFields() const  { return fields; }
-    bool IsAssignableTo(const Type* other) const override;
-    [[nodiscard]] uint8_t GetSize() const override { return 8; }
-    [[nodiscard]] size_t GetHeapSize() const
-    {
-        size_t total = 0;
-        for (const auto& val: fields | std::views::values)
-        {
-            total += val->GetSize();
-        }
-        return total;
-    }
-
-    StructType(std::string name, std::vector<std::pair<std::string, const Type*>> fields) :
-        fields{std::move(fields)}, name{std::move(name)}
-    { }
-
-    void SetFields(std::vector<std::pair<std::string, const Type*>> new_fields)
-    {
-        fields = std::move(new_fields);
-    }
-private:
-    std::vector<std::pair<std::string, const Type*>> fields;
-    std::string name;
-};
 
 class EnumType final : public Type
 {
@@ -178,3 +166,42 @@ private:
     std::string name;
     std::vector<std::pair<std::string, const FunctionType*>> expected_methods;
 };
+
+class StructType final : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override { return name; }
+    [[nodiscard]] const Type* GetFieldType(std::string_view name) const;
+    [[nodiscard]] size_t GetNumFields() const { return fields.size(); }
+    [[nodiscard]] auto& GetFields() { return fields; }
+    [[nodiscard]] const auto& GetFields() const  { return fields; }
+    bool IsAssignableTo(const Type* other) const override;
+    [[nodiscard]] uint8_t GetSize() const override { return 8; }
+    [[nodiscard]] size_t GetHeapSize() const
+    {
+        size_t total = 0;
+        for (const auto& val: fields | std::views::values)
+        {
+            total += val->GetSize();
+        }
+        return total;
+    }
+
+    StructType(std::string name, std::vector<std::pair<std::string, const Type*>> fields) :
+        fields{std::move(fields)}, name{std::move(name)}
+    { }
+
+    void SetFields(std::vector<std::pair<std::string, const Type*>> new_fields)
+    {
+        fields = std::move(new_fields);
+    }
+
+private:
+    std::vector<std::pair<std::string, const Type*>> fields;
+    std::string name;
+};
+
+inline std::string MangleMethodName(const std::string& method_name, const Type* type)
+{
+    return std::format("{}${}", type->GetName(), method_name);
+}

@@ -1,4 +1,7 @@
 #include "vm/Compiler.h"
+#include "analysis/Type.h"
+#include "frontend/ProjectConfig.h"
+#include "utils/Constants.h"
 
 #include <algorithm>
 #include <variant>
@@ -30,6 +33,7 @@ void Compiler::CompileStatement(const Statement* statement)
     if(const auto brk_stmt = dynamic_cast<const BreakStatement*>(statement)) return CompileBreakStatement(brk_stmt);
     if(const auto mod_stmt = dynamic_cast<const NativeModuleStatement*>(statement)) return CompileNativeModuleStatement(mod_stmt);
     if(const auto native_fn_decl = dynamic_cast<const NativeFunctionDeclaration*>(statement)) return CompileNativeFunctionDeclaration(native_fn_decl);
+    if(const auto for_loop = dynamic_cast<const ForLoop*>(statement)) return CompileForLoop(for_loop);
 }
 
 void Compiler::CompileExpression(const Expression* expression)
@@ -596,6 +600,7 @@ void Compiler::CompileBodyStatement(const BodyStatement* body_statement)
         if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
         else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_FLOAT);
         else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
+        else if(dynamic_cast<const StructType*>(type) || dynamic_cast<const ArrayType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_POP_OBJECT);
     }
     locals.resize(prev_size);
 }
@@ -647,6 +652,7 @@ void Compiler::CompileWhileStatement(const WhileStatement* while_statement)
 {
     const size_t loop_start = current_chunk->code.size();
     loop_starts.push_back(loop_start);
+    loop_local_counts.push_back(locals.size());
 
     // stack contains the true or false condition
     CompileExpression(while_statement->condition.get());
@@ -684,6 +690,7 @@ void Compiler::CompileWhileStatement(const WhileStatement* while_statement)
     }
     break_placeholders.clear();
     loop_starts.pop_back();
+    loop_local_counts.pop_back();
 }
 
 void Compiler::CompileExpressionStatement(const ExpressionStatement* expression_statement)
@@ -698,21 +705,49 @@ void Compiler::CompileExpressionStatement(const ExpressionStatement* expression_
     else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
 }
 
-void Compiler::CompileContinueStatement(const ContinueStatement* continue_statement) const
+void Compiler::CompileContinueStatement(const ContinueStatement* continue_statement)
 {
     const size_t loop_start = loop_starts.back();
+    const size_t loop_local_count = loop_local_counts.back();
+    const auto line = continue_statement->source_location.line_number;
+
+    // Pop any locals that were created inside the loop body before continuing to the next iteration
+    for(size_t i = locals.size(); i > loop_local_count; --i)
+    {
+        if(const Type* type = locals[i - 1].type; type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))
+        {
+            current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+        }
+        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_FLOAT);
+        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
+        else if(dynamic_cast<const StructType*>(type) || dynamic_cast<const ArrayType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_POP_OBJECT);
+    }
+
     const uint16_t distance = (current_chunk->code.size() + 3) - loop_start; // offset 3 to not rerun the loop instruction
 
     current_chunk->WriteInstruction(
-        continue_statement->source_location.line_number, OpCode::OP_LOOP,
+        line, OpCode::OP_LOOP,
         distance
     );
 }
 
 void Compiler::CompileBreakStatement(const BreakStatement* break_statement)
 {
+    const size_t loop_local_count = loop_local_counts.back();
+    const auto line = break_statement->source_location.line_number;
+
+    // Pop any locals that were created inside the loop body before jumping out
+    for(size_t i = locals.size(); i > loop_local_count; --i)
+    {
+        const Type* type = locals[i - 1].type;
+        if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+        else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_FLOAT);
+        else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
+        else if(dynamic_cast<const StructType*>(type) || dynamic_cast<const ArrayType*>(type)) current_chunk->WriteInstruction(line, OpCode::OP_POP_OBJECT);
+    }
+
     // Don't know the location so leave placeholder, the while populates (reminder jump uses 2 bytes);
-    current_chunk->WriteInstruction(break_statement->source_location.line_number, OpCode::OP_JUMP, static_cast<uint16_t>(0));
+    current_chunk->WriteInstruction(line, OpCode::OP_JUMP, static_cast<uint16_t>(0));
     break_placeholders.push_back(current_chunk->code.size() - 2);
 }
 
@@ -736,6 +771,174 @@ void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration*
         static_cast<uint8_t>(num_args),
         return_bytes
     );
+}
+
+void Compiler::ForLoopIterableStruct(const ForLoop* for_loop, const uint32_t line, const StructType* struct_type)
+{
+    constexpr auto var_name = "$_iter";
+    // treat the top of the stack as a hidden local variable
+    locals.push_back({var_name, struct_type});
+    const auto iter_idx = static_cast<uint16_t>(GetLocalVariableIndex(var_name));
+
+    const size_t loop_start = current_chunk->code.size();
+    loop_starts.push_back(loop_start);
+    loop_local_counts.push_back(locals.size());
+
+    // Call has_next
+    const auto has_next_index = static_cast<uint8_t>(
+        current_chunk->AddConstant(MangleMethodName(std::string(constants::HAS_NEXT_METHOD), struct_type))
+    );
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, has_next_index);
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_OBJECT, iter_idx);
+    const uint16_t arg_bytes = struct_type->GetSize();
+    current_chunk->WriteInstruction(line, OpCode::OP_CALL, arg_bytes);
+
+    current_chunk->WriteInstruction(line, OpCode::OP_JUMP_IF_FALSE, static_cast<uint16_t>(0));
+    // index to leave loop, placeholder
+    const size_t placeholder_if_index = current_chunk->code.size() - 2;
+
+    const auto next_index = static_cast<uint8_t>(
+        current_chunk->AddConstant(MangleMethodName(std::string(constants::NEXT_METHOD), struct_type))
+    );
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL_FUNCTION, next_index);
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_OBJECT, iter_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_CALL, arg_bytes);
+
+    // iterator also has to be a value for within the loop
+    locals.push_back({for_loop->iterator_name.lexeme, PrimitiveType::Int.get()});
+
+    CompileStatement(for_loop->body.get());
+
+    locals.pop_back(); // the iterator gets cleared for next iteration/end
+    current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+
+    // Loop jump (offset + 3 to recheck condition)
+    const uint16_t backward_jump = (current_chunk->code.size() + 3) - loop_start;
+    current_chunk->WriteInstruction(line, OpCode::OP_LOOP, backward_jump);
+
+
+    const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
+    current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff; // High byte
+    current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff; // Low byte
+
+    for(const auto index : break_placeholders)
+    {
+        const uint16_t break_jump = current_chunk->code.size() - (index + 2);
+        current_chunk->code[index] = (break_jump >> 8) & 0xff;
+        current_chunk->code[index + 1] = break_jump & 0xff;
+    }
+
+    break_placeholders.clear();
+    loop_starts.pop_back();
+    loop_local_counts.pop_back();
+
+    locals.pop_back(); // Pop the temp _iter created earlier
+    current_chunk->WriteInstruction(line, OpCode::OP_POP_OBJECT);
+}
+
+void Compiler::ForLoopArray(const ForLoop* for_loop, const uint32_t line, const ArrayType* array)
+{
+    // The array pointer is already pushed by CompileExpression in CompileForLoop
+    constexpr auto arr_variable_name = "$_arr";
+    locals.push_back({arr_variable_name, array});
+    const auto arr_idx = static_cast<uint16_t>(GetLocalVariableIndex(arr_variable_name));
+
+    // push -1 for the index variable, if its 0 continue keywords just skip through the increment
+    const uint8_t minus_one_idx = current_chunk->AddConstant(-1);
+    current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, minus_one_idx);
+    
+    constexpr auto index_variable_name = "$_arr_index";
+    locals.push_back({index_variable_name, PrimitiveType::Int.get()});
+    const auto idx_idx = static_cast<uint16_t>(GetLocalVariableIndex(index_variable_name));
+
+    const size_t loop_start = current_chunk->code.size();
+    loop_starts.push_back(loop_start);
+    loop_local_counts.push_back(locals.size());
+
+    // Increment index first
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, idx_idx);
+    const uint8_t one_idx = current_chunk->AddConstant(1);
+    current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, one_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_ADD_INT);
+    current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL_INT, idx_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+
+    // Check condition: _arr_index < _arr.length
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, idx_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_OBJECT, arr_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LENGTH);
+    current_chunk->WriteInstruction(line, OpCode::OP_LESS_INT);
+
+    // Jump if condition is false
+    current_chunk->WriteInstruction(line, OpCode::OP_JUMP_IF_FALSE, static_cast<uint16_t>(0));
+    const size_t placeholder_if_index = current_chunk->code.size() - 2;
+
+    // Load array element: _arr[_arr_index]
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_OBJECT, arr_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL_INT, idx_idx);
+    const uint8_t stride = array->GetElementType()->GetSize();
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_INDEX, stride);
+
+    // register iterator variable that the user has for the loop
+    locals.push_back({for_loop->iterator_name.lexeme, array->GetElementType()});
+
+    CompileStatement(for_loop->body.get());
+
+    locals.pop_back();
+    if(const Type* elem_type = array->GetElementType(); elem_type == PrimitiveType::Int.get()
+        || dynamic_cast<const EnumType*>(elem_type))
+    {
+        current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+    }
+    else if(elem_type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_FLOAT);
+    else if(elem_type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP_BOOL);
+    else if(dynamic_cast<const StructType*>(elem_type) || dynamic_cast<const ArrayType*>(elem_type))
+    {
+        current_chunk->WriteInstruction(line, OpCode::OP_POP_OBJECT);
+    }
+
+    const uint16_t backward_jump = (current_chunk->code.size() + 3) - loop_start;
+    current_chunk->WriteInstruction(line, OpCode::OP_LOOP, backward_jump);
+
+    // Patch jump if false
+    const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
+    current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff;
+    current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff;
+
+    // Patch break statements
+    for(const auto index : break_placeholders)
+    {
+        const uint16_t break_jump = current_chunk->code.size() - (index + 2);
+        current_chunk->code[index] = (break_jump >> 8) & 0xff;
+        current_chunk->code[index + 1] = break_jump & 0xff;
+    }
+    break_placeholders.clear();
+    loop_starts.pop_back();
+    loop_local_counts.pop_back();
+
+    // Clean up hidden variables
+    locals.pop_back(); // Pop _arr_index
+    current_chunk->WriteInstruction(line, OpCode::OP_POP_INT);
+
+    locals.pop_back(); // Pop _arr
+    current_chunk->WriteInstruction(line, OpCode::OP_POP_OBJECT);
+}
+
+void Compiler::CompileForLoop(const ForLoop* for_loop)
+{
+    const auto line = for_loop->source_location.line_number;
+    auto* iterable_type = for_loop->iterable->type_info;
+
+    CompileExpression(for_loop->iterable.get());
+
+    if(const auto* struct_type = dynamic_cast<const StructType*>(iterable_type); struct_type)
+    {
+        ForLoopIterableStruct(for_loop, line, struct_type);
+    }
+    else if(const auto* array_type = dynamic_cast<const ArrayType*>(iterable_type); array_type)
+    {
+        ForLoopArray(for_loop, line, array_type);
+    }
 }
 
 int64_t Compiler::GetLocalVariableIndex(const std::string& name) const

@@ -33,6 +33,7 @@ enum class TokenType
     Struct,
     Self,
     Interface,
+    Extend,
 
     // Types
     IntType,
@@ -127,6 +128,7 @@ struct Token {
         {"range", TokenType::Range},
         {"enum", TokenType::Enum},
         {"interface", TokenType::Interface},
+        {"extend", TokenType::Extend},
     };
     static std::string TypeToString(TokenType token_type);
 
@@ -135,6 +137,16 @@ struct Token {
     [[nodiscard]] bool IsComparisonOperator() const;
     [[nodiscard]] bool IsLogicalOperator() const;
     [[nodiscard]] bool IsEqualityOperator() const;
+
+    [[nodiscard]] bool IsNonVoidType() const
+    {
+        return type != TokenType::Void && (IsPrimitiveTypeName() || type == TokenType::Identifier);
+    }
+
+    [[nodiscard]] bool IsVoidableType() const
+    {
+        return IsPrimitiveTypeName() || type == TokenType::Identifier;
+    }
 };
 
 template <>

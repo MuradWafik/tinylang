@@ -79,3 +79,12 @@ bool InterfaceType::IsAssignableTo(const Type* other) const
     return this == other;
 }
 
+bool Type::ImplementsInterface(const std::string& interface_name) const
+{
+    return std::ranges::any_of
+    (
+        implemented_interfaces,
+        [&interface_name](const InterfaceType* e){ return e->GetName() == interface_name;}
+    );
+}
+

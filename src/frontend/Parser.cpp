@@ -100,6 +100,8 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::Struct: return ParseStructDeclaration();
         case TokenType::Enum: return ParseEnumDeclaration();
         case TokenType::Interface: return ParseInterfaceDeclaration();
+        case TokenType::For: return ParseForLoop();
+        case TokenType::Extend: return ParseExtendStatement();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -179,10 +181,8 @@ ExpectedNodePtr Parser::ParseExpressionStatement()
     auto e = ParseExpression();
     if(!e) return std::unexpected(e.error());
 
-    auto semicolon = Expect(TokenType::Semicolon, "Expected ';' after expression");
-    if(!semicolon) return std::unexpected(semicolon.error());
+    if(auto semicolon = Expect(TokenType::Semicolon, "In expression"); !semicolon) return std::unexpected(semicolon.error());
 
-    // Wrap the expression cleanly into a statement node
     SourceLocation loc = e.value()->source_location;
     return std::make_unique<ExpressionStatement>(std::move(e.value()), loc);
 }
@@ -558,10 +558,7 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         return std::unexpected(body.error());
     }
 
-    if(receiver.has_value())
-    {
-        method_signature->name.lexeme = receiver->type_name.lexeme + "$" + method_signature->name.lexeme;
-    }
+
 
     return std::make_unique<FunctionDeclaration>(
         std::move(method_signature.value()),
@@ -640,13 +637,14 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
         }
 
         auto type_name = Consume();
-        if(!type_name.IsPrimitiveTypeName() && type_name.type != TokenType::Identifier)
+        if(!type_name.IsNonVoidType())
         {
             return std::unexpected(
-                std::format("Expected typename for parameter '{}', got '{}' at {}",
+                std::format("Expected typename for parameter '{}', got '{}' at {}, its type is '{}'",
                     parameter_name->lexeme,
                     type_name.lexeme,
-                    type_name.source_location)
+                    type_name.source_location,
+                    type_name.type)
             );
         }
 
@@ -864,18 +862,6 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
         return std::unexpected(struct_name.error());
     }
 
-    std::vector<Token> implemented_interfaces;
-    if(Match(TokenType::Colon))
-    {
-        do
-        {
-            auto interface_name = Expect(TokenType::Identifier, "Expected interface name");
-            if(!interface_name) return std::unexpected(interface_name.error());
-            implemented_interfaces.push_back(interface_name.value());
-        }
-        while(Match(TokenType::Comma));
-    }
-
     if(const auto left_brace = Expect(TokenType::LeftCurlyBrace, error_msg); !left_brace)
     {
         return std::unexpected(left_brace.error());
@@ -936,7 +922,7 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
         return std::unexpected(right_brace.error());
     }
 
-    return std::make_unique<StructDeclaration>(*struct_name, std::move(struct_members), std::move(implemented_interfaces), struct_name->source_location);
+    return std::make_unique<StructDeclaration>(*struct_name, std::move(struct_members), struct_name->source_location);
 }
 
 ExpectedPtr<EnumDeclaration> Parser::ParseEnumDeclaration()
@@ -1032,6 +1018,64 @@ ExpectedPtr<InterfaceDeclaration> Parser::ParseInterfaceDeclaration()
     return std::make_unique<InterfaceDeclaration>(*name, std::move(methods), keyword.source_location);
 }
 
+ExpectedPtr<ForLoop> Parser::ParseForLoop()
+{
+    constexpr auto error = "Parsing for loop";
+    auto for_keyword = Consume(); // for keyword
+
+    auto iterator = Expect(TokenType::Identifier, error);
+    if(!iterator) return std::unexpected(iterator.error());
+
+    if(auto in = Expect(TokenType::In, error); !in) return std::unexpected(in.error());
+
+    auto iterable = ParseExpression();
+    if(!iterable) return std::unexpected(iterable.error());
+
+    auto body = ParseBodyStatement();
+    if(!body) return std::unexpected(body.error());
+
+    return std::make_unique<ForLoop>(
+        std::move(iterator.value()), std::move(iterable.value()),
+        std::move(body.value()), for_keyword.source_location);
+}
+
+ExpectedPtr<ExtendStatement> Parser::ParseExtendStatement()
+{
+    auto& extend = Consume(); // extend keyword
+
+    auto target_type = Consume();
+    if(!target_type.IsNonVoidType())
+    {
+        return std::unexpected(
+            std::format("Expected type name after extend keyword, got '{}' at {}",
+                target_type.lexeme,
+                target_type.source_location
+            )
+        );
+    }
+
+    if(auto colon = Expect(TokenType::Colon, "After struct type in extend statement");
+        !colon)
+    {
+        return std::unexpected(colon.error());
+    }
+
+    auto interface_extending = Expect(TokenType::Identifier, "Interface identifier for extend statement");
+
+    if(!interface_extending) return std::unexpected(interface_extending.error());
+
+    if(auto semicolon = Expect(TokenType::Semicolon, "In extend statement"); !semicolon)
+    {
+        return std::unexpected(semicolon.error());
+    }
+
+    return std::make_unique<ExtendStatement>(
+        std::move(target_type),
+        std::move(interface_extending.value()),
+        extend.source_location
+    );
+}
+
 std::expected<MethodSignature, std::string> Parser::ParseMethodSignature()
 {
     auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
@@ -1059,7 +1103,7 @@ std::expected<MethodSignature, std::string> Parser::ParseMethodSignature()
     }
 
     auto return_type = Consume();
-    if(!return_type.IsPrimitiveTypeName() && return_type.type != TokenType::Identifier)
+    if(!return_type.IsVoidableType())
     {
         return std::unexpected(
             std::format("Expected type name after '->', got '{}' at {}",

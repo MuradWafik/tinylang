@@ -35,7 +35,7 @@ This document outlines the strategic progression for TinyLang, moving from a bas
 ## Phase 4B: Expressive Syntax, Pattern Matching & Destructuring
 **Priority:** Medium-High | **Difficulty:** Medium-High
 
-*   **Collection & Range Iteration (`for ... in`):**
+*   **Collection & Range Iteration (`for ... in`) (✅ Completed):**
     *   **Range Loops:** `for i in range(0, 10)` – Desugared into a high-performance while loop in the compiler or handled via dedicated loop opcodes.
     *   **Collection Iteration:** `for item in array` – Iterates over arrays, strings, and custom collections.
 *   **Tuples & Destructuring / Unpacking:**
@@ -65,6 +65,23 @@ This document outlines the strategic progression for TinyLang, moving from a bas
     *   **Method Syntax (Go-Style Receivers) (✅ Completed):** Methods are defined independently from the struct data using a receiver parameter: `fn (self: Vector2) to_string() -> string { ... }`.
     *   **Interface Declaration (C#-Style Explicit) (✅ Completed):** Structs must explicitly declare the interfaces they implement to enforce strict compile-time checking: `struct Range : IntIterator { ... }`.
     *   **Implementation (✅ Completed):** 100% verified during Semantic Analysis. The VM executes direct function calls with zero runtime lookup penalty.
+*   **Extension Blocks & Primitive Methods (✅ Completed):**
+    *   `extend int : Stringer;` syntax to allow bolting interfaces onto built-in primitives and arrays.
+    *   Enables methods on primitive types using standard receiver syntax (`fn (self: int) to_string()`).
+
+## Phase 4C: Characters & String Manipulation
+**Priority:** Medium | **Difficulty:** Medium
+
+*   **Goal:** Add a primitive `char` type (UTF-8 representation) and native string indexing to enable in-language string APIs.
+*   **Characters (`char`):**
+    *   Introduce `char` primitives and character literals (e.g., `'a'`).
+    *   Update AST and Semantic Analyzer to parse and type-check `char` values.
+*   **String Indexing:**
+    *   Enable read-only indexing on strings (`str[index] -> char`) compiling to a native `OP_GET_STRING_CHAR` bytecode.
+    *   Strings remain structurally immutable to prevent reference-sharing mutations.
+*   **Standard String API:**
+    *   Expose a native `allocate_string(length)` plugin function or `string_from_chars(char[])`.
+    *   Develop an in-language standard library (`string.tl`) utilizing receiver methods (e.g., `fn (self: string) to_upper() -> string`) to manipulate strings natively without C++ baggage.
 
 ## Phase 5: Modules, Native Plugins & Project Configuration
 **Priority:** Medium | **Difficulty:** Medium-High
@@ -77,7 +94,21 @@ This document outlines the strategic progression for TinyLang, moving from a bas
     *   **Project-Root Relative:** All module and plugin path strings (e.g. `native module "plugins/std.so";`) are strictly resolved relative to the **Project Root** (discovered by ascending until `tinylang.json` / `tinylang.toml` is found), rather than relative to individual source files.
 *   **Implementation:** Requires upgrading the Parser to resolve module paths against the project root, parsing imported files into isolated ASTs, and linking their `SymbolTable`s together during Semantic Analysis to prevent naming collisions.
 
-## Phase 6: Generics & Monomorphization
+## Phase 6: Advanced Typing (Any, Unions & Result Types)
+**Priority:** Medium | **Difficulty:** High
+
+*   **Goal:** Introduce dynamic dispatch capabilities, heterogenous collections, and safe error handling.
+*   **The `any` Type:**
+    *   A dynamically-typed, boxed value implemented as a Tagged Union in the VM.
+    *   Allows heterogeneous arrays like `var list: any[] = [1, "hello", true];`.
+    *   Requires runtime type-checking when casting back to static types (`item as int`).
+*   **Type Unions:**
+    *   `var x: int | string = 10;` – Restricts an `any`-like payload to specific known types at compile-time.
+*   **Result Types (Error Handling):**
+    *   Built-in `Result` equivalent leveraging Type Unions or Payload Enums (e.g., `Result.Ok(data)` or `Result.Err(msg)`).
+    *   Enables safe, exception-free error propagation.
+
+## Phase 7: Generics & Monomorphization
 **Priority:** Low | **Difficulty:** Extremely High
 
 *   **Goal:** Allow reusable, type-safe structures like `Array<T>` and generic functions.
@@ -85,7 +116,7 @@ This document outlines the strategic progression for TinyLang, moving from a bas
     *   The Semantic Analyzer creates a fresh, strongly-typed copy of the generic function or struct for every unique type `T` used in the program.
     *   This guarantees that the Bytecode VM executes blazing fast, direct `OP_CALL` instructions without ever needing vtables or dynamic dispatch.
 
-## Phase 7: Tooling (Qt IDE & LSP)
+## Phase 8: Tooling (Qt IDE & LSP)
 **Priority:** Lowest (Final Polish) | **Difficulty:** Varies
 
 *   **Qt Text Editor (Medium):** Build a bespoke editor for TinyLang using `QSyntaxHighlighter`, directly hooking the C++ TinyLang Lexer into the Qt rendering pipeline for instant, accurate syntax highlighting.

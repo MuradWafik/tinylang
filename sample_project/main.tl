@@ -1,17 +1,20 @@
 native module "std";
 native fn print_int(value: int) -> void;
 
-interface IterableInt{
+interface IterableInt
+{
    fn has_next() -> bool;
    fn next() -> int;
 }
 
-struct Range : IterableInt
+struct Range
 {
     var start: int;
     var end: int;
     var step: int;
 }
+
+extend Range : IterableInt;
 
 fn (self: Range) has_next() -> bool
 {
@@ -28,39 +31,29 @@ fn (self: Range) next() -> int
     return val;
 }
 
-interface Movable {
-    fn move_x() -> void;
+// --- New Extension Block Test ---
+
+interface Printable {
+    fn print() -> void;
 }
 
-interface Resizable {
-    fn resize() -> void;
+// Define the method on the primitive receiver
+fn (self: int) print() -> void {
+    print_int(self);
 }
 
-struct Box : Movable, Resizable {
-    var x: int;
-    var size: int;
-}
-
-fn (self: Box) move_x() -> void {
-    self.x = self.x + 1;
-}
-
-fn (self: Box) resize() -> void {
-    self.size = self.size * 2;
-}
-
+// Bolting the interface onto the primitive int!
+extend int : Printable;
 
 fn main() -> void {
-    var b = Box(0, 10);
-    b.move_x();
-    b.resize();
-    // print_int(b.x);
-    // print_int(b.size);
 
-
-    var x = Range(10, 0, -2);
-    while(x.has_next()){
-        print_int(x.start);
-        x.next();
+    for i in [1, 2, 3, 4]
+    {
+        print_int(i);
     }
+
+    var my_number = 42;
+    my_number.print();
+
 }
+

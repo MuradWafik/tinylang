@@ -257,3 +257,56 @@ TEST_CASE("VM - Enums", "[VM]") {
         REQUIRE(std::get<bool>(RunAndGetGlobal(source, "is_ok")) == true);
     }
 }
+
+TEST_CASE("VM - Advanced Control Flow", "[VM]") {
+    SECTION("For loop with array iteration") {
+        std::string source = R"(
+            var arr: int[] = [10, 20, 30, 40, 50];
+            var sum: int = 0;
+            for val in arr {
+                sum = sum + val;
+            }
+        )";
+        auto val = RunAndGetGlobal(source, "sum");
+        REQUIRE(std::get<int>(val) == 150);
+    }
+
+    SECTION("While loop with break and continue") {
+        std::string source = R"(
+            var sum: int = 0;
+            var i: int = 0;
+            while (i < 10) {
+                i = i + 1;
+                if (i == 5) {
+                    continue;
+                }
+                if (i == 8) {
+                    break;
+                }
+                sum = sum + i;
+            }
+        )";
+        // i goes 1, 2, 3, 4, (5 is skipped), 6, 7. Sum = 1 + 2 + 3 + 4 + 6 + 7 = 23
+        auto val = RunAndGetGlobal(source, "sum");
+        REQUIRE(std::get<int>(val) == 23);
+    }
+
+    SECTION("For loop array with break and continue") {
+        std::string source = R"(
+            var arr: int[] = [10, 20, 30, 40, 50, 60];
+            var sum: int = 0;
+            for val in arr {
+                if (val == 30) {
+                    continue;
+                }
+                if (val == 50) {
+                    break;
+                }
+                sum = sum + val;
+            }
+        )";
+        // sum = 10 + 20 + 40 = 70
+        auto val = RunAndGetGlobal(source, "sum");
+        REQUIRE(std::get<int>(val) == 70);
+    }
+}

@@ -75,7 +75,8 @@ std::string Token::TypeToString(const TokenType token_type)
     return "unknown token";
 }
 
-bool Token::IsPrimitiveTypeName() const {
+bool Token::IsPrimitiveTypeName() const
+{
     switch (type)
     {
         case TokenType::BoolType:
@@ -88,7 +89,8 @@ bool Token::IsPrimitiveTypeName() const {
     }
 }
 
-bool Token::IsArithmeticOperator() const {
+bool Token::IsArithmeticOperator() const
+{
     switch (type)
     {
         case TokenType::Plus:
@@ -100,7 +102,8 @@ bool Token::IsArithmeticOperator() const {
     }
 }
 
-bool Token::IsComparisonOperator() const {
+bool Token::IsComparisonOperator() const
+{
     switch(type)
     {
         case TokenType::Less:
@@ -112,7 +115,8 @@ bool Token::IsComparisonOperator() const {
     }
 }
 
-bool Token::IsLogicalOperator() const {
+bool Token::IsLogicalOperator() const
+{
     switch(type)
     {
         case TokenType::AndAnd:

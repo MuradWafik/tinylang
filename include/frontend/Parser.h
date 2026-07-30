@@ -64,7 +64,7 @@ private:
 
 
     ExpectedStatementPtr ParseFunctionDeclaration();
-    ExpectedNodePtr ParseNativeStatement();
+    ExpectedNodePtr ParseNativeStatement(); // native module/function declaration
     Expected<std::vector<Parameter>> ParseParameters();
     ExpectedPtr<VariableDeclaration> ParseVariableDeclaration();
     ExpectedPtr<BodyStatement> ParseBodyStatement();
@@ -76,6 +76,11 @@ private:
     ExpectedPtr<StructDeclaration> ParseStructDeclaration();
     ExpectedPtr<EnumDeclaration> ParseEnumDeclaration();
     ExpectedPtr<InterfaceDeclaration> ParseInterfaceDeclaration();
+    ExpectedPtr<ForLoop> ParseForLoop();
+    ExpectedPtr<ExtendStatement> ParseExtendStatement();
+
+
+
 
     std::expected<MethodSignature, std::string> ParseMethodSignature();
 };
