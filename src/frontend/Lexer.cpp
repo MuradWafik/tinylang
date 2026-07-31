@@ -95,7 +95,6 @@ std::expected<Token, LexerError>  Lexer::LexString()
     std::string lexeme;
     const SourceLocation start_source = {line, column};
     char c = Peek();
-    assert(c == '"');
 
     // Consume the starting quote to not be included
     Consume();
@@ -123,22 +122,18 @@ std::expected<Token, LexerError>  Lexer::LexString()
             }
             c = Peek();
 
-            switch(c)
+            std::optional<char> escaped = GetEscapeCharacter(c);
+            if(!escaped.has_value())
             {
-                case 'n':  lexeme += '\n'; break;
-                case 't':  lexeme += '\t'; break;
-                case 'r':  lexeme += '\r'; break;
-                case '"':  lexeme += '"';  break;
-                case '\\': lexeme += '\\'; break;
-
-                default:
-                    return std::unexpected<LexerError>{
-                        {
-                            std::format("Unexpected escape character: {}", c),
-                            start_source
-                        }
-                    };
+                return std::unexpected<LexerError>{
+                    {
+                        std::format("Unexpected escape character: {}", c),
+                        start_source
+                    }
+                };
             }
+            
+            lexeme += escaped.value();
             Consume();
             continue;
         }
@@ -148,6 +143,40 @@ std::expected<Token, LexerError>  Lexer::LexString()
     }
 
     return std::unexpected<LexerError>{{"Missing closing quote to string", start_source}};
+}
+
+std::expected<Token, LexerError> Lexer::LexChar()
+{
+    std::string lexeme;
+    const SourceLocation start_source = {line, column};
+    Consume(); // consume the starting quote
+
+    if(IsAtEnd()) return std::unexpected<LexerError>{{"File ended while parsing char", start_source}};
+
+    if(const char c = Peek(); c == '\\')
+    {
+        Consume();
+        if(IsAtEnd()) return std::unexpected<LexerError>{{"File ended while parsing char escape", start_source}};
+        
+        std::optional<char> escaped = GetEscapeCharacter(Peek());
+        if(!escaped.has_value())
+        {
+            return std::unexpected<LexerError>{{"Invalid escape sequence in char", start_source}};
+        }
+        lexeme += escaped.value();
+    }
+    else
+    {
+        lexeme += c;
+    }
+    Consume();
+
+    if(!Match('\''))
+    {
+        return std::unexpected<LexerError>{{"Missing closing quote for char", start_source}};
+    }
+
+    return Token{TokenType::CharLiteral, lexeme, start_source};
 }
 
 std::expected<Token, LexerError>  Lexer::LexSymbol()
@@ -294,6 +323,17 @@ char Lexer::Consume()
     return cur;
 }
 
+bool Lexer::Match(const char c)
+{
+    if(IsAtEnd()) return false;
+    if(Peek() == c)
+    {
+        Consume();
+        return true;
+    }
+    return false;
+}
+
 std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view source)
 {
     this->index = 0;
@@ -349,6 +389,13 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
             {
                 return std::unexpected(result.error());
             }
+
+            tokens.push_back(result.value());
+        }
+        else if(cur == '\'')
+        {
+            auto result = LexChar();
+            if(!result) return std::unexpected(result.error());
 
             tokens.push_back(result.value());
         }
@@ -418,4 +465,19 @@ bool Lexer::TrySkipComments()
         }
     }
     return true;
+}
+
+std::optional<char> Lexer::GetEscapeCharacter(char c) const
+{
+    switch(c)
+    {
+        case 'n':  return '\n';
+        case 't':  return '\t';
+        case 'r':  return '\r';
+        case '"':  return '"';
+        case '\\': return '\\';
+        case '0':  return '\0';
+        case '\'': return '\'';
+        default:   return std::nullopt;
+    }
 }

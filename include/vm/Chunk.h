@@ -12,6 +12,7 @@ public:
     std::vector<ConstantValue> constants;
     std::vector<uint32_t> lines;
     std::vector<std::unique_ptr<FunctionObject>> functions;
+    bool has_main = false;
 
     Chunk() = default;
 

@@ -1,5 +1,6 @@
 #include "vm/Chunk.h"
 #include <print>
+
 void Chunk::Write(const uint8_t byte, const uint32_t line)
 {
     code.push_back(byte);
@@ -16,7 +17,6 @@ size_t Chunk::AddConstant(ConstantValue value)
     constants.push_back(std::move(value));
     return constants.size() - 1;
 }
-
 
 int Chunk::DisassembleInstruction(int offset) const
 {
@@ -38,40 +38,48 @@ int Chunk::DisassembleInstruction(int offset) const
         case OpCode::OP_CONSTANT_INT:
         case OpCode::OP_CONSTANT_FLOAT:
         case OpCode::OP_CONSTANT_BOOL:
+        case OpCode::OP_CONSTANT_CHAR:
         case OpCode::OP_CONSTANT_FUNCTION:
-        case OpCode::OP_ALLOCATE_STRING:
-        case OpCode::OP_DEFINE_GLOBAL_INT:
-        case OpCode::OP_DEFINE_GLOBAL_FLOAT:
-        case OpCode::OP_DEFINE_GLOBAL_BOOL:
-        case OpCode::OP_DEFINE_GLOBAL_FUNCTION:
-        case OpCode::OP_GET_GLOBAL_INT:
-        case OpCode::OP_GET_GLOBAL_FLOAT:
-        case OpCode::OP_GET_GLOBAL_BOOL:
-        case OpCode::OP_GET_GLOBAL_FUNCTION:
-        case OpCode::OP_SET_GLOBAL_INT:
-        case OpCode::OP_SET_GLOBAL_FLOAT:
-        case OpCode::OP_SET_GLOBAL_BOOL:
-        case OpCode::OP_DEFINE_GLOBAL_OBJECT:
-        case OpCode::OP_GET_GLOBAL_OBJECT:
-        case OpCode::OP_SET_GLOBAL_OBJECT:
         {
             const auto index = code[offset + 1];
             const auto& variable = constants[index];
             std::println("{:<24} {:4} '{}'", opcode_name, index, variable);
             return offset + 2;
         }
-        case OpCode::OP_GET_LOCAL_INT:
-        case OpCode::OP_GET_LOCAL_FLOAT:
-        case OpCode::OP_GET_LOCAL_BOOL:
-        case OpCode::OP_GET_LOCAL_OBJECT:
-        case OpCode::OP_SET_LOCAL_INT:
-        case OpCode::OP_SET_LOCAL_FLOAT:
-        case OpCode::OP_SET_LOCAL_BOOL:
-        case OpCode::OP_SET_LOCAL_OBJECT:
+        case OpCode::OP_LOAD_NATIVE:
+        {
+            const auto path_index = code[offset + 1];
+            const auto name_index = code[offset + 2];
+            const auto offset_bytes = *reinterpret_cast<const uint16_t*>(&code[offset + 3]);
+            const auto num_args = code[offset + 5];
+            const auto return_bytes = code[offset + 6];
+            const auto& name = std::get<std::string>(constants[name_index]);
+            std::println("{:<24} offset: {:4} name_idx: {:4} '{}' ({} args)", opcode_name, offset_bytes, name_index, name, num_args);
+            return offset + 7;
+        }
+        case OpCode::OP_ALLOCATE_STRING:
+        {
+            const auto index = code[offset + 1];
+            const auto& variable = constants[index];
+            std::println("{:<24} {:4} '{}'", opcode_name, index, variable);
+            return offset + 2;
+        }
+        case OpCode::OP_DEFINE_GLOBAL:
+        case OpCode::OP_GET_GLOBAL:
+        case OpCode::OP_SET_GLOBAL:
+        {
+            const auto offset_bytes = *reinterpret_cast<const uint16_t*>(&code[offset + 1]);
+            const auto size = code[offset + 3];
+            std::println("{:<24} offset: {:4} size: {:4}", opcode_name, offset_bytes, size);
+            return offset + 4;
+        }
+        case OpCode::OP_GET_LOCAL:
+        case OpCode::OP_SET_LOCAL:
         {
             const uint16_t local_index = (code[offset + 1] << 8) | code[offset + 2];
-            std::println("{:<24} {:4} (byte offset)", opcode_name, local_index);
-            return offset + 3;
+            const auto size = code[offset + 3];
+            std::println("{:<24} {:4} (byte offset) size: {:4}", opcode_name, local_index, size);
+            return offset + 4;
         }
         case OpCode::OP_ALLOCATE_STRUCT:
         {
@@ -112,18 +120,7 @@ int Chunk::DisassembleInstruction(int offset) const
             std::println("{:<24} {:4}", opcode_name, jump);
             return offset + 3;
         }
-        case OpCode::OP_LOAD_NATIVE:
-        {
-            const auto path_index = code[offset + 1];
-            const auto name_index = code[offset + 2];
-            const auto num_args   = code[offset + 3];
-            const auto return_bytes = code[offset + 4];
-            const auto& path = constants[path_index];
-            const auto& name = constants[name_index];
-            std::println("{:<24} path_idx: {:2} '{}', name_idx: {:2} '{}', args: {:2}, ret_bytes: {:2}", 
-                opcode_name, path_index, path, name_index, name, num_args, return_bytes);
-            return offset + 5;
-        }
+
         case OpCode::OP_CALL:
         {
             const uint16_t arg_bytes = (code[offset + 1] << 8) | code[offset + 2];

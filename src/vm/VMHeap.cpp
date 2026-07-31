@@ -20,23 +20,10 @@ void VMHeap::Sweep()
     }
 }
 
-void VMHeap::CollectGarbage(const std::vector<uint8_t>& vm_stack, std::unordered_map<std::string, ConstantValue>& globals)
+void VMHeap::CollectGarbage(const std::vector<uint8_t>& vm_stack, const std::vector<uint8_t>& globals)
 {
     ScanMemory(vm_stack.data(), vm_stack.size());
-
-    for(const auto& variant_val: globals | std::views::values)
-    {
-        // Check if this global variable holds an Object*
-        if(const auto* obj_ptr = std::get_if<Object*>(&variant_val))
-        {
-            if(Object* obj = *obj_ptr; objects.contains(obj)
-                && !obj->is_marked)
-            {
-                obj->is_marked = true;
-                worklist.push_back(obj);
-            }
-        }
-    }
+    ScanMemory(globals.data(), globals.size());
 
     TraverseWorklist();
     Sweep();

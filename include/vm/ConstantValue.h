@@ -16,6 +16,7 @@ using ConstantValue = std::variant<
     int32_t,
     std::float32_t,
     bool,
+    char8_t,
     std::string, // used as a temporary
     FunctionObject*,
     Object*,
@@ -56,6 +57,7 @@ inline std::string ToString(const ConstantValue& value)
         if constexpr(std::is_same_v<T, int32_t>) return std::to_string(arg);
         else if constexpr(std::is_same_v<T, std::float32_t>) return std::to_string(arg);
         else if constexpr(std::is_same_v<T, bool>) return arg ? "true" : "false";
+        else if constexpr(std::is_same_v<T, char8_t>) return std::to_string(arg);
         else if constexpr(std::is_same_v<T, std::string>) return arg;
         else if constexpr(std::is_same_v<T, FunctionObject*>) return std::format("<fn {}>", arg->name);
         else if constexpr(std::is_same_v<T, std::monostate>) return "void";

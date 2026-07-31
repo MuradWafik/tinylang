@@ -47,7 +47,7 @@ extend int : Printable;
 
 fn main() -> void {
 
-    for i in [1, 2, 3, 4]
+    for i in [1, 20, 30, 1]
     {
         print_int(i);
     }

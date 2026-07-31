@@ -9,7 +9,8 @@
 #include "vm/VM.h"
 
 // Helper function to compile and run code in the VM, then extract a global variable
-static ConstantValue RunAndGetGlobal(const std::string& source, const std::string& var_name) {
+template <typename T>
+static T RunAndGetGlobal(const std::string& source, const std::string& var_name) {
     Lexer lexer{};
     auto lex_result = lexer.Lex(source);
     REQUIRE(lex_result.has_value());
@@ -28,19 +29,11 @@ static ConstantValue RunAndGetGlobal(const std::string& source, const std::strin
 
     Compiler compiler{&project_config};
     auto chunk = compiler.Compile(parse_result.value());
-    REQUIRE(chunk != nullptr);
 
-    for(size_t offset = 0; offset < chunk->code.size();) {
-        offset = chunk->DisassembleInstruction(offset);
-    }
+    VM vm;
+    vm.StartProgram(chunk.get());
 
-    VM vm{};
-    auto vm_result = vm.Interpret(chunk.get());
-    REQUIRE(vm_result == InterpretResult::INTERPRET_OK);
-
-    auto val = vm.GetGlobal(var_name);
-    REQUIRE(val.has_value());
-    return val.value();
+    return vm.GetGlobal<T>(compiler.global_offsets.at(var_name));
 }
 
 TEST_CASE("VM - Basic Arithmetic and Variables", "[VM]") {
@@ -50,9 +43,8 @@ TEST_CASE("VM - Basic Arithmetic and Variables", "[VM]") {
             var b: int = 5;
             var c: int = (a * b) + (a / b) - 2;
         )";
-        auto val = RunAndGetGlobal(source, "c");
-        REQUIRE(std::holds_alternative<int>(val));
-        REQUIRE(std::get<int>(val) == 50); // (10 * 5) + (10 / 5) - 2 = 50 + 2 - 2 = 50
+        auto val = RunAndGetGlobal<int32_t>(source, "c");
+        REQUIRE(val == 50); // (10 * 5) + (10 / 5) - 2 = 50 + 2 - 2 = 50
     }
 
     SECTION("Float arithmetic") {
@@ -61,9 +53,8 @@ TEST_CASE("VM - Basic Arithmetic and Variables", "[VM]") {
             var y: float = 2.0;
             var z: float = x * y;
         )";
-        auto val = RunAndGetGlobal(source, "z");
-        REQUIRE(std::holds_alternative<std::float32_t>(val));
-        REQUIRE_THAT(std::get<std::float32_t>(val), Catch::Matchers::WithinRel(7.0f, 0.001f));
+        auto val = RunAndGetGlobal<std::float32_t>(source, "z");
+        REQUIRE_THAT(val, Catch::Matchers::WithinRel(7.0f, 0.001f));
     }
 }
 
@@ -75,8 +66,8 @@ TEST_CASE("VM - Control Flow", "[VM]") {
                 result = 1;
             }
         )";
-        auto val = RunAndGetGlobal(source, "result");
-        REQUIRE(std::get<int>(val) == 1);
+        auto val = RunAndGetGlobal<int>(source, "result");
+        REQUIRE(val == 1);
     }
 
     SECTION("If statement else branch") {
@@ -88,8 +79,8 @@ TEST_CASE("VM - Control Flow", "[VM]") {
                 result = 2;
             }
         )";
-        auto val = RunAndGetGlobal(source, "result");
-        REQUIRE(std::get<int>(val) == 2);
+        auto val = RunAndGetGlobal<int>(source, "result");
+        REQUIRE(val == 2);
     }
 }
 
@@ -101,8 +92,8 @@ TEST_CASE("VM - Loops", "[VM]") {
                 counter = counter + 1;
             }
         )";
-        auto val = RunAndGetGlobal(source, "counter");
-        REQUIRE(std::get<int>(val) == 5);
+        auto val = RunAndGetGlobal<int>(source, "counter");
+        REQUIRE(val == 5);
     }
 }
 
@@ -114,8 +105,8 @@ TEST_CASE("VM - Functions", "[VM]") {
             }
             var result: int = add(3, 4);
         )";
-        auto val = RunAndGetGlobal(source, "result");
-        REQUIRE(std::get<int>(val) == 7);
+        auto val = RunAndGetGlobal<int>(source, "result");
+        REQUIRE(val == 7);
     }
 
     SECTION("Recursive factorial function") {
@@ -128,8 +119,8 @@ TEST_CASE("VM - Functions", "[VM]") {
             }
             var result: int = factorial(5);
         )";
-        auto val = RunAndGetGlobal(source, "result");
-        REQUIRE(std::get<int>(val) == 120);
+        auto val = RunAndGetGlobal<int>(source, "result");
+        REQUIRE(val == 120);
     }
 }
 
@@ -145,9 +136,9 @@ TEST_CASE("VM - Logical Short Circuit", "[VM]") {
                 // Should not reach
             }
         )";
-        auto val = RunAndGetGlobal(source, "result");
+        auto val = RunAndGetGlobal<int>(source, "result");
         // Result should still be 0 because right side of && was short-circuited
-        REQUIRE(std::get<int>(val) == 0);
+        REQUIRE(val == 0);
     }
 
     SECTION("Logical OR short circuits") {
@@ -161,9 +152,9 @@ TEST_CASE("VM - Logical Short Circuit", "[VM]") {
                 // Will reach
             }
         )";
-        auto val = RunAndGetGlobal(source, "result");
+        auto val = RunAndGetGlobal<int>(source, "result");
         // Result should still be 0 because right side of || was short-circuited
-        REQUIRE(std::get<int>(val) == 0);
+        REQUIRE(val == 0);
     }
 }
 
@@ -174,8 +165,8 @@ TEST_CASE("VM - Native Functions", "[VM]") {
             native fn tinylang_clock() -> float;
             var res: float = tinylang_clock();
         )";
-        auto val = RunAndGetGlobal(source, "res");
-        REQUIRE(std::get<std::float32_t>(val) == 42.0f);
+        auto val = RunAndGetGlobal<std::float32_t>(source, "res");
+        REQUIRE(val == 42.0f);
     }
 }
 
@@ -196,8 +187,8 @@ TEST_CASE("VM - Methods", "[VM]") {
             vec.x = 42;
             result = vec.get_x();
         )";
-        auto val = RunAndGetGlobal(source, "result");
-        REQUIRE(std::get<int>(val) == 42);
+        auto val = RunAndGetGlobal<int>(source, "result");
+        REQUIRE(val == 42);
     }
     SECTION("Can instantiate structs using default and full constructors") {
         std::string source = R"(
@@ -212,11 +203,11 @@ TEST_CASE("VM - Methods", "[VM]") {
             var vec2 = Vector2();
             var res2 = vec2.x + vec2.y;
         )";
-        auto val1 = RunAndGetGlobal(source, "res1");
-        REQUIRE(std::get<int>(val1) == 30);
+        auto val1 = RunAndGetGlobal<int>(source, "res1");
+        REQUIRE(val1 == 30);
 
-        auto val2 = RunAndGetGlobal(source, "res2");
-        REQUIRE(std::get<int>(val2) == 0);
+        auto val2 = RunAndGetGlobal<int>(source, "res2");
+        REQUIRE(val2 == 0);
     }
 }
 
@@ -237,9 +228,9 @@ TEST_CASE("VM - Enums", "[VM]") {
             var test2: bool = (a == Status.Approved);
             var test3: bool = (r == Status.Rejected);
         )";
-        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "test1")) == true);
-        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "test2")) == true);
-        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "test3")) == true);
+        REQUIRE(RunAndGetGlobal<bool>(source, "test1") == true);
+        REQUIRE(RunAndGetGlobal<bool>(source, "test2") == true);
+        REQUIRE(RunAndGetGlobal<bool>(source, "test3") == true);
     }
 
     SECTION("Can explicitly assign integer values to enum variants") {
@@ -254,7 +245,7 @@ TEST_CASE("VM - Enums", "[VM]") {
             var n: Codes = Codes.NotFound;
             var is_ok: bool = (o == Codes.Ok);
         )";
-        REQUIRE(std::get<bool>(RunAndGetGlobal(source, "is_ok")) == true);
+        REQUIRE(RunAndGetGlobal<bool>(source, "is_ok") == true);
     }
 }
 
@@ -267,8 +258,8 @@ TEST_CASE("VM - Advanced Control Flow", "[VM]") {
                 sum = sum + val;
             }
         )";
-        auto val = RunAndGetGlobal(source, "sum");
-        REQUIRE(std::get<int>(val) == 150);
+        auto val = RunAndGetGlobal<int>(source, "sum");
+        REQUIRE(val == 150);
     }
 
     SECTION("While loop with break and continue") {
@@ -287,8 +278,8 @@ TEST_CASE("VM - Advanced Control Flow", "[VM]") {
             }
         )";
         // i goes 1, 2, 3, 4, (5 is skipped), 6, 7. Sum = 1 + 2 + 3 + 4 + 6 + 7 = 23
-        auto val = RunAndGetGlobal(source, "sum");
-        REQUIRE(std::get<int>(val) == 23);
+        auto val = RunAndGetGlobal<int>(source, "sum");
+        REQUIRE(val == 23);
     }
 
     SECTION("For loop array with break and continue") {
@@ -306,7 +297,7 @@ TEST_CASE("VM - Advanced Control Flow", "[VM]") {
             }
         )";
         // sum = 10 + 20 + 40 = 70
-        auto val = RunAndGetGlobal(source, "sum");
-        REQUIRE(std::get<int>(val) == 70);
+        auto val = RunAndGetGlobal<int>(source, "sum");
+        REQUIRE(val == 70);
     }
 }

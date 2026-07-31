@@ -38,6 +38,7 @@ This document outlines the strategic progression for TinyLang, moving from a bas
 *   **Collection & Range Iteration (`for ... in`) (✅ Completed):**
     *   **Range Loops:** `for i in range(0, 10)` – Desugared into a high-performance while loop in the compiler or handled via dedicated loop opcodes.
     *   **Collection Iteration:** `for item in array` – Iterates over arrays, strings, and custom collections.
+    *   **`in` Contains Operator:** `if "a" in "apple"` or `if 5 in my_array`. Resolves to underlying contains logic based on the right-hand operand's type.
 *   **Tuples & Destructuring / Unpacking:**
     *   **Tuples:** Fixed-size, heterogeneous anonymous containers like `var pair: (int, string) = (42, "hello");`.
     *   **Tuple & Struct Unpacking:** 

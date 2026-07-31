@@ -16,7 +16,7 @@ PluginLoader::~PluginLoader()
     loaded_libraries.clear();
 }
 
-std::expected<NativeFuncPtr, std::string> PluginLoader::LoadSymbol(const std::string& lib_path, const std::string& symbol_name)
+std::expected<NativeFn, std::string> PluginLoader::LoadSymbol(const std::string& lib_path, const std::string& symbol_name)
 {
     void* handle = nullptr;
     if(const auto it = loaded_libraries.find(lib_path); it != loaded_libraries.end())
@@ -34,7 +34,7 @@ std::expected<NativeFuncPtr, std::string> PluginLoader::LoadSymbol(const std::st
     }
 
     dlerror(); // Clear any existing errors
-    auto symbol = reinterpret_cast<NativeFuncPtr>(dlsym(handle, symbol_name.c_str()));
+    auto symbol = reinterpret_cast<NativeFn>(dlsym(handle, symbol_name.c_str()));
     if(const char* dlsym_error = dlerror())
     {
         return std::unexpected(std::format("Failed to find symbol '{}' in '{}': {}", symbol_name, lib_path, dlsym_error));

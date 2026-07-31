@@ -182,6 +182,6 @@ private:
 
 
     void InitializeDefaults();
-    std::expected<void, std::string> EnsureInterfacesImplemented();
+    std::expected<void, std::string> EnsureInterfacesImplemented() const;
 
 };

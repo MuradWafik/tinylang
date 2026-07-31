@@ -57,20 +57,20 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::OrOr:            return "||";
 
         // Delimiters & Punctuation
-        case TokenType::LeftParen:       return "(";
-        case TokenType::RightParen:      return ")";
-        case TokenType::LeftCurlyBrace:       return "{";
-        case TokenType::RightCurlyBrace:      return "}";
-        case TokenType::LeftSquareBracket:     return "[";
-        case TokenType::RightSquareBracket:    return "]";
-        case TokenType::Colon:           return ":";
-        case TokenType::Semicolon:       return ";";
-        case TokenType::Comma:           return ",";
-        case TokenType::Arrow:           return "->";
-        case TokenType::Dot:           return ".";
+        case TokenType::LeftParen:          return "(";
+        case TokenType::RightParen:         return ")";
+        case TokenType::LeftCurlyBrace:     return "{";
+        case TokenType::RightCurlyBrace:    return "}";
+        case TokenType::LeftSquareBracket:  return "[";
+        case TokenType::RightSquareBracket: return "]";
+        case TokenType::Colon:              return ":";
+        case TokenType::Semicolon:          return ";";
+        case TokenType::Comma:              return ",";
+        case TokenType::Arrow:              return "->";
+        case TokenType::Dot:                return ".";
 
         // Special System Tokens
-        case TokenType::EndOfFile:       return "end of file";
+        case TokenType::EndOfFile:         return "end of file";
     }
     return "unknown token";
 }
@@ -83,6 +83,7 @@ bool Token::IsPrimitiveTypeName() const
         case TokenType::IntType:
         case TokenType::FloatType:
         case TokenType::StringType:
+        case TokenType::CharType:
         case TokenType::Void:
             return true;
         default: return false;

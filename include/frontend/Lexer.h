@@ -17,16 +17,20 @@ struct LexerError
 class Lexer
 {
 public:
+
     std::expected<std::vector<Token>, LexerError> Lex(std::string_view source);
 private:
     [[nodiscard]] bool IsAtEnd() const;
     [[nodiscard]] char Peek() const;
     [[nodiscard]] std::optional<char> PeekNext() const;
+    [[nodiscard]] std::optional<char> GetEscapeCharacter(char c) const;
     char Consume();
+    [[nodiscard]] bool Match(char c);
     void SkipWhitespace();
     std::expected<Token, LexerError> LexIdentifier();
     std::expected<Token, LexerError> LexNumber();
     std::expected<Token, LexerError> LexString();
+    std::expected<Token, LexerError> LexChar();
     std::expected<Token, LexerError> LexSymbol();
 
     [[nodiscard]] Token CheckSymbolForNext(

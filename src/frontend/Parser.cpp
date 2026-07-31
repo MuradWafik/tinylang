@@ -453,6 +453,11 @@ ExpectedExpressionPtr Parser::ParsePrimary()
             Token strToken = Consume();
             return std::make_unique<StringLiteral>(std::move(strToken.lexeme), source_location);
         }
+        case TokenType::CharLiteral:
+        {
+            Consume();
+            return std::make_unique<CharLiteral>(lexeme[0], source_location);
+        }
         case TokenType::True:
         {
             Consume();

@@ -154,6 +154,11 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
         string_node->type_info = PrimitiveType::String.get();
         return PrimitiveType::String.get();
     }
+    if(auto* char_node = dynamic_cast<CharLiteral*>(expr))
+    {
+        char_node->type_info = PrimitiveType::Char.get();
+        return PrimitiveType::Char.get();
+    }
 
     return std::unexpected("Unknown expression type ");
 }
@@ -692,8 +697,6 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeBinaryExpressio
         return Return(std::format("Error in right side of binary expression: {}", right.error()));
     }
 
-    // const auto left_type = symbol_table.LookupType(left.value());
-    // const auto right_type = symbol_table.LookupType(right.value());
     const auto left_type = left.value();
     const auto right_type = right.value();
 
@@ -760,6 +763,16 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpre
         return Return(lhs.error());
     }
 
+    if(const auto* index_access = dynamic_cast<IndexAccess*>(assignment_expression->target.get()); index_access)
+    {
+        // cant assign individual indices for a string access since they are immutable
+        if(index_access->array_expr->type_info == PrimitiveType::String.get())
+        {
+            return Return("Strings are immutable and do not support index assignment");
+        }
+
+    }
+
     auto rhs = AnalyzeExpression(assignment_expression->value.get());
     if(!rhs)
     {
@@ -768,7 +781,10 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpre
 
     if(!rhs.value()->IsAssignableTo(lhs.value()))
     {
-        return Return(std::format("Type mismatch: Cannot assign '{}' to '{}'", rhs.value()->GetName(), lhs.value()->GetName()));
+        return Return(std::format(
+            "Type mismatch: Cannot assign '{}' to '{}' at {}",
+            rhs.value()->GetName(), lhs.value()->GetName(), assignment_expression->source_location)
+        );
     }
     assignment_expression->type_info = rhs.value();
     return rhs.value();
@@ -925,12 +941,14 @@ void SemanticAnalyzer::InitializeDefaults()
     symbol_table.DefineType(PrimitiveType::Float->GetName(), PrimitiveType::Float.get());
     symbol_table.DefineType(PrimitiveType::Bool->GetName(), PrimitiveType::Bool.get());
     symbol_table.DefineType(PrimitiveType::String->GetName(), PrimitiveType::String.get());
+    symbol_table.DefineType(PrimitiveType::Char->GetName(), PrimitiveType::Char.get());
     symbol_table.DefineType(PrimitiveType::Void->GetName(), PrimitiveType::Void.get());
 
     const Type* int_t = PrimitiveType::Int.get();
     const Type* float_t = PrimitiveType::Float.get();
     const Type* bool_t = PrimitiveType::Bool.get();
     const Type* string_t = PrimitiveType::String.get();
+    const Type* char_t = PrimitiveType::Char.get();
 
     // Arithmetic
     for(const auto op : {TokenType::Plus, TokenType::Minus, TokenType::Star, TokenType::Slash})
@@ -940,8 +958,7 @@ void SemanticAnalyzer::InitializeDefaults()
     }
 
     RegisterBinaryOperator(TokenType::Modulo, int_t, int_t, int_t);
-    // const auto left_type = symbol_table.LookupType(left.value());
-    // const auto right_type = symbol_table.LookupType(right.value());
+
     // String concatenation
     RegisterBinaryOperator(TokenType::Plus, string_t, string_t, string_t);
 
@@ -958,6 +975,7 @@ void SemanticAnalyzer::InitializeDefaults()
         RegisterBinaryOperator(op, float_t, float_t, bool_t);
         RegisterBinaryOperator(op, int_t, float_t, bool_t);
         RegisterBinaryOperator(op, float_t, int_t, bool_t);
+        RegisterBinaryOperator(op, char_t, char_t, bool_t);
     }
 
     // Equality
@@ -967,6 +985,7 @@ void SemanticAnalyzer::InitializeDefaults()
         RegisterBinaryOperator(op, float_t, float_t, bool_t);
         RegisterBinaryOperator(op, bool_t, bool_t, bool_t);
         RegisterBinaryOperator(op, string_t, string_t, bool_t);
+        RegisterBinaryOperator(op, char_t, char_t, bool_t);
     }
 
     RegisterUnaryOperator(TokenType::Negate, bool_t, bool_t);
@@ -977,28 +996,31 @@ void SemanticAnalyzer::InitializeDefaults()
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIndexAccess(IndexAccess* index_access)
 {
-    auto array_type = AnalyzeExpression(index_access->array_expr.get());
-    if(!array_type)
+    auto indexed_type = AnalyzeExpression(index_access->array_expr.get());
+    if(!indexed_type)
     {
-        return std::unexpected(array_type.error());
+        return std::unexpected(indexed_type.error());
     }
 
-    auto* array_t = dynamic_cast<const ArrayType*>(array_type.value());
-    if(!array_t)
+    auto accessing_type = AnalyzeExpression(index_access->index_expr.get());
+    if(!accessing_type) return std::unexpected(accessing_type.error());
+    if(accessing_type.value() != PrimitiveType::Int.get())
     {
-        return Return("Cannot index into a non-array type");
+        return Return(std::format("Indexing value must be an integer at {}", index_access->index_expr->source_location));
     }
 
-    auto index_type = AnalyzeExpression(index_access->index_expr.get());
-    if(!index_type) return std::unexpected(index_type.error());
-    if(index_type.value() != PrimitiveType::Int.get())
+    if(indexed_type.value() == PrimitiveType::String.get())
     {
-        return Return("Array index must be an integer");
+        index_access->type_info = PrimitiveType::Char.get();
+        return index_access->type_info;
+    }
+    if(auto* array_t = dynamic_cast<const ArrayType*>(indexed_type.value()))
+    {
+        index_access->type_info = array_t->GetElementType();
+        return index_access->type_info;
     }
 
-    // The type of the IndexAccess is the element type
-    index_access->type_info = array_t->GetElementType();
-    return index_access->type_info;
+    return Return("Cannot index into a non-array/string type");
 }
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(ArrayLiteral* array_node)
@@ -1176,22 +1198,21 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeForLoop(const ForLoop*
 
 
     }
-    else if(auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()); array_type)
+    else if(!dynamic_cast<const ArrayType*>(iterable_type.value()) && iterable_type.value() != PrimitiveType::String.get())
     {
-        // nothing?
+        return Return("Iterable must be a struct type, array, or string");
     }
-    else
-    {
-        return Return("Iterable must be a struct type or an array");
-    }
-
 
     auto& iterator = for_loop->iterator_name;
     const Type* iter_var_type = PrimitiveType::Int.get();
 
-    if (auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()))
+    if(auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()))
     {
         iter_var_type = array_type->GetElementType();
+    }
+    else if(iterable_type.value() == PrimitiveType::String.get())
+    {
+        iter_var_type = PrimitiveType::Char.get();
     }
 
     symbol_table.PushScope();
@@ -1244,7 +1265,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeExtendStatement(const 
     return {};
 }
 
-std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented()
+std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented() const
 {
     for (const auto& check : pending_interface_checks)
     {

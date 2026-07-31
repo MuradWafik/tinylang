@@ -25,18 +25,22 @@ public:
     InterpretResult StartProgram(Chunk* root_chunk);
     InterpretResult Interpret(Chunk* chunk);
 
-    std::optional<ConstantValue> GetGlobal(const std::string& name) const
+    void SetLocal();
+
+    template <typename T>
+    T GetGlobal(const uint16_t offset) const
     {
-        if(const auto it = globals.find(name); it != globals.end())
-        {
-            return it->second;
-        }
-        return std::nullopt;
+        T val;
+        std::memcpy(&val, globals.data() + offset, sizeof(T));
+        return val;
     }
 
 private:
     std::vector<uint8_t> stack{};
-    std::unordered_map<std::string, ConstantValue> globals{};
+    public:
+    const std::vector<uint8_t>& GetGlobals() const { return globals; }
+private:
+    std::vector<uint8_t> globals{};
     PluginLoader plugin_loader{};
     std::vector<std::unique_ptr<FunctionObject>> allocated_native_functions;
     // functions are no longer shared ptrs to work with the raw bytes so need to be managed
@@ -69,41 +73,38 @@ private:
         return ReadBytes<T>(stack);
     }
 
-    template <fundamental T>
-    void DefineGlobal()
+    void DefineGlobal(const uint16_t offset, const uint8_t size)
     {
-        const auto global_symbol = ExtractNextConstant();
-        const auto value = Pop<T>();
-        globals[std::get<std::string>(global_symbol)] = value;
+        if(offset + size > globals.size())
+        {
+            globals.resize(offset + size);
+        }
+        std::memcpy(globals.data() + offset, stack.data() + stack.size() - size, size);
+        stack.resize(stack.size() - size);
     }
 
-    template <fundamental T>
-    void GetGlobal()
+    void GetGlobal(const uint16_t offset, const uint8_t size)
     {
-        Push<T>(std::get<T>(globals[std::get<std::string>(ExtractNextConstant())]));
+        stack.insert(stack.end(), globals.data() + offset, globals.data() + offset + size);
     }
 
-    template <fundamental T>
-    void SetGlobal()
+    void SetGlobal(const uint16_t offset, const uint8_t size)
     {
-        const auto value = Peek<T>();
-        globals[std::get<std::string>(ExtractNextConstant())] = value;
+        std::memcpy(globals.data() + offset, stack.data() + stack.size() - size, size);
     }
 
-    template <fundamental T>
-    void SetLocalVariable()
+    void SetLocalVariable(const uint16_t offset, const uint8_t size)
     {
-        const auto local_index = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
-        const T value = ReadBytes<T>(stack);
-        std::memcpy(stack.data() + call_frames.back().stack_base + sizeof(FunctionObject*) + local_index, &value, sizeof(T));
+        std::memcpy(
+            stack.data() + call_frames.back().stack_base + sizeof(FunctionObject*) + offset,
+            stack.data() + stack.size() - size, size
+        );
     }
 
-    template <fundamental T>
-    void GetLocalVariable()
+    void GetLocalVariable(const uint16_t offset, const uint8_t size)
     {
-        const auto local_index = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
-        const T value = ReadBytesAbsolute<T>(stack, call_frames.back().stack_base + sizeof(FunctionObject*) + local_index);
-        Push(value);
+        const uint8_t* ptr = stack.data() + call_frames.back().stack_base + sizeof(FunctionObject*) + offset;
+        stack.insert(stack.end(), ptr, ptr + size);
     }
 
     template <typename T>
@@ -194,8 +195,7 @@ private:
         return l != r;
     }
 
-    template <fundamental T>
-    std::optional<InterpretResult> Return()
+    std::optional<InterpretResult> Return(const uint8_t size)
     {
         // If it's the outermost scope, exit
         if(call_frames.size() == 1)
@@ -204,34 +204,25 @@ private:
             return InterpretResult::INTERPRET_OK;
         }
 
-        const auto return_value = Pop<T>();
         const auto frame = call_frames.back();
         call_frames.pop_back();
-        // Erase everything (the function pointer, arguments, and locals)
-        stack.resize(frame.stack_base);
 
-        Push(return_value);
-        return std::nullopt;
-    }
-
-    // void
-    std::optional<InterpretResult> Return()
-    {
-        // If it's the outermost scope, exit
-        if(call_frames.size() == 1)
+        if(size > 0)
         {
-            call_frames.pop_back();
-            return InterpretResult::INTERPRET_OK;
+            const uint8_t* return_value_ptr = stack.data() + stack.size() - size;
+            std::vector<uint8_t> temp_buffer(return_value_ptr, return_value_ptr + size);
+            
+            stack.resize(frame.stack_base);
+            stack.insert(stack.end(), temp_buffer.begin(), temp_buffer.end());
         }
-        // grab the frame so we know where its base is
-        const auto frame = call_frames.back();
-        call_frames.pop_back();
-        // Erase everything (the function pointer, arguments, and locals)
-        stack.resize(frame.stack_base);
+        else
+        {
+            stack.resize(frame.stack_base);
+        }
+
         return std::nullopt;
     }
 
-    uint8_t HandleNegate();
     void HandleJump();
     void HandleLoop();
     void HandleJumpIfFalsePeek();
@@ -241,15 +232,20 @@ private:
     InterpretResult Run();
     ConstantValue& ExtractNextConstant();
     void AddString();
+    void EqualString();
+    void NotEqualString();
     void AllocateString();
     void LoadNativeFunction();
     void AllocateArray();
     void GetArrayIndex();
     void SetArrayIndex();
+    void GetStringChar();
     void AllocateStruct();
     void GetProperty();
     void SetProperty();
     void GetLength();
+    void GetLocal();
+    void DefineGlobal();
 
     template<typename T0, typename T1, typename Target>
     static constexpr bool AreBoth()

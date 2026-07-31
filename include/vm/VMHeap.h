@@ -21,7 +21,7 @@ public:
     }
 
     void Sweep();
-    void CollectGarbage(const std::vector<uint8_t>& vm_stack, std::unordered_map<std::string, ConstantValue>& globals);
+    void CollectGarbage(const std::vector<uint8_t>& vm_stack, const std::vector<uint8_t>& globals);
     void TraverseWorklist();
 
     void ScanMemory(const uint8_t* memory, size_t size);

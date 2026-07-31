@@ -31,14 +31,21 @@ struct FloatLiteral final : Expression
 struct StringLiteral final : Expression
 {
     std::string value;
-    explicit StringLiteral(std::string val, SourceLocation loc) : value(std::move(val)) { this->source_location = loc; }
+    explicit StringLiteral(std::string val, const SourceLocation loc) : value(std::move(val)) { this->source_location = loc; }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("StringLiteral(\"{}\")", value); }
+};
+
+struct CharLiteral final : Expression
+{
+    char value;
+    explicit CharLiteral(const char val, const SourceLocation loc) : value(val) { this->source_location = loc; }
+    [[nodiscard]] std::string GetTypeString() const override { return std::format("CharLiteral(\"{}\")", value); }
 };
 
 struct BoolLiteral final : Expression
 {
     bool value;
-    explicit BoolLiteral(const bool val, SourceLocation loc) : value(val) { this->source_location = loc; }
+    explicit BoolLiteral(const bool val, const SourceLocation loc) : value(val) { this->source_location = loc; }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("BoolLiteral({})", value); }
 };
 

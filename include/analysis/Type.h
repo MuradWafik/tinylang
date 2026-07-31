@@ -49,7 +49,8 @@ enum class PrimitiveKind
     Float,
     Bool,
     String,
-    Void
+    Char,
+    Void,
 };
 
 class PrimitiveType final : public Type
@@ -69,7 +70,9 @@ public:
             case PrimitiveKind::Int:
             case PrimitiveKind::Float:
                 return 4;
-            case PrimitiveKind::Bool: return 1;
+            case PrimitiveKind::Bool:
+            case PrimitiveKind::Char:
+                return 1;
             case PrimitiveKind::String: return 8; // pointer
             case PrimitiveKind::Void: return 0;
         }
@@ -83,6 +86,7 @@ public:
     static const std::unique_ptr<PrimitiveType> Float;
     static const std::unique_ptr<PrimitiveType> Bool;
     static const std::unique_ptr<PrimitiveType> String;
+    static const std::unique_ptr<PrimitiveType> Char;
     static const std::unique_ptr<PrimitiveType> Void;
 
 private:
@@ -94,6 +98,7 @@ inline const std::unique_ptr<PrimitiveType> PrimitiveType::Int = std::make_uniqu
 inline const std::unique_ptr<PrimitiveType> PrimitiveType::Float = std::make_unique<PrimitiveType>(PrimitiveKind::Float, "float");
 inline const std::unique_ptr<PrimitiveType> PrimitiveType::Bool = std::make_unique<PrimitiveType>(PrimitiveKind::Bool, "bool");
 inline const std::unique_ptr<PrimitiveType> PrimitiveType::String = std::make_unique<PrimitiveType>(PrimitiveKind::String, "String");
+inline const std::unique_ptr<PrimitiveType> PrimitiveType::Char = std::make_unique<PrimitiveType>(PrimitiveKind::Char, "char");
 inline const std::unique_ptr<PrimitiveType> PrimitiveType::Void = std::make_unique<PrimitiveType>(PrimitiveKind::Void, "void");
 
 class FunctionType final : public Type

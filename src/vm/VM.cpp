@@ -1,3 +1,5 @@
+#include <iostream>
+#include <cstring>
 #include "vm/VM.h"
 
 #include <stdfloat>
@@ -9,33 +11,16 @@
 
 InterpretResult VM::StartProgram(Chunk* root_chunk)
 {
-    // Run the root chunk to evaluate global functions and variables
-    if(const auto res = Interpret(root_chunk); res != InterpretResult::INTERPRET_OK) return res;
-
-    if(!globals.contains("main"))
-    {
-        std::println(std::cerr, "Runtime Error: No 'main' entrypoint found.");
-        return InterpretResult::INTERPRET_RUNTIME_ERROR;
-    }
-
-    const auto* main_func_ptr_ptr = std::get_if<FunctionObject*>(&globals["main"]);
-    if(!main_func_ptr_ptr)
-    {
-        std::println(std::cerr, "Runtime Error: 'main' is not a function.");
-        return InterpretResult::INTERPRET_RUNTIME_ERROR;
-    }
-    const auto main_func_ptr = *main_func_ptr_ptr;
+    // Evaluate the root wile running main if it exists
+    const auto res = Interpret(root_chunk);
     
-    // Push main so it acts as the first call frame
-    Push<FunctionObject*>(main_func_ptr);
-
-    CallFrame main_frame;
-    main_frame.chunk = main_func_ptr->chunk.get();
-    main_frame.ip = main_frame.chunk->code.data();
-    main_frame.stack_base = stack.size() - sizeof(FunctionObject*); // stack starts here
-    call_frames.push_back(main_frame);
-
-    return Run();
+    if(!root_chunk->has_main)
+    {
+        std::println(std::cerr, "Runtime Error: No 'fn main()' entrypoint found.");
+        return InterpretResult::INTERPRET_RUNTIME_ERROR;
+    }
+    
+    return res;
 }
 
 InterpretResult VM::Interpret(Chunk* chunk)
@@ -53,11 +38,11 @@ InterpretResult VM::Run()
     while(true)
     {
 #ifdef DEBUG_TRACE_EXECUTION
-        std::print("          ");
+        std::cout << "          ";
         for (const auto& slot : stack) {
-            std::print("[ {} ]", slot);
+            std::cout << "[ " << static_cast<int>(slot) << " ]";
         }
-        std::println("");
+        std::cout << std::endl;
         
         const auto& cur_frame = call_frames.back();
         cur_frame.chunk->DisassembleInstruction(cur_frame.ip - cur_frame.chunk->code.data());
@@ -65,41 +50,10 @@ InterpretResult VM::Run()
 
         switch(static_cast<OpCode>(*(call_frames.back().ip)++))
         {
-            case OpCode::OP_RETURN_INT:
+            case OpCode::OP_RETURN:
             {
-                if(const auto terminated = Return<int32_t>())
-                {
-                    return terminated.value();
-                }
-                break;
-            }
-            case OpCode::OP_RETURN_FLOAT:
-            {
-                if(const auto terminated = Return<std::float32_t>())
-                {
-                    return terminated.value();
-                }
-                break;
-            }
-            case OpCode::OP_RETURN_BOOL:
-            {
-                if(const auto terminated = Return<bool>())
-                {
-                    return terminated.value();
-                }
-                break;
-            }
-            case OpCode::OP_RETURN_OBJECT:
-            {
-                if(const auto terminated = Return<Object*>())
-                {
-                    return terminated.value();
-                }
-                break;
-            }
-            case OpCode::OP_RETURN_VOID:
-            {
-                if(const auto terminated = Return())
+                const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+                if(const auto terminated = Return(size))
                 {
                     return terminated.value();
                 }
@@ -120,6 +74,12 @@ InterpretResult VM::Run()
             case OpCode::OP_CONSTANT_BOOL:
             {
                 const auto val = std::get<bool>(ExtractNextConstant());
+                Push(val);
+                break;
+            }
+            case OpCode::OP_CONSTANT_CHAR:
+            {
+                const auto val = std::get<char8_t>(ExtractNextConstant());
                 Push(val);
                 break;
             }
@@ -210,6 +170,11 @@ InterpretResult VM::Run()
                 Push(GreaterThan<std::float32_t>());
                 break;
             }
+            case OpCode::OP_GREATER_CHAR:
+            {
+                Push(GreaterThan<char8_t>());
+                break;
+            }
 
             case OpCode::OP_GREATER_EQUAL_INT:
             {
@@ -219,6 +184,11 @@ InterpretResult VM::Run()
             case OpCode::OP_GREATER_EQUAL_FLOAT:
             {
                 Push(GreaterEqualThan<std::float32_t>());
+                break;
+            }
+            case OpCode::OP_GREATER_EQUAL_CHAR:
+            {
+                Push(GreaterEqualThan<char8_t>());
                 break;
             }
 
@@ -232,6 +202,11 @@ InterpretResult VM::Run()
                 Push(LessThan<std::float32_t>());
                 break;
             }
+            case OpCode::OP_LESS_CHAR:
+            {
+                Push(LessThan<char8_t>());
+                break;
+            }
 
             case OpCode::OP_LESS_EQUAL_INT:
             {
@@ -241,6 +216,11 @@ InterpretResult VM::Run()
             case OpCode::OP_LESS_EQUAL_FLOAT:
             {
                 Push(LessEqualThan<std::float32_t>());
+                break;
+            }
+            case OpCode::OP_LESS_EQUAL_CHAR:
+            {
+                Push(LessEqualThan<char8_t>());
                 break;
             }
 
@@ -259,6 +239,16 @@ InterpretResult VM::Run()
                 Push(EqualTo<bool>());
                 break;
             }
+            case OpCode::OP_EQUAL_CHAR:
+            {
+                Push(EqualTo<char8_t>());
+                break;
+            }
+            case OpCode::OP_EQUAL_STRING:
+            {
+                EqualString();
+                break;
+            }
 
             case OpCode::OP_NOT_EQUAL_INT:
             {
@@ -275,82 +265,51 @@ InterpretResult VM::Run()
                 Push(NotEqualTo<bool>());
                 break;
             }
+            case OpCode::OP_NOT_EQUAL_CHAR:
+            {
+                Push(NotEqualTo<char8_t>());
+                break;
+            }
+            case OpCode::OP_NOT_EQUAL_STRING:
+            {
+                NotEqualString();
+                break;
+            }
+            case OpCode::OP_DEFINE_GLOBAL:
+            {
+                DefineGlobal();
+                break;
+            }
+            case OpCode::OP_GET_GLOBAL:
+            {
+                const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+                const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
 
-            // case OpCode::OP_NEGATE:
-            // {
-            //     Push(std::move(HandleNegate()));
-            //     break;
-            // }
-            case OpCode::OP_DEFINE_GLOBAL_INT:
-            {
-                DefineGlobal<int32_t>();
-                break;
-            }
-            case OpCode::OP_DEFINE_GLOBAL_FLOAT:
-            {
-                DefineGlobal<std::float32_t>();
-                break;
-            }
-            case OpCode::OP_DEFINE_GLOBAL_BOOL:
-            {
-                DefineGlobal<bool>();
-                break;
-            }
-            case OpCode::OP_DEFINE_GLOBAL_FUNCTION:
-            {
-                DefineGlobal<FunctionObject*>();
-                break;
-            }
-            case OpCode::OP_DEFINE_GLOBAL_OBJECT:
-            {
-                DefineGlobal<Object*>();
-                break;
-            }
+                if(offset + size > globals.size())
+                {
+                    std::println(std::cerr, "Runtime Error: Global offset out of bounds.");
+                    return InterpretResult::INTERPRET_RUNTIME_ERROR;
+                }
 
-            case OpCode::OP_GET_GLOBAL_INT:
-            {
-                GetGlobal<int32_t>();
+                stack.insert(stack.end(), globals.begin() + offset, globals.begin() + offset + size);
                 break;
             }
-            case OpCode::OP_GET_GLOBAL_FLOAT:
+            case OpCode::OP_SET_GLOBAL:
             {
-                GetGlobal<std::float32_t>();
-                break;
-            }
-            case OpCode::OP_GET_GLOBAL_BOOL:
-            {
-                GetGlobal<bool>();
-                break;
-            }
-            case OpCode::OP_GET_GLOBAL_FUNCTION:
-            {
-                GetGlobal<FunctionObject*>();
-                break;
-            }
-            case OpCode::OP_GET_GLOBAL_OBJECT:
-            {
-                GetGlobal<Object*>();
-                break;
-            }
+                const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+                const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
 
-            case OpCode::OP_SET_GLOBAL_INT:
-            {
-                SetGlobal<int32_t>();
-                break;
-            }
-            case OpCode::OP_SET_GLOBAL_FLOAT:
-            {
-                SetGlobal<std::float32_t>();
-                break;
-            }
-            case OpCode::OP_SET_GLOBAL_BOOL:
-            {
-                SetGlobal<bool>();
-                break;
-            }
-            case OpCode::OP_SET_GLOBAL_OBJECT:
-            {
-                SetGlobal<Object*>();
+                if(offset + size > globals.size())
+                {
+                    std::println(std::cerr, "Runtime Error: Global offset out of bounds.");
+                    return InterpretResult::INTERPRET_RUNTIME_ERROR;
+                }
+
+                // read from stack, without popping
+                for(int i = 0; i < size; i++)
+                {
+                    globals[offset + i] = stack[stack.size() - size + i];
+                }
                 break;
             }
 
@@ -360,66 +319,22 @@ InterpretResult VM::Run()
                 break;
             }
 
-            case OpCode::OP_GET_LOCAL_INT:
+            case OpCode::OP_GET_LOCAL:
             {
-                GetLocalVariable<int32_t>();
+                GetLocal();
                 break;
             }
-            case OpCode::OP_GET_LOCAL_FLOAT:
+            case OpCode::OP_SET_LOCAL:
             {
-                GetLocalVariable<std::float32_t>();
+                SetLocal();
                 break;
             }
-            case OpCode::OP_GET_LOCAL_BOOL:
+            case OpCode::OP_POP:
             {
-                GetLocalVariable<bool>();
-                break;
-            }
-            case OpCode::OP_GET_LOCAL_OBJECT:
-            {
-                GetLocalVariable<Object*>();
-                break;
-            }
-
-            case OpCode::OP_SET_LOCAL_INT:
-            {
-                SetLocalVariable<int32_t>();
-                break;
-            }
-            case OpCode::OP_SET_LOCAL_FLOAT:
-            {
-                SetLocalVariable<std::float32_t>();
-                break;
-            }
-            case OpCode::OP_SET_LOCAL_BOOL:
-            {
-                SetLocalVariable<bool>();
-                break;
-            }
-            case OpCode::OP_SET_LOCAL_OBJECT:
-            {
-                SetLocalVariable<Object*>();
-                break;
-            }
-
-            case OpCode::OP_POP_INT:
-            {
-                Pop<int32_t>();
-                break;
-            }
-            case OpCode::OP_POP_FLOAT:
-            {
-                Pop<std::float32_t>();
-                break;
-            }
-            case OpCode::OP_POP_BOOL:
-            {
-                Pop<bool>();
-                break;
-            }
-            case OpCode::OP_POP_OBJECT:
-            {
-                Pop<Object*>();
+                const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+                for(int i = 0; i < size; i++) {
+                    stack.pop_back();
+                }
                 break;
             }
 
@@ -493,7 +408,11 @@ InterpretResult VM::Run()
                 SetProperty();
                 break;
             }
-
+            case OpCode::OP_GET_STRING_CHAR:
+            {
+                GetStringChar();
+                break;
+            }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
     }
@@ -587,6 +506,7 @@ void VM::LoadNativeFunction()
 {
     const std::string& lib_path = std::get<std::string>(ExtractNextConstant());
     const std::string& symbol_name = std::get<std::string>(ExtractNextConstant());
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     const auto num_args = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const auto return_bytes = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     auto result = plugin_loader.LoadSymbol(lib_path, symbol_name);
@@ -596,7 +516,14 @@ void VM::LoadNativeFunction()
     }
 
     allocated_native_functions.push_back(std::make_unique<FunctionObject>(symbol_name, num_args, return_bytes, result.value()));
-    globals[symbol_name] = allocated_native_functions.back().get();
+    
+    if(offset + sizeof(FunctionObject*) > globals.size())
+    {
+        globals.resize(offset + sizeof(FunctionObject*));
+    }
+    
+    FunctionObject* ptr = allocated_native_functions.back().get();
+    std::memcpy(globals.data() + offset, &ptr, sizeof(FunctionObject*));
 }
 
 void VM::AllocateArray()
@@ -620,7 +547,7 @@ void VM::GetArrayIndex()
     // OP_GET_INDEX [1 byte: stride]    | Stack: Pops 4 byte int index, pops 8 byte ArrayObject*, pushes 'stride' bytes
     const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const auto index = Pop<int32_t>();
-    const auto* array = dynamic_cast<Array*>(Pop<Object*>());
+    const auto* array = static_cast<Array*>(Pop<Object*>());
 
     if(index < 0 || index >= array->size)
     {
@@ -644,7 +571,7 @@ void VM::SetArrayIndex()
     const size_t index_start = value_start - sizeof(int32_t);
     const size_t array_start = index_start - sizeof(Object*);
     const auto index = ReadBytesAbsolute<int32_t>(stack, index_start);
-    const auto* array = dynamic_cast<Array*>(ReadBytesAbsolute<Object*>(stack, array_start));
+    const auto* array = static_cast<Array*>(ReadBytesAbsolute<Object*>(stack, array_start));
 
     if(index < 0 || index >= array->size)
     {
@@ -659,6 +586,19 @@ void VM::SetArrayIndex()
     // shift the value bytes down to overwrite the array and index
     std::memmove(&stack[array_start], &stack[value_start], bytes_per_element);
     stack.resize(stack.size() - sizeof(Object*) - sizeof(int32_t));
+}
+
+void VM::GetStringChar()
+{
+    const auto index = Pop<int32_t>();
+    const auto* str = static_cast<String*>(Pop<Object*>());
+
+    if(index < 0 || index >= str->length)
+    {
+        throw std::runtime_error(std::format("String index out of bounds. Index: {}, Size: {}", index, str->length));
+    }
+
+    Push<char8_t>(str->chars[index]);
 }
 
 void VM::AllocateStruct()
@@ -681,14 +621,13 @@ void VM::AllocateStruct()
 
 void VM::GetLength()
 {
-    auto* obj = Pop<Object*>();
-    if(const auto* arr = dynamic_cast<Array*>(obj))
+    if(auto* obj = Pop<Object*>(); obj->type == ObjectType::Array)
     {
-        Push<int32_t>(static_cast<int32_t>(arr->size));
+        Push<int32_t>(static_cast<int32_t>(static_cast<Array*>(obj)->size));
     }
-    else if(const auto* str = dynamic_cast<String*>(obj))
+    else if(obj->type == ObjectType::String)
     {
-        Push<int32_t>(static_cast<int32_t>(str->length));
+        Push<int32_t>(static_cast<int32_t>(static_cast<String*>(obj)->length));
     }
     else
     {
@@ -701,7 +640,7 @@ void VM::GetProperty()
     // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size] | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
     const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
-    const auto* obj = dynamic_cast<Struct*>(Pop<Object*>());
+    const auto* obj = static_cast<Struct*>(Pop<Object*>());
 
     stack.insert(
         stack.end(),
@@ -718,12 +657,12 @@ void VM::SetProperty()
 
     const size_t value_start = stack.size() - size;
     const size_t struct_start = value_start - sizeof(Object*);
-    auto* obj = dynamic_cast<Struct*>(ReadBytesAbsolute<Object*>(stack, struct_start));
+    const auto* obj = static_cast<Struct*>(ReadBytesAbsolute<Object*>(stack, struct_start));
 
-    // Copies values from the stack to the struct
+    // Copy values from stack to the struct
     std::memcpy(&obj->fields[offset], &stack[value_start], size);
 
-    // shift the value bytes down to overwrite the struct pointer
+    // Shift the value bytes down to overwrite the struct pointer
     std::memmove(&stack[struct_start], &stack[value_start], size);
     stack.resize(stack.size() - sizeof(Object*));
 }
@@ -738,9 +677,74 @@ void VM::AllocateString()
 
 void VM::AddString()
 {
-    const auto r = dynamic_cast<String*>(Pop<Object*>());
-    const auto l = dynamic_cast<String*>(Pop<Object*>());
+    const auto r = static_cast<String*>(Pop<Object*>());
+    const auto l = static_cast<String*>(Pop<Object*>());
 
     auto* obj = AllocateObject<String>(l, r);
     Push<Object*>(obj);
+}
+
+void VM::EqualString()
+{
+    const auto r = static_cast<String*>(Pop<Object*>());
+    const auto l = static_cast<String*>(Pop<Object*>());
+    
+    if(l->length != r->length)
+    {
+        Push<bool>(false);
+        return;
+    }
+    Push<bool>(std::memcmp(l->chars, r->chars, l->length) == 0);
+}
+
+void VM::NotEqualString()
+{
+    const auto r = static_cast<String*>(Pop<Object*>());
+    const auto l = static_cast<String*>(Pop<Object*>());
+    
+    if(l->length != r->length)
+    {
+        Push<bool>(true);
+        return;
+    }
+    Push<bool>(std::memcmp(l->chars, r->chars, l->length) != 0);
+}
+
+void VM::GetLocal()
+{
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    const auto base = call_frames.back().stack_base + sizeof(FunctionObject*);
+    stack.insert(stack.end(), stack.begin() + base + offset, stack.begin() + base + offset + size);
+}
+
+void VM::DefineGlobal()
+{
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    // Ensure globals has enough space
+    if(offset + size > globals.size())
+    {
+        globals.resize(offset + size);
+    }
+
+    for(int i = size - 1; i >= 0; i--)
+    {
+        globals[offset + i] = stack.back();
+        stack.pop_back();
+    }
+}
+
+void VM::SetLocal()
+{
+    const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    const auto base = call_frames.back().stack_base + sizeof(FunctionObject*);
+    for(int i = 0; i < size; i++)
+    {
+        stack[base + offset + i] = stack[stack.size() - size + i];
+    }
 }

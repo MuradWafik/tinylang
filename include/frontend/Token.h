@@ -12,6 +12,7 @@ enum class TokenType
     IntLiteral,
     FloatLiteral,
     StringLiteral,
+    CharLiteral,
 
     // Keywords
     Fn,
@@ -40,6 +41,7 @@ enum class TokenType
     FloatType,
     BoolType,
     StringType,
+    CharType,
     Void,
 
     // Operators
@@ -118,6 +120,7 @@ struct Token {
         {"float", TokenType::FloatType},
         {"bool", TokenType::BoolType},
         {"String", TokenType::StringType},
+        {"char", TokenType::CharType},
         {"void", TokenType::Void},
         {"native", TokenType::Native},
         {"module", TokenType::Module},
