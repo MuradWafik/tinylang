@@ -127,6 +127,14 @@ int Chunk::DisassembleInstruction(int offset) const
             std::println("{:<24} {:4} arg bytes", opcode_name, arg_bytes);
             return offset + 3;
         }
+        case OpCode::OP_POP:
+        case OpCode::OP_DUP:
+        case OpCode::OP_RETURN:
+        {
+            const auto size = code[offset + 1];
+            std::println("{:<24} {:4} (size)", opcode_name, size);
+            return offset + 2;
+        }
         default:
         {
             std::println("{}", opcode_name);

@@ -52,6 +52,7 @@ private:
     void CompileArrayLiteral(const ArrayLiteral* array_literal);
     void CompileIndexAccess(const IndexAccess* index_access);
     void CompilePropertyAccess(const PropertyAccess* property_access);
+    void CompileSwitchExpression(const SwitchExpression* switch_expression);
 
 
     void ForLoopIterableStruct(const ForLoop* for_loop, uint32_t line, const StructType* struct_type);

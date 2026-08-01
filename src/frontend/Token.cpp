@@ -10,6 +10,7 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::IntLiteral:      return "integer literal";
         case TokenType::FloatLiteral:    return "float literal";
         case TokenType::StringLiteral:   return "string literal";
+        case TokenType::CharLiteral:     return "char literal";
 
         // Keywords
         case TokenType::Fn:              return "fn";
@@ -30,12 +31,16 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::In:              return "in";
         case TokenType::Range:           return "range";
         case TokenType::Enum:            return "enum";
+        case TokenType::Extend:          return "extend";
+        case TokenType::Interface:       return "interface";
+        case TokenType::Switch:          return "switch";
 
         // Built-in Types
         case TokenType::IntType:         return "int";
         case TokenType::FloatType:       return "float";
         case TokenType::BoolType:        return "bool";
         case TokenType::StringType:      return "String";
+        case TokenType::CharType:        return "char";
         case TokenType::Void:            return "void";
 
         // Operators
@@ -44,6 +49,7 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Star:            return "*";
         case TokenType::Slash:           return "/";
         case TokenType::Assign:          return "=";
+        case TokenType::Modulo:          return "%";
         case TokenType::Equal:           return "==";
         case TokenType::Negate:          return "!";
         case TokenType::NotEqual:        return "!=";
@@ -68,6 +74,8 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Comma:              return ",";
         case TokenType::Arrow:              return "->";
         case TokenType::Dot:                return ".";
+
+        case TokenType::Underscore:         return "_";
 
         // Special System Tokens
         case TokenType::EndOfFile:         return "end of file";

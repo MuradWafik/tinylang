@@ -195,10 +195,7 @@ ExpectedExpressionPtr Parser::ParseExpression()
 ExpectedExpressionPtr Parser::ParseAssignment()
 {
     ExpectedExpressionPtr left = ParseLogicalOr();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     if(Match(TokenType::Assign))
     {
@@ -227,13 +224,66 @@ ExpectedExpressionPtr Parser::ParseAssignment()
     return left;
 }
 
+ExpectedExpressionPtr Parser::ParseSwitch()
+{
+    auto& switch_keyword = Consume(); // switch
+
+    auto target = ParseExpression();
+    if(!target) return target;
+
+    constexpr auto error_msg = "Parsing switch expression";
+    if(auto open = Expect(TokenType::LeftCurlyBrace, error_msg);
+        !open)
+    {
+        return std::unexpected(open.error());
+    }
+
+    std::vector<SwitchBranch> branches{};
+    while(!IsAtEnd() && Peek().type != TokenType::RightCurlyBrace)
+    {
+        std::unique_ptr<Expression> pattern = nullptr;
+
+        // null type if the pattern is discard
+        if(!Match(TokenType::Underscore))
+        {
+            auto pattern_expr = ParseExpression();
+            if(!pattern_expr) return pattern_expr;
+
+            pattern = std::move(pattern_expr.value());
+        }
+
+        if(const auto arrow = Expect(TokenType::Arrow, error_msg);
+            !arrow)
+        {
+            return std::unexpected(arrow.error());
+        }
+
+        auto val = ParseExpression();
+        if(!val) return val;
+
+        branches.emplace_back(std::move(pattern), std::move(val.value()));
+
+        Match(TokenType::Comma); // allow for trailing comma
+
+    }
+
+    if(const auto closed = Expect(TokenType::RightCurlyBrace, error_msg);
+        !closed)
+    {
+        return std::unexpected(closed.error());
+    }
+
+    return std::make_unique<SwitchExpression>(
+        std::move(target.value()),
+        std::move(branches),
+        switch_keyword.source_location
+    );
+}
+
 ExpectedExpressionPtr Parser::ParseLogicalOr()
 {
     ExpectedExpressionPtr left = ParseLogicalAnd();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     while(Match(TokenType::OrOr))
     {
@@ -251,10 +301,7 @@ ExpectedExpressionPtr Parser::ParseLogicalOr()
 ExpectedExpressionPtr Parser::ParseLogicalAnd()
 {
     ExpectedExpressionPtr left = ParseEquality();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     while(Match(TokenType::AndAnd))
     {
@@ -272,10 +319,7 @@ ExpectedExpressionPtr Parser::ParseLogicalAnd()
 ExpectedExpressionPtr Parser::ParseEquality()
 {
     ExpectedExpressionPtr left = ParseComparison();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     while(Match(TokenType::Equal) || Match(TokenType::NotEqual))
     {
@@ -293,10 +337,7 @@ ExpectedExpressionPtr Parser::ParseEquality()
 ExpectedExpressionPtr Parser::ParseComparison()
 {
     ExpectedExpressionPtr left = ParseAddition();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     while(Match(TokenType::LessEqual) || Match(TokenType::GreaterEqual)
         || Match(TokenType::Less) || Match(TokenType::Greater))
@@ -315,10 +356,7 @@ ExpectedExpressionPtr Parser::ParseComparison()
 ExpectedExpressionPtr Parser::ParseAddition()
 {
     ExpectedExpressionPtr left = ParseMultiplication();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     while(Match(TokenType::Plus) || Match(TokenType::Minus))
     {
@@ -336,10 +374,7 @@ ExpectedExpressionPtr Parser::ParseAddition()
 ExpectedExpressionPtr Parser::ParseMultiplication()
 {
     ExpectedExpressionPtr left = ParseUnary();
-    if(!left)
-    {
-        return std::unexpected(left.error());
-    }
+    if(!left) return left;
 
     while(Match(TokenType::Star) || Match(TokenType::Slash) || Match(TokenType::Modulo))
     {
@@ -476,6 +511,7 @@ ExpectedExpressionPtr Parser::ParsePrimary()
             Token idToken = Consume();
             return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme), source_location);
         }
+
         // Grouped Expressions
         case TokenType::LeftParen:
         {
@@ -511,6 +547,10 @@ ExpectedExpressionPtr Parser::ParsePrimary()
             }
 
             return std::make_unique<ArrayLiteral>(std::move(values), source_location);
+        }
+        case TokenType::Switch:
+        {
+            return ParseSwitch();
         }
 
         default:

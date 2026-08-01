@@ -246,6 +246,8 @@ private:
     void GetLength();
     void GetLocal();
     void DefineGlobal();
+    void Pop();
+    void Duplicate();
 
     template<typename T0, typename T1, typename Target>
     static constexpr bool AreBoth()

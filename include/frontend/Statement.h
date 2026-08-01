@@ -331,6 +331,4 @@ struct ExtendStatement final : Statement
     {
         this->source_location = loc;
     }
-
-
 };

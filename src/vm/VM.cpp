@@ -331,10 +331,12 @@ InterpretResult VM::Run()
             }
             case OpCode::OP_POP:
             {
-                const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
-                for(int i = 0; i < size; i++) {
-                    stack.pop_back();
-                }
+                Pop();
+                break;
+            }
+            case OpCode::OP_DUP:
+            {
+                Duplicate();
                 break;
             }
 
@@ -746,5 +748,22 @@ void VM::SetLocal()
     for(int i = 0; i < size; i++)
     {
         stack[base + offset + i] = stack[stack.size() - size + i];
+    }
+}
+void VM::Pop()
+{
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    for(int i = 0; i < size; i++) {
+        stack.pop_back();
+    }
+}
+
+void VM::Duplicate()
+{
+    const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const size_t start_idx = stack.size() - size;
+    for(int i = 0; i < size; i++) {
+        uint8_t val = stack[start_idx + i];
+        stack.push_back(val);
     }
 }

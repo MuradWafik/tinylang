@@ -143,6 +143,7 @@ private:
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
     std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
     std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
+    std::expected<const Type*, std::string> AnalyzeSwitchExpression(const SwitchExpression* switch_expr);
 
     std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);
     std::expected<void, std::string> AnalyzeIfStatement(const IfStatement* if_statement);
@@ -171,6 +172,7 @@ private:
     std::expected<const Type*, std::string> AnalyzeIndexAccess(IndexAccess* index_access);
     std::expected<const Type*, std::string> AnalyzeArrayLiteral(ArrayLiteral* array_node);
     std::expected<const Type*, std::string> AnalyzePropertyAccess(PropertyAccess* property_access);
+    std::expected<const Type*, std::string> AnalyzeSwitchExpression(SwitchExpression* switch_expression);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);

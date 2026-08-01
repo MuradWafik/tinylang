@@ -195,3 +195,48 @@ struct PropertyAccess final : Expression
         return std::format("PropertyAccess(object: {}, property: \"{}\")", object_expr->GetTypeString(), property_name);
     }
 };
+
+// single branch: pattern -> val
+struct SwitchBranch
+{
+    std::unique_ptr<Expression> pattern; // If pattern is nullptr, it means its the discard value
+    std::unique_ptr<Expression> result; // The expression to evaluate and return if this arm matches
+
+};
+
+class SwitchExpression final : public Expression
+{
+public:
+    std::unique_ptr<Expression> target;
+    std::vector<SwitchBranch> branches; // !!! important to keep order
+
+    SwitchExpression(
+        std::unique_ptr<Expression> target, std::vector<SwitchBranch> branches,
+        const SourceLocation loc)
+    : target(std::move(target)), branches(std::move(branches))
+    {
+        this->source_location = loc;
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        std::string target_str = target ? target->GetTypeString() : "NULL_TARGET";
+        std::string res = std::format("SwitchExpression(target: {}, branches: [", target_str);
+        for (size_t i = 0; i < branches.size(); ++i)
+        {
+            std::string result_str = branches[i].result ? branches[i].result->GetTypeString() : "NULL_RESULT";
+            if (branches[i].pattern)
+            {
+                res += std::format("({} -> {})", branches[i].pattern->GetTypeString(), result_str);
+            }
+            else
+            {
+                res += std::format("(_ -> {})", result_str);
+            }
+            if (i < branches.size() - 1) res += ", ";
+        }
+        res += "])";
+        return res;
+    }
+
+};

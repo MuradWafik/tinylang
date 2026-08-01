@@ -62,6 +62,7 @@ void Compiler::CompileExpression(const Expression* expression)
     if(const auto array_lit = dynamic_cast<const ArrayLiteral*>(expression)) return CompileArrayLiteral(array_lit);
     if(const auto index_access = dynamic_cast<const IndexAccess*>(expression)) return CompileIndexAccess(index_access);
     if(const auto property_access = dynamic_cast<const PropertyAccess*>(expression)) return CompilePropertyAccess(property_access);
+    if(const auto switch_expr = dynamic_cast<const SwitchExpression*>(expression)) return CompileSwitchExpression(switch_expr);
 }
 
 void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) const
@@ -940,9 +941,81 @@ void Compiler::ForLoopArray(const ForLoop* for_loop, const uint32_t line, const 
     current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(8));
 }
 
-void Compiler::ForLoopString(const ForLoop* for_loop, uint32_t line, PrimitiveType* get)
+void Compiler::ForLoopString(const ForLoop* for_loop, const uint32_t line, PrimitiveType* get)
 {
+    // The string pointer is already pushed by CompileExpression in CompileForLoop
+    constexpr auto str_variable_name = "$_str";
+    locals.push_back({str_variable_name, PrimitiveType::String.get()});
+    const auto str_idx = static_cast<uint16_t>(GetLocalVariableIndex(str_variable_name));
 
+    // push -1 for the index variable, if its 0 continue keywords just skip through the increment
+    const uint8_t minus_one_idx = current_chunk->AddConstant(-1);
+    current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, minus_one_idx);
+    
+    constexpr auto index_variable_name = "$_str_index";
+    locals.push_back({index_variable_name, PrimitiveType::Int.get()});
+    const auto idx_idx = static_cast<uint16_t>(GetLocalVariableIndex(index_variable_name));
+
+    const size_t loop_start = current_chunk->code.size();
+    loop_starts.push_back(loop_start);
+    loop_local_counts.push_back(locals.size());
+
+    // Increment index first
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, static_cast<uint16_t>(idx_idx), static_cast<uint8_t>(4));
+    const uint8_t one_idx = current_chunk->AddConstant(1);
+    current_chunk->WriteInstruction(line, OpCode::OP_CONSTANT_INT, one_idx);
+    current_chunk->WriteInstruction(line, OpCode::OP_ADD_INT);
+    current_chunk->WriteInstruction(line, OpCode::OP_SET_LOCAL, static_cast<uint16_t>(idx_idx), static_cast<uint8_t>(4));
+    current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(4));
+
+    // Check condition: _str_index < _str.length
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, static_cast<uint16_t>(idx_idx), static_cast<uint8_t>(4));
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, static_cast<uint16_t>(str_idx), static_cast<uint8_t>(8));
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LENGTH);
+    current_chunk->WriteInstruction(line, OpCode::OP_LESS_INT);
+
+    // Jump if condition is false
+    current_chunk->WriteInstruction(line, OpCode::OP_JUMP_IF_FALSE, static_cast<uint16_t>(0));
+    const size_t placeholder_if_index = current_chunk->code.size() - 2;
+
+    // Load string character: _str[_str_index]
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, static_cast<uint16_t>(str_idx), static_cast<uint8_t>(8));
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, static_cast<uint16_t>(idx_idx), static_cast<uint8_t>(4));
+    current_chunk->WriteInstruction(line, OpCode::OP_GET_STRING_CHAR);
+
+    // register iterator variable that the user has for the loop
+    locals.push_back({for_loop->iterator_name.lexeme, PrimitiveType::Char.get()});
+
+    CompileStatement(for_loop->body.get());
+
+    locals.pop_back(); // loop var
+    current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(1)); // char is 1 byte
+
+    const uint16_t backward_jump = (current_chunk->code.size() + 3) - loop_start;
+    current_chunk->WriteInstruction(line, OpCode::OP_LOOP, backward_jump);
+
+    // Patch jump if false
+    const uint16_t if_jump = current_chunk->code.size() - (placeholder_if_index + 2);
+    current_chunk->code[placeholder_if_index] = (if_jump >> 8) & 0xff;
+    current_chunk->code[placeholder_if_index + 1] = if_jump & 0xff;
+
+    // Patch break statements
+    for(const auto index : break_placeholders)
+    {
+        const uint16_t break_jump = current_chunk->code.size() - (index + 2);
+        current_chunk->code[index] = (break_jump >> 8) & 0xff;
+        current_chunk->code[index + 1] = break_jump & 0xff;
+    }
+    break_placeholders.clear();
+    loop_starts.pop_back();
+    loop_local_counts.pop_back();
+
+    // Clean up hidden variables
+    locals.pop_back(); // Pop _str_index
+    current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(4));
+
+    locals.pop_back(); // Pop _str
+    current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(8));
 }
 
 void Compiler::CompileForLoop(const ForLoop* for_loop)
@@ -975,4 +1048,80 @@ int64_t Compiler::GetLocalVariableIndex(const std::string& name) const
         offset += type->GetSize();
     }
     return -1;
+}
+void Compiler::CompileSwitchExpression(const SwitchExpression* switch_expression)
+{
+    const auto line = switch_expression->source_location.line_number;
+    
+    // 1. Compile the target expression, pushing it onto the stack.
+    CompileExpression(switch_expression->target.get());
+    
+    const Type* target_type = switch_expression->target->type_info;
+    const uint8_t target_size = target_type->GetSize();
+    
+    std::vector<size_t> end_jump_placeholders;
+    
+    for (const auto& branch : switch_expression->branches)
+    {
+        if (branch.pattern) // Not the default '_' branch
+        {
+            // Duplicate the target on top of the stack for comparison
+            current_chunk->WriteInstruction(line, OpCode::OP_DUP, target_size);
+            
+            // Compile the pattern expression
+            CompileExpression(branch.pattern.get());
+            
+            // Compare target and pattern
+            if (target_type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(target_type)) {
+                current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_INT);
+            } else if (target_type == PrimitiveType::Float.get()) {
+                current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_FLOAT);
+            } else if (target_type == PrimitiveType::Char.get()) {
+                current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_CHAR);
+            } else if (target_type == PrimitiveType::Bool.get()) {
+                current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_BOOL);
+            } else if (target_type == PrimitiveType::String.get()) {
+                current_chunk->WriteInstruction(line, OpCode::OP_EQUAL_STRING);
+            }
+            
+            // If false, jump to the next branch
+            current_chunk->WriteInstruction(line, OpCode::OP_JUMP_IF_FALSE, static_cast<uint16_t>(0));
+            const size_t next_branch_jump_idx = current_chunk->code.size() - 2;
+            
+            // --- MATCHED BODY ---
+            // Pop the original target from the stack since we matched
+            current_chunk->WriteInstruction(line, OpCode::OP_POP, target_size);
+            
+            // Compile the result expression
+            CompileExpression(branch.result.get());
+            
+            // Jump to the end of the switch
+            current_chunk->WriteInstruction(line, OpCode::OP_JUMP, static_cast<uint16_t>(0));
+            end_jump_placeholders.push_back(current_chunk->code.size() - 2);
+            
+            // Patch the next branch jump
+            const uint16_t jump_to_next = current_chunk->code.size() - (next_branch_jump_idx + 2);
+            current_chunk->code[next_branch_jump_idx] = (jump_to_next >> 8) & 0xff;
+            current_chunk->code[next_branch_jump_idx + 1] = jump_to_next & 0xff;
+        }
+        else // Default '_' branch
+        {
+            // Pop the original target
+            current_chunk->WriteInstruction(line, OpCode::OP_POP, target_size);
+            
+            // Compile the result
+            CompileExpression(branch.result.get());
+            
+            // Jump to end
+            current_chunk->WriteInstruction(line, OpCode::OP_JUMP, static_cast<uint16_t>(0));
+            end_jump_placeholders.push_back(current_chunk->code.size() - 2);
+        }
+    }
+    
+    // Patch all end jumps to point here
+    for (size_t idx : end_jump_placeholders) {
+        const uint16_t jump_to_end = current_chunk->code.size() - (idx + 2);
+        current_chunk->code[idx] = (jump_to_end >> 8) & 0xff;
+        current_chunk->code[idx + 1] = jump_to_end & 0xff;
+    }
 }

@@ -31,7 +31,7 @@ private:
     [[nodiscard]] const Token* TryPeekNext() const;
     const Token& Consume();
     [[nodiscard]] bool IsAtEnd() const;
-    [[nodiscard]] bool Match(TokenType target);
+    bool Match(TokenType target);
     Expected<Token> Expect(TokenType expected, std::string_view context_message);
 
     ExpectedNodePtr ParseStatement();
@@ -50,6 +50,7 @@ private:
      */
     // expressions sorted from lowest to highest priority so each one calls on the one below it
     ExpectedExpressionPtr ParseAssignment();
+    ExpectedExpressionPtr ParseSwitch();
     ExpectedExpressionPtr ParseLogicalOr();
     ExpectedExpressionPtr ParseLogicalAnd();
     ExpectedExpressionPtr ParseEquality();

@@ -35,6 +35,7 @@ enum class TokenType
     Self,
     Interface,
     Extend,
+    Switch,
 
     // Types
     IntType,
@@ -75,6 +76,8 @@ enum class TokenType
     Comma,
     Arrow,
     Dot,
+
+    Underscore, // discard/default, not sure which it falls into
 
     EndOfFile
 };
@@ -132,6 +135,7 @@ struct Token {
         {"enum", TokenType::Enum},
         {"interface", TokenType::Interface},
         {"extend", TokenType::Extend},
+        {"switch", TokenType::Switch},
     };
     static std::string TypeToString(TokenType token_type);
 

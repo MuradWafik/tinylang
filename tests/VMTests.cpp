@@ -301,3 +301,45 @@ TEST_CASE("VM - Advanced Control Flow", "[VM]") {
         REQUIRE(val == 70);
     }
 }
+
+TEST_CASE("VM - Switch Expression", "[VM]") {
+    SECTION("Match integer and default fallback") {
+        std::string source = R"(
+            var status: int = 404;
+            var result: int = switch status {
+                200 -> 1,
+                404 -> 2,
+                _   -> 3
+            };
+        )";
+        auto val = RunAndGetGlobal<int32_t>(source, "result");
+        REQUIRE(val == 2);
+    }
+    
+    SECTION("Match default fallback") {
+        std::string source = R"(
+            var status: int = 500;
+            var result: int = switch status {
+                200 -> 1,
+                404 -> 2,
+                _   -> 3
+            };
+        )";
+        auto val = RunAndGetGlobal<int32_t>(source, "result");
+        REQUIRE(val == 3);
+    }
+}
+
+TEST_CASE("VM - String Iteration", "[VM]") {
+    SECTION("Iterate over string characters") {
+        std::string source = R"(
+            var str = "Hello";
+            var counter = 0;
+            for c in str {
+                counter = counter + 1;
+            }
+        )";
+        auto val = RunAndGetGlobal<int32_t>(source, "counter");
+        REQUIRE(val == 5);
+    }
+}

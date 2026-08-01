@@ -119,3 +119,14 @@ struct StringHash
 
 template<typename T>
 concept fundamental = std::is_trivially_copyable_v<T>;
+
+
+template <typename T, typename... Args>
+bool is_in(const T& value, Args&&... args)
+{
+    using CommonType = std::common_type_t<T, Args...>; // needs a cast when checking in the function
+
+    // stack-allocated list, casting everything to the common base
+    std::initializer_list<CommonType> list = { static_cast<CommonType>(value), static_cast<CommonType>(args)... };
+    return std::find(list.begin() + 1, list.end(), *list.begin()) != list.end();
+}

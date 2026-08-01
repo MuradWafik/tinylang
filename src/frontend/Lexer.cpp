@@ -362,6 +362,18 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
         }
 
         const char cur = Peek();
+        if(cur == '_')
+        {
+            if(!PeekNext() || std::isspace(PeekNext().value()) || PeekNext().value() == '{' || PeekNext().value() == '-')
+            {
+                SourceLocation loc{line, column};
+                tokens.emplace_back(TokenType::Underscore, "_", loc);
+
+                Consume();
+                continue;
+            }
+        }
+
         if(std::isalpha(static_cast<unsigned char>(cur)) || cur == '_')
         {
             auto result = LexIdentifier();

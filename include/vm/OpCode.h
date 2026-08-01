@@ -73,6 +73,7 @@ enum class OpCode : uint8_t
 
     // --- Control Flow ---
     OP_POP,                // [1 byte operand: size]           | Pops 'size' bytes
+    OP_DUP,                // [1 byte operand: size]           | Stack: Peeks 'size' bytes and pushes a copy
     OP_JUMP_IF_FALSE,      // [2 byte operand: jump_offset]    | Stack: Pops condition. If false, advances IP by offset
     OP_JUMP_IF_FALSE_PEEK, // [2 byte operand: jump_offset]    | Stack: Peeks condition. If false, advances IP by offset
     OP_JUMP_IF_TRUE_PEEK,  // [2 byte operand: jump_offset]    | Stack: Peeks condition. If true, advances IP by offset

@@ -133,6 +133,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
     if(auto* array_node = dynamic_cast<ArrayLiteral*>(expr)) return AnalyzeArrayLiteral(array_node);
     if(auto* index_access = dynamic_cast<IndexAccess*>(expr)) return AnalyzeIndexAccess(index_access);
     if(auto* property_access = dynamic_cast<PropertyAccess*>(expr)) return AnalyzePropertyAccess(property_access);
+    if(auto* switch_expr = dynamic_cast<SwitchExpression*>(expr)) return AnalyzeSwitchExpression(switch_expr);
 
     if(auto* bool_node = dynamic_cast<BoolLiteral*>(expr))
     {
@@ -160,7 +161,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
         return PrimitiveType::Char.get();
     }
 
-    return std::unexpected("Unknown expression type ");
+    return std::unexpected(std::format("Unknown expression type '{}'", expr->GetTypeString()));
 }
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration)
@@ -1106,6 +1107,58 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
 
     property_access->type_info = field_type;
     return field_type;
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeSwitchExpression(SwitchExpression* switch_expression)
+{
+    auto switched_variable = AnalyzeExpression(switch_expression->target.get());
+    if(!switched_variable) return switched_variable;
+
+    // currently (maybe changed later) can only do switch (primitive_t) maybe down the road will include any type with operator ==
+    if(
+        !is_in(
+            switched_variable.value(),
+            PrimitiveType::Bool.get(), PrimitiveType::Int.get(), PrimitiveType::Float.get(),
+            PrimitiveType::Char.get(), PrimitiveType::String.get()
+        )
+        && !dynamic_cast<const EnumType*>(switched_variable.value())
+    )
+    {
+        return Return(std::format(
+            "Calling switch on non primitive type at {}", switch_expression->target->source_location)
+        );
+    }
+
+    const Type* return_type = nullptr;
+    for(const auto& [pattern, result]: switch_expression->branches)
+    {
+        if(pattern)
+        {
+            auto pattern_t = AnalyzeExpression(pattern.get());
+            if(!pattern_t) return pattern_t;
+
+            if(!switched_variable.value()->IsAssignableTo(pattern_t.value()))
+            {
+                return Return(std::format(
+                    "In switch expression, can not match pattern type '{}' to type '{}' at {}",
+                    pattern_t.value()->GetName(), switched_variable.value()->GetName(), pattern->source_location));
+            }
+        }
+
+        auto result_t = AnalyzeExpression(result.get());
+        if(!result_t) return result_t;
+
+        if(!return_type) return_type = result_t.value();
+        if(!return_type->IsAssignableTo(result_t.value()))
+        {
+            return Return(std::format(
+                "In switch expression, can not return type '{}' to type '{}' at {}",
+                result_t.value()->GetName(), return_type->GetName(), pattern->source_location));
+        }
+    }
+
+    switch_expression->type_info = return_type;
+    return return_type;
 }
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeInterfaceDeclaration(
