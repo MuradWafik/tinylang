@@ -37,9 +37,9 @@ struct StringLiteral final : Expression
 
 struct CharLiteral final : Expression
 {
-    char value;
-    explicit CharLiteral(const char val, const SourceLocation loc) : value(val) { this->source_location = loc; }
-    [[nodiscard]] std::string GetTypeString() const override { return std::format("CharLiteral(\"{}\")", value); }
+    char8_t value;
+    explicit CharLiteral(const char8_t val, const SourceLocation loc) : value(val) { this->source_location = loc; }
+    [[nodiscard]] std::string GetTypeString() const override { return std::format("CharLiteral(\"{}\")", static_cast<char>(value)); }
 };
 
 struct BoolLiteral final : Expression

@@ -14,7 +14,13 @@ class Type;
 struct Statement : ASTNode
 {};
 
-struct VariableDeclaration final : Statement
+struct ExportableStatement : Statement
+{
+    bool is_exported = false;
+};
+
+
+struct VariableDeclaration final : ExportableStatement
 {
     Token name;
     std::optional<Token> type;
@@ -135,7 +141,7 @@ struct MethodSignature
     const Type* return_type_info = nullptr;
 };
 
-struct FunctionDeclaration final : Statement
+struct FunctionDeclaration final : ExportableStatement
 {
     MethodSignature method_signature;
     std::optional<Parameter> receiver; // the self class for methods
@@ -195,14 +201,14 @@ struct ContinueStatement final : Statement
 };
 
 
-struct NativeModuleStatement final : Statement
+struct NativeImportStatement final : Statement
 {
     Token name;
     [[nodiscard]] std::string GetTypeString() const override {
-        return "NativeModuleStatement";
+        return std::format("NativeImportStatement({})", name.lexeme);
     }
 
-    explicit NativeModuleStatement(Token name, const SourceLocation loc) : name(std::move(name))
+    explicit NativeImportStatement(Token name, const SourceLocation loc) : name(std::move(name))
     {
         this->source_location = loc;
     }
@@ -211,6 +217,7 @@ struct NativeModuleStatement final : Statement
 struct NativeFunctionDeclaration final : Statement
 {
     MethodSignature method_signature;
+    std::string original_name;
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -218,13 +225,13 @@ struct NativeFunctionDeclaration final : Statement
     }
 
     NativeFunctionDeclaration(MethodSignature method_signature, const SourceLocation loc) :
-    method_signature{std::move(method_signature)}
+    method_signature{std::move(method_signature)}, original_name{this->method_signature.name.lexeme}
     {
         this->source_location = loc;
     }
 };
 
-struct StructDeclaration final : Statement
+struct StructDeclaration final : ExportableStatement
 {
     Token name;
     std::vector<std::pair<Token, Token>> fields; // {"x", "int"}, {"y", "int"} ...
@@ -248,7 +255,7 @@ struct EnumVariant
 };
 
 
-struct EnumDeclaration final : Statement
+struct EnumDeclaration final : ExportableStatement
 {
     Token name;
     std::vector<EnumVariant> variant_names;
@@ -265,7 +272,7 @@ struct EnumDeclaration final : Statement
     }
 };
 
-struct InterfaceDeclaration final : Statement
+struct InterfaceDeclaration final : ExportableStatement
 {
     Token name;
     std::vector<MethodSignature> methods;
@@ -331,4 +338,37 @@ struct ExtendStatement final : Statement
     {
         this->source_location = loc;
     }
+};
+
+struct ImportStatement final : Statement
+{
+    std::string module_name;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("Import({})", module_name);
+    }
+
+    ImportStatement(std::string module_name, const SourceLocation loc)
+    : module_name{std::move(module_name)}
+    {
+        this->source_location = loc;
+    }
+};
+
+struct ModuleDeclaration final : Statement
+{
+    std::string name;
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("Module({})", name);
+    }
+
+    ModuleDeclaration(std::string name, const SourceLocation loc)
+    : name{std::move(name)}
+    {
+        this->source_location = loc;
+    }
+
 };

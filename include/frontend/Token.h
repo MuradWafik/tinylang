@@ -36,6 +36,8 @@ enum class TokenType
     Interface,
     Extend,
     Switch,
+    Import,
+    Export,
 
     // Types
     IntType,
@@ -86,6 +88,7 @@ enum class TokenType
 
 struct SourceLocation
 {
+    std::string filename;
     uint32_t line_number;
     uint32_t column;
 };
@@ -95,7 +98,7 @@ struct std::formatter<SourceLocation> : std::formatter<std::string> {
     template <typename FormatContext>
     auto format(const SourceLocation& sl, FormatContext& ctx) const {
         // Construct the string representation
-        std::string s = std::format("Line: {} Column {}", sl.line_number, sl.column);
+        std::string s = std::format("{} Line: {} Column {}", sl.filename, sl.line_number, sl.column);
 
         // Delegate parsing and padding logic to the base string formatter
         return std::formatter<std::string>::format(s, ctx);
@@ -136,6 +139,8 @@ struct Token {
         {"interface", TokenType::Interface},
         {"extend", TokenType::Extend},
         {"switch", TokenType::Switch},
+        {"import", TokenType::Import},
+        {"export", TokenType::Export},
     };
     static std::string TypeToString(TokenType token_type);
 

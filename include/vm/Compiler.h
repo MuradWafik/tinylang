@@ -7,14 +7,14 @@
 #include <memory>
 #include <vector>
 
-#include "frontend/ProjectConfig.h"
+#include "../project/ProjectConfig.h"
 
 class Compiler
 {
 public:
-    explicit Compiler(ProjectConfig* project_config) : project_config{project_config} {}
+    explicit Compiler(ProjectConfig* project_config, class ModuleRegistry* registry) : project_config{project_config}, registry{registry} {}
 
-    std::unique_ptr<Chunk> Compile(const std::vector<std::unique_ptr<ASTNode>>& statements);
+    std::unordered_map<std::string, std::unique_ptr<Chunk>> CompileAll(const std::string& entry_module);
 
     std::unordered_map<std::string, uint16_t> global_offsets;
     uint16_t global_bytes_count = 0;
@@ -28,9 +28,9 @@ private:
     void CompileIfStatement(const IfStatement* if_statement);
     void CompileWhileStatement(const WhileStatement* while_statement);
     void CompileExpressionStatement(const ExpressionStatement* expression_statement);
-    void CompileContinueStatement(const ContinueStatement* continue_statement);
+    void CompileContinueStatement(const ContinueStatement* continue_statement) const;
     void CompileBreakStatement(const BreakStatement* break_statement);
-    void CompileNativeModuleStatement(const NativeModuleStatement* mod_stmt);
+    void CompileNativeModuleStatement(const NativeImportStatement* mod_stmt);
     void CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration);
     void CompileForLoop(const ForLoop* for_loop);
 
@@ -77,5 +77,6 @@ private:
 
     std::filesystem::path current_native_module_path{};
     ProjectConfig* project_config; // non owning
+    class ModuleRegistry* registry; // non owning
 
 };

@@ -7,7 +7,8 @@
 #include <string_view>
 #include <variant>
 #include <vector>
-
+#include <optional>
+#include <nlohmann/json.hpp>
 
 namespace FileReader
 {
@@ -38,7 +39,6 @@ namespace FileReader
             std::format("Unable to open file '{}'", file_path.c_str())
         };
     }
-
 
     std::stringstream ss;
     ss << file.rdbuf();
@@ -122,11 +122,41 @@ concept fundamental = std::is_trivially_copyable_v<T>;
 
 
 template <typename T, typename... Args>
-bool is_in(const T& value, Args&&... args)
+bool IsIn(const T& value, Args&&... args)
 {
     using CommonType = std::common_type_t<T, Args...>; // needs a cast when checking in the function
 
     // stack-allocated list, casting everything to the common base
     std::initializer_list<CommonType> list = { static_cast<CommonType>(value), static_cast<CommonType>(args)... };
     return std::find(list.begin() + 1, list.end(), *list.begin()) != list.end();
+}
+
+template <typename T = std::string>
+std::optional<T> GetOptional(const nlohmann::json& j, const std::string& key)
+{
+    if (j.contains(key))
+    {
+        return j[key].get<T>();
+    }
+    return std::nullopt;
+}
+
+
+inline bool IsHidden(const std::filesystem::directory_entry& entry)
+{
+    // Linux / mac
+    if(const auto name = entry.path().filename().string(); name.size() > 1 && name[0] == '.')
+    {
+        return true;
+    }
+
+#ifdef _WIN32
+    // Windows convention (file attribute check) (ai generated, not tested)
+    DWORD attributes = GetFileAttributesW(entry.path().wstring().c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_HIDDEN)) {
+        return true;
+    }
+#endif
+
+    return false;
 }

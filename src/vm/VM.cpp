@@ -9,18 +9,25 @@
 
 #include "utils/Utils.h"
 
-InterpretResult VM::StartProgram(Chunk* root_chunk)
+InterpretResult VM::StartProgram(const std::unordered_map<std::string, std::unique_ptr<Chunk>>& chunks, const std::string& entry_module)
 {
-    // Evaluate the root wile running main if it exists
-    const auto res = Interpret(root_chunk);
-    
-    if(!root_chunk->has_main)
+    for(const auto& [name, chunk] : chunks)
     {
-        std::println(std::cerr, "Runtime Error: No 'fn main()' entrypoint found.");
-        return InterpretResult::INTERPRET_RUNTIME_ERROR;
+        if(name != entry_module)
+        {
+            if(const auto res = Interpret(chunk.get()); res != InterpretResult::INTERPRET_OK)
+            {
+                return res;
+            }
+        }
     }
-    
-    return res;
+
+    if(const auto it = chunks.find(entry_module); it != chunks.end())
+    {
+        return Interpret(it->second.get());
+    }
+
+    return InterpretResult::INTERPRET_COMPILE_ERROR;
 }
 
 InterpretResult VM::Interpret(Chunk* chunk)
@@ -753,7 +760,8 @@ void VM::SetLocal()
 void VM::Pop()
 {
     const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
-    for(int i = 0; i < size; i++) {
+    for(int i = 0; i < size; i++)
+    {
         stack.pop_back();
     }
 }
@@ -762,7 +770,8 @@ void VM::Duplicate()
 {
     const auto size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const size_t start_idx = stack.size() - size;
-    for(int i = 0; i < size; i++) {
+    for(int i = 0; i < size; i++)
+    {
         uint8_t val = stack[start_idx + i];
         stack.push_back(val);
     }

@@ -34,6 +34,8 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Extend:          return "extend";
         case TokenType::Interface:       return "interface";
         case TokenType::Switch:          return "switch";
+        case TokenType::Import:          return "import";
+        case TokenType::Export:          return "export";
 
         // Built-in Types
         case TokenType::IntType:         return "int";

@@ -1,0 +1,4 @@
+module math;
+export fn add(a: int, b: int) -> int {
+    return a + b;
+}

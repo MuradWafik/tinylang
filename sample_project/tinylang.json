@@ -1,7 +1,19 @@
 {
   "name": "sample_project",
   "version": "0.1.0",
+  "entry": "main.tl",
   "plugins": {
     "std": "plugins/std_plugin"
+  },
+  "dependencies": {
+    "math": {
+      "path": "libs/tinylang_math"
+    },
+    "http": {
+      "git": {
+        "url": "https://github.com/murad/tiny-http.git",
+        "branch": "main"
+      }
+    }
   }
 }

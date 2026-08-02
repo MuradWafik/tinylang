@@ -206,6 +206,19 @@ private:
     std::string name;
 };
 
+class ModuleType final : public Type
+{
+public:
+    [[nodiscard]] std::string GetName() const override { return name; }
+    bool IsAssignableTo(const Type* other) const override { return false; }
+    [[nodiscard]] uint8_t GetSize() const override { return 0; } // Modules are not values in memory
+
+    explicit ModuleType(std::string name) : name{std::move(name)} {}
+    
+private:
+    std::string name;
+};
+
 inline std::string MangleMethodName(const std::string& method_name, const Type* type)
 {
     return std::format("{}${}", type->GetName(), method_name);

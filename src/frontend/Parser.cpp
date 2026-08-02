@@ -102,6 +102,9 @@ ExpectedNodePtr Parser::ParseStatement()
         case TokenType::Interface: return ParseInterfaceDeclaration();
         case TokenType::For: return ParseForLoop();
         case TokenType::Extend: return ParseExtendStatement();
+        case TokenType::Export: return ParseExportStatement();
+        case TokenType::Import: return ParseImportStatement();
+        case TokenType::Module: return ParseModuleDeclaration();
         case TokenType::EndOfFile: return std::unexpected("Unexpected end of file");
         default: return ParseExpressionStatement();
     }
@@ -128,23 +131,12 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
     std::optional<Token> type_name = std::nullopt;
     if(Match(TokenType::Colon))
     {
-        auto type_name_token = Consume();
-        if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
+        auto type_name_expected = ParseTypeName();
+        if(!type_name_expected)
         {
-            return std::unexpected(
-                std::format("Expected typename for variable declaration got '{}'. {}'", type_name_token.type, type_name_token.source_location));
+            return std::unexpected(type_name_expected.error());
         }
-
-        while(Match(TokenType::LeftSquareBracket))
-        {
-            if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type");
-                !right_bracket)
-            {
-                return std::unexpected(right_bracket.error());
-            }
-            type_name_token.lexeme += "[]";
-        }
-        type_name = type_name_token;
+        type_name = type_name_expected.value();
     }
 
     std::unique_ptr<Expression> initializer = nullptr;
@@ -558,7 +550,7 @@ ExpectedExpressionPtr Parser::ParsePrimary()
     }
 }
 
-ExpectedStatementPtr Parser::ParseFunctionDeclaration()
+ExpectedPtr<FunctionDeclaration> Parser::ParseFunctionDeclaration()
 {
     // function_declaration
     // fn name(vars...? : types...) -> return type { body }
@@ -581,7 +573,7 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
         const auto& type = Peek();
         if(!type.IsPrimitiveTypeName() && type.type != TokenType::Identifier)
         {
-            throw std::runtime_error("Expected a valid type for receiver");
+            return std::unexpected(std::format("Expected a valid type for receiver, got type '{}'", type.lexeme));
         }
         Consume();
 
@@ -613,41 +605,49 @@ ExpectedStatementPtr Parser::ParseFunctionDeclaration()
     );
 }
 
+ExpectedPtr<NativeImportStatement> Parser::ParseNativeImportDeclaration()
+{
+    auto name = Expect(TokenType::Identifier,"In Module name");
+    if(!name)
+    {
+        return std::unexpected(name.error());
+    }
+
+    if(auto semicolon = Expect(TokenType::Semicolon, "Error in native module declaration");
+        !semicolon)
+    {
+        return std::unexpected(semicolon.error());
+    }
+    return std::make_unique<NativeImportStatement>(name.value(), name->source_location);
+}
+
+ExpectedPtr<NativeFunctionDeclaration> Parser::ParseNativeFunctionDeclaration(const Token& native_keyword)
+{
+    auto method_signature = ParseMethodSignature();
+    if(!method_signature) return std::unexpected(method_signature.error());
+    if(auto semicolon = Expect(TokenType::Semicolon, "In native function declaration");
+        !semicolon)
+    {
+        return std::unexpected(semicolon.error());
+    }
+
+    return std::make_unique<NativeFunctionDeclaration>(
+        std::move(method_signature.value()),
+        native_keyword.source_location
+    );
+}
+
 ExpectedNodePtr Parser::ParseNativeStatement()
 {
-    auto& native = Consume(); //  native keyword
-    if(Match(TokenType::Module))
+    auto& native_keyword = Consume();
+    if(Match(TokenType::Import))
     {
-        // Native module declaration
-        auto name = Expect(TokenType::StringLiteral,"Module name expected");
-        if(!name)
-        {
-            return std::unexpected(name.error());
-        }
-
-        if(auto semicolon = Expect(TokenType::Semicolon, "Error in native module declaration");
-            !semicolon)
-        {
-            return std::unexpected(semicolon.error());
-        }
-        return std::make_unique<NativeModuleStatement>(*name, name->source_location);
+        return ParseNativeImportDeclaration();
     }
 
     if(Match(TokenType::Fn)) // native function
     {
-        auto method_signature = ParseMethodSignature();
-        if(!method_signature) return std::unexpected(method_signature.error());
-        if(auto semicolon = Expect(TokenType::Semicolon, "");
-            !semicolon)
-        {
-            return std::unexpected(semicolon.error());
-        }
-
-
-        return std::make_unique<NativeFunctionDeclaration>(
-            std::move(method_signature.value()),
-            native.source_location
-        );
+        return ParseNativeFunctionDeclaration(native_keyword);
     }
 
     return std::unexpected(std::format("Unknown token after Native keyword '{}'", Peek().type));
@@ -681,7 +681,13 @@ Expected<std::vector<Parameter>> Parser::ParseParameters()
             return std::unexpected(colon.error());
         }
 
-        auto type_name = Consume();
+        auto type_name_expected = ParseTypeName();
+        if(!type_name_expected)
+        {
+            return std::unexpected(type_name_expected.error());
+        }
+        auto type_name = type_name_expected.value();
+        
         if(!type_name.IsNonVoidType())
         {
             return std::unexpected(
@@ -1121,6 +1127,126 @@ ExpectedPtr<ExtendStatement> Parser::ParseExtendStatement()
     );
 }
 
+ExpectedPtr<ExportableStatement> Parser::ParseExportStatement()
+{
+    auto export_keyword = Consume();
+
+    std::unique_ptr<ExportableStatement> export_stmt = nullptr;
+    if(Peek().type == TokenType::Fn)
+    {
+        auto fn_result = ParseFunctionDeclaration();
+        if(!fn_result) return fn_result;
+
+        export_stmt = std::move(fn_result.value());
+    }
+    else if(Peek().type == TokenType::Enum)
+    {
+        auto enum_result = ParseEnumDeclaration();
+        if(!enum_result) return enum_result;
+
+        export_stmt = std::move(enum_result.value());
+    }
+    else if(Peek().type == TokenType::Struct)
+    {
+        auto struct_result = ParseStructDeclaration();
+        if(!struct_result) return struct_result;
+
+        export_stmt = std::move(struct_result.value());
+    }
+    else if(Peek().type == TokenType::Var)
+    {
+        auto var_decl = ParseVariableDeclaration();
+        if(!var_decl) return var_decl;
+
+        export_stmt = std::move(var_decl.value());
+    }
+    else if(Peek().type == TokenType::Interface)
+    {
+        auto interface_decl = ParseInterfaceDeclaration();
+        if(!interface_decl) return interface_decl;
+
+        export_stmt = std::move(interface_decl.value());
+    }
+    else
+    {
+        return std::unexpected(std::format("Unknown token after export keyword '{}', at {}", Peek().lexeme, Peek().source_location));
+    }
+
+    export_stmt->is_exported = true;
+    return export_stmt;
+}
+
+ExpectedPtr<ImportStatement> Parser::ParseImportStatement()
+{
+    auto& import_keyord = Consume(); // import
+
+    constexpr auto error = "Parsing import statement";
+
+    std::vector<Token> module_name; // module like std.io would be 2 identifiers (skipping the period)
+    // while(!IsAtEnd() && Peek().type != TokenType::Semicolon)
+    // {
+    //     auto identifier = Expect(TokenType::Identifier, error);
+    //     if(!identifier) return std::unexpected(identifier.error());
+    //
+    //     Match(TokenType::Dot); // dont care about it just remove if it exists for the next iteration
+    //     module_name.emplace_back(std::move(identifier.value()));
+    //
+    //
+    //
+    // }
+    do
+    {
+        auto identifier = Expect(TokenType::Identifier, error);
+        if(!identifier) return std::unexpected(identifier.error());
+        module_name.emplace_back(std::move(identifier.value()));
+
+    } while(!IsAtEnd() && Match(TokenType::Dot));
+
+    if(auto closed = Expect(TokenType::Semicolon, error); !closed)
+    {
+        return std::unexpected(closed.error());
+    }
+
+    const auto target_name =
+        module_name
+        | std::views::transform([](const Token& t) { return std::string_view(t.lexeme); })
+        | std::views::join_with(std::string_view{"."})
+        | std::ranges::to<std::string>();
+
+    return std::make_unique<ImportStatement>(std::move(target_name), import_keyord.source_location);
+}
+
+ExpectedPtr<ModuleDeclaration> Parser::ParseModuleDeclaration()
+{
+    auto& keyword = Consume();
+    if(!module_name.empty())
+    {
+        auto next = Consume(); // to display in the error
+        return std::unexpected(std::format(
+            "Redefinition of module, got '{}' at {} already had '{}'",
+            next.lexeme, next.source_location, module_name));
+    }
+
+    constexpr auto error = "Parsing module declaration";
+    auto start = keyword.source_location;
+    std::string name;
+    do
+    {
+        auto cur = Expect(TokenType::Identifier, error);
+        if(!cur)
+        {
+            return std::unexpected(cur.error());
+        }
+
+        name += cur->lexeme;
+    } while(!IsAtEnd() && Match(TokenType::Dot));
+
+    if(auto end = Expect(TokenType::Semicolon, error); !end) return std::unexpected(end.error());
+
+    module_name = name;
+    return std::make_unique<ModuleDeclaration>(std::move(name), start);
+}
+
 std::expected<MethodSignature, std::string> Parser::ParseMethodSignature()
 {
     auto function_name = Expect(TokenType::Identifier, "Expected function name after 'fn'");
@@ -1147,7 +1273,13 @@ std::expected<MethodSignature, std::string> Parser::ParseMethodSignature()
         return std::unexpected(arrow.error());
     }
 
-    auto return_type = Consume();
+    auto return_type_expected = ParseTypeName();
+    if(!return_type_expected)
+    {
+        return std::unexpected(return_type_expected.error());
+    }
+    auto return_type = return_type_expected.value();
+
     if(!return_type.IsVoidableType())
     {
         return std::unexpected(
@@ -1163,4 +1295,35 @@ std::expected<MethodSignature, std::string> Parser::ParseMethodSignature()
         .parameters = std::move(parameters_result.value()),
         .return_type = return_type
     };
+}
+
+Expected<Token> Parser::ParseTypeName()
+{
+    auto type_name_token = Consume();
+    if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
+    {
+        return std::unexpected(
+            std::format("Expected typename, got '{}' at {}", type_name_token.type, type_name_token.source_location));
+    }
+    
+    // Check for dot access like `geometry.Point`
+    while(Match(TokenType::Dot))
+    {
+        auto prop = Expect(TokenType::Identifier, "Expected identifier after '.' in type name");
+        if(!prop) return std::unexpected(prop.error());
+        
+        type_name_token.lexeme += "::" + prop->lexeme;
+    }
+
+    while(Match(TokenType::LeftSquareBracket))
+    {
+        if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type");
+            !right_bracket)
+        {
+            return std::unexpected(right_bracket.error());
+        }
+        type_name_token.lexeme += "[]";
+    }
+
+    return type_name_token;
 }

@@ -22,7 +22,7 @@ class VM
 public:
     VM() = default;
 
-    InterpretResult StartProgram(Chunk* root_chunk);
+    InterpretResult StartProgram(const std::unordered_map<std::string, std::unique_ptr<Chunk>>& chunks, const std::string& entry_module);
     InterpretResult Interpret(Chunk* chunk);
 
     void SetLocal();

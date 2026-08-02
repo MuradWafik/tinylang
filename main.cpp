@@ -1,71 +1,49 @@
 #include <iostream>
 #include <print>
 
-#include "utils/Utils.h"
-#include "frontend/Lexer.h"
-#include "frontend/Parser.h"
-#include "analysis/SemanticAnalyzer.h"
+#include "CLI/CLI.hpp"
+#include "project/Project.h"
 
-#include "vm/Compiler.h"
-#include "vm/VM.h"
 
 
 void Run(const int argc, char** argv)
 {
-    if(argc < 2)
+
+    CLI::App app{"Tinylang Compiler"};
+
+    // std::string project_name;
+    // auto new_cmd = app.add_subcommand("new", "Create a new Tinylang project");
+    // new_cmd->add_option("name", project_name, "Name of the project")->required();
+    //
+
+    std::string run_path = ".";
+    const auto run_cmd = app.add_subcommand("run", "Run a Tinylang project");
+    run_cmd->add_option("path", run_path, "Path to project root");
+
+    try
     {
-        std::println(std::cerr, "No File Path provided");
+        app.parse(argc, argv);
+    }
+    catch(const CLI::ParseError& e)
+    {
+        app.exit(e);
         return;
     }
 
-    const auto source_file_path = argv[1];
-    auto FileOpenResult = FileReader::Read(source_file_path);
-    if(!FileOpenResult.has_value())
+    if(!run_cmd) return;
+
+    auto project_result = Project::Init(run_path);
+    if(!project_result)
     {
-        std::println(std::cerr, "{}", FileOpenResult.error());
+        std::println(std::cerr, "{}", project_result.error());
         return;
     }
 
-    Lexer lexer{};
-    auto LexResult = lexer.Lex(FileOpenResult.value());
-    if(!LexResult)
+    const std::unique_ptr<Project> project = std::move(project_result.value());
+    if (auto run_result = project->CompileAndRun(); !run_result)
     {
-        std::println(std::cerr, "Error Lexing: {}", LexResult.error().message);
-        std::println(std::cerr, "{}", LexResult.error().location);
-        return;
+        std::println(std::cerr, "Execution Failed: {}", run_result.error());
     }
-
-    Parser parser{LexResult.value()};
-    auto parse_result = parser.ParseProgram();
-
-    if(!parse_result)
-    {
-        std::println(std::cerr, "Error Parsing: {}", parse_result.error());
-        return;
-    }
-
-    auto project_config =  ProjectConfig::FindAndLoad(source_file_path);
-    if(!project_config)
-    {
-        std::println(std::cerr, "Error reading project config: {}", project_config.error());
-        return;
-    }
-
-    SemanticAnalyzer semantic_analyzer{project_config->get()};
-
-    if(auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value()); !semantic_analysis_result)
-    {
-        std::println(std::cerr, "Error in semantic analysis: {}", semantic_analysis_result.error());
-        return;
-    }
-
-    Compiler compiler{project_config->get()};
-    std::unique_ptr<Chunk> chunk = compiler.Compile(parse_result.value());
-
-    // chunk->Disassemble("Compiler Test");
-
-    VM vm;
-    vm.StartProgram(chunk.get());
 
 }
 int main(const int argc, char** argv)

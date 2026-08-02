@@ -8,9 +8,10 @@
 
 #include "analysis/Type.h"
 #include "frontend/ASTNode.h"
-#include "frontend/ProjectConfig.h"
+#include "../project/ProjectConfig.h"
 #include "frontend/Statement.h"
 #include "frontend/Token.h"
+#include "project/ModuleRegistry.h"
 #include "utils/Utils.h"
 
 struct OperatorSignature
@@ -106,12 +107,17 @@ private:
 class SemanticAnalyzer
 {
 public:
-    std::expected<void, std::string> Analyze(const std::vector<std::unique_ptr<ASTNode>>& program);
-    std::expected<void, std::string> Analyze(ASTNode* node);
     const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
     const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
 
-    explicit SemanticAnalyzer(ProjectConfig* project_config, bool strict_mode = true) : project_config{project_config}, strict_mode{strict_mode} {}
+    std::expected<void, std::string> RunAnalysis(
+            );
+
+    // Runs Pass 1 (Exports) and Pass 2 (Typechecking) on the entire registry
+    std::expected<void, std::string> AnalyzeAll();
+    explicit SemanticAnalyzer(ProjectConfig* project_config, ModuleRegistry* module_registry, bool strict_mode = true)
+    : strict_mode{strict_mode}, project_config{project_config}, module_registry{module_registry}
+    {}
 
 private:
     SymbolTable symbol_table{};
@@ -120,6 +126,13 @@ private:
     std::unordered_map<OperatorSignature, const Type*, OperatorSignatureHash> binary_operators;
     std::unordered_map<UnaryOperatorSignature, const Type*, UnaryOperatorSignatureHash> unary_operators;
     ProjectConfig* project_config; // non owning
+    ModuleRegistry* module_registry;
+
+    enum class AnalysisPass
+    {
+        Registration,
+        Validation
+    } analysis_pass;
 
     // Has to take ownership of the types since they must be dynamically allocated for dynamic dispatch
     std::vector<std::unique_ptr<Type>> allocated_types;
@@ -128,6 +141,7 @@ private:
     // as return statements have no information of their functions
 
     std::string current_native_module{};
+    std::string current_namespace{};
     // Native functions need to be aware of their native modules and to add them to symbol table
 
     struct PendingInterfaceCheck
@@ -154,7 +168,7 @@ private:
     std::expected<void, std::string> AnalyzeReturnStatement(const ReturnStatement* return_statement);
     std::expected<void, std::string> AnalyzeBodyStatement(const BodyStatement* body_statement);
     std::expected<void, std::string> AnalyzeExpressionStatement(const ExpressionStatement* expression_statement);
-    std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeModuleStatement* native_module_statement);
+    std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeImportStatement* native_module_statement);
     std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(NativeFunctionDeclaration* native_function_declaration);
     std::expected<void, std::string> AnalyzeStructDeclaration(StructDeclaration* struct_declaration);
     std::expected<void, std::string> AnalyzeEnumDeclaration(const EnumDeclaration* enum_declaration);
@@ -185,5 +199,7 @@ private:
 
     void InitializeDefaults();
     std::expected<void, std::string> EnsureInterfacesImplemented() const;
+
+    std::string MangleName(const std::string& name) const;
 
 };

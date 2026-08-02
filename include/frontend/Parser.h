@@ -24,6 +24,8 @@ class Parser {
 public:
     explicit Parser(const std::vector<Token>& tokens) : index{0}, tokens{tokens} {};
     Expected<std::vector<std::unique_ptr<ASTNode>>> ParseProgram();
+
+    std::string module_name;
 private:
     size_t index;
     const std::vector<Token>& tokens;
@@ -63,8 +65,7 @@ private:
     //TODO: Most have the same logic refactor, (potentially a dictionary with the tokens to match and next level)
 
 
-
-    ExpectedStatementPtr ParseFunctionDeclaration();
+    ExpectedPtr<FunctionDeclaration> ParseFunctionDeclaration();
     ExpectedNodePtr ParseNativeStatement(); // native module/function declaration
     Expected<std::vector<Parameter>> ParseParameters();
     ExpectedPtr<VariableDeclaration> ParseVariableDeclaration();
@@ -79,9 +80,13 @@ private:
     ExpectedPtr<InterfaceDeclaration> ParseInterfaceDeclaration();
     ExpectedPtr<ForLoop> ParseForLoop();
     ExpectedPtr<ExtendStatement> ParseExtendStatement();
+    ExpectedPtr<ExportableStatement> ParseExportStatement();
+    ExpectedPtr<ImportStatement> ParseImportStatement();
+    ExpectedPtr<ModuleDeclaration> ParseModuleDeclaration();
 
 
-
-
+    ExpectedPtr<NativeImportStatement> ParseNativeImportDeclaration();
+    ExpectedPtr<NativeFunctionDeclaration> ParseNativeFunctionDeclaration(const Token& native_keyword);
     std::expected<MethodSignature, std::string> ParseMethodSignature();
+    Expected<Token> ParseTypeName();
 };

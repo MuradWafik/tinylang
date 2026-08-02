@@ -15,7 +15,9 @@ add_library(tinylang_lib
         src/vm/VM.cpp
         src/vm/VMHeap.cpp
         src/vm/PluginLoader.cpp
-        src/frontend/ProjectConfig.cpp
+        src/project/ProjectConfig.cpp
+        src/project/Project.cpp
+        src/project/ModuleRegistry.cpp
 )
 
 target_include_directories(tinylang_lib PUBLIC
@@ -34,6 +36,7 @@ target_include_directories(tinylang_api INTERFACE include)
 
 # --- Plugins ---
 add_library(std_plugin MODULE src/plugins/std.cpp)
+
 target_link_libraries(std_plugin PRIVATE tinylang_api)
 
 include(FetchContent)
@@ -59,7 +62,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-target_link_libraries(tinylang_lib PUBLIC magic_enum::magic_enum nlohmann_json::nlohmann_json)
+FetchContent_Declare(
+        cli11
+        GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+        GIT_TAG v2.4.1
+)
+FetchContent_MakeAvailable(cli11)
+
+target_link_libraries(tinylang_lib PUBLIC magic_enum::magic_enum nlohmann_json::nlohmann_json CLI11::CLI11)
 
 enable_testing()
 
