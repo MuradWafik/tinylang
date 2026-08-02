@@ -8,7 +8,7 @@
 
 struct ASTNode
 {
-    SourceLocation source_location{0, 0};
+    SourceLocation source_location{"", 0, 0};
     virtual ~ASTNode() = default;
     [[nodiscard]] virtual std::string GetTypeString() const = 0;
 };
@@ -27,7 +27,7 @@ template <typename T>
 requires std::derived_from<T, ASTNode>
 struct std::formatter<T*> : std::formatter<std::string> {
     auto format(const T* node, format_context& ctx) const {
-        std::string str = node ? node->GetTypeString() : "nullptr";
+        const std::string str = node ? node->GetTypeString() : "nullptr";
         return std::formatter<std::string>::format(str, ctx);
     }
 };
@@ -37,7 +37,7 @@ template <typename T>
 requires std::derived_from<T, ASTNode>
 struct std::formatter<std::unique_ptr<T>> : std::formatter<std::string> {
     auto format(const std::unique_ptr<T>& node, format_context& ctx) const {
-        std::string str = node ? node->GetTypeString() : "nullptr";
+        const std::string str = node ? node->GetTypeString() : "nullptr";
         return std::formatter<std::string>::format(str, ctx);
     }
 };

@@ -12,10 +12,14 @@ void Chunk::Write(OpCode opcode, const uint32_t line)
     Write(static_cast<uint8_t>(opcode), line);
 }
 
-size_t Chunk::AddConstant(ConstantValue value)
+uint8_t Chunk::AddConstant(ConstantValue value)
 {
+    if (constants.size() > 255)
+    {
+        throw std::runtime_error("Too many constants in one chunk.");
+    }
     constants.push_back(std::move(value));
-    return constants.size() - 1;
+    return static_cast<uint8_t>(constants.size() - 1);
 }
 
 int Chunk::DisassembleInstruction(int offset) const
@@ -48,11 +52,9 @@ int Chunk::DisassembleInstruction(int offset) const
         }
         case OpCode::OP_LOAD_NATIVE:
         {
-            const auto path_index = code[offset + 1];
             const auto name_index = code[offset + 2];
             const auto offset_bytes = *reinterpret_cast<const uint16_t*>(&code[offset + 3]);
             const auto num_args = code[offset + 5];
-            const auto return_bytes = code[offset + 6];
             const auto& name = std::get<std::string>(constants[name_index]);
             std::println("{:<24} offset: {:4} name_idx: {:4} '{}' ({} args)", opcode_name, offset_bytes, name_index, name, num_args);
             return offset + 7;

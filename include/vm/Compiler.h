@@ -31,7 +31,7 @@ private:
     void CompileContinueStatement(const ContinueStatement* continue_statement) const;
     void CompileBreakStatement(const BreakStatement* break_statement);
     void CompileNativeModuleStatement(const NativeImportStatement* mod_stmt);
-    void CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration);
+    void CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const;
     void CompileForLoop(const ForLoop* for_loop);
 
 
@@ -77,6 +77,6 @@ private:
 
     std::filesystem::path current_native_module_path{};
     ProjectConfig* project_config; // non owning
-    class ModuleRegistry* registry; // non owning
+    ModuleRegistry* registry; // non owning
 
 };

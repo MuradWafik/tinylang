@@ -16,6 +16,8 @@ struct Namespace
 
     // The combined exports from ALL files in this namespace
     std::unordered_map<std::string, ExportableStatement*> exports;
+
+    std::vector<std::string> dependencies; // needed for the graph search
 };
 
 class ModuleRegistry 

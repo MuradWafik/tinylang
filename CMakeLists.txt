@@ -11,6 +11,7 @@ add_library(tinylang_lib
         src/analysis/Type.cpp
         src/vm/ConstantValue.cpp
         src/vm/Chunk.cpp
+        src/vm/Serializer.cpp
         src/vm/Compiler.cpp
         src/vm/VM.cpp
         src/vm/VMHeap.cpp

@@ -811,9 +811,16 @@ void Compiler::CompileNativeModuleStatement(const NativeImportStatement* mod_stm
     current_native_module_path = project_config->ResolvePluginPath(mod_stmt->name.lexeme);
 }
 
-void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration)
+void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration* native_function_declaration) const
+
 {
-    const auto path_index = current_chunk->AddConstant(current_native_module_path.string());
+    std::string rel_path = std::filesystem::relative(current_native_module_path, project_config->project_root).string();
+    if (rel_path.length() > 0 && rel_path[0] != '.' && rel_path[0] != '/')
+    {
+        rel_path = "./" + rel_path;
+    }
+
+    const auto path_index = current_chunk->AddConstant(rel_path);
     const auto name_index = current_chunk->AddConstant(native_function_declaration->original_name);
     
     // get global offset allocated in pre-pass
@@ -829,7 +836,7 @@ void Compiler::CompileNativeFunctionDeclaration(const NativeFunctionDeclaration*
         static_cast<uint8_t>(name_index),
         offset,
         static_cast<uint8_t>(num_args),
-        return_bytes
+        static_cast<uint8_t>(return_bytes)
     );
 }
 

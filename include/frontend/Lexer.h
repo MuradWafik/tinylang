@@ -18,12 +18,12 @@ class Lexer
 {
 public:
 
-    std::expected<std::vector<Token>, LexerError> Lex(std::string_view source);
+    std::expected<std::vector<Token>, LexerError> Lex(std::string_view source, std::string filename = "");
 private:
     [[nodiscard]] bool IsAtEnd() const;
     [[nodiscard]] char Peek() const;
     [[nodiscard]] std::optional<char> PeekNext() const;
-    [[nodiscard]] std::optional<char> GetEscapeCharacter(char c) const;
+    [[nodiscard]] static std::optional<char> GetEscapeCharacter(char c);
     char Consume();
     [[nodiscard]] bool Match(char c);
     void SkipWhitespace();
@@ -51,5 +51,6 @@ private:
     std::uint32_t line = 1;
     std::uint32_t column = 1;
     std::string_view source;
+    std::string filename;
 };
 

@@ -10,7 +10,7 @@
 
 class Chunk;
 struct FunctionObject;
-struct Object;
+class Object;
 
 using ConstantValue = std::variant<
     int32_t,

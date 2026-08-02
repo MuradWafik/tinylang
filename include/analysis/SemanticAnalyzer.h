@@ -8,10 +8,10 @@
 
 #include "analysis/Type.h"
 #include "frontend/ASTNode.h"
-#include "../project/ProjectConfig.h"
 #include "frontend/Statement.h"
 #include "frontend/Token.h"
 #include "project/ModuleRegistry.h"
+#include "project/ProjectConfig.h"
 #include "utils/Utils.h"
 
 struct OperatorSignature
@@ -115,7 +115,7 @@ public:
 
     // Runs Pass 1 (Exports) and Pass 2 (Typechecking) on the entire registry
     std::expected<void, std::string> AnalyzeAll();
-    explicit SemanticAnalyzer(ProjectConfig* project_config, ModuleRegistry* module_registry, bool strict_mode = true)
+    SemanticAnalyzer(ProjectConfig* project_config, ModuleRegistry* module_registry, const bool strict_mode = true)
     : strict_mode{strict_mode}, project_config{project_config}, module_registry{module_registry}
     {}
 
@@ -157,7 +157,6 @@ private:
     std::expected<void, std::string> AnalyzeNode(ASTNode* node);
     std::expected<void, std::string> AnalyzeStatement(Statement* stmt);
     std::expected<const Type*, std::string> AnalyzeExpression(Expression* expr);
-    std::expected<const Type*, std::string> AnalyzeSwitchExpression(const SwitchExpression* switch_expr);
 
     std::expected<void, std::string> AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration);
     std::expected<void, std::string> AnalyzeIfStatement(const IfStatement* if_statement);
@@ -175,7 +174,6 @@ private:
     std::expected<void, std::string> AnalyzeInterfaceDeclaration(InterfaceDeclaration* interface_declaration);
     std::expected<void, std::string> AnalyzeForLoop(const ForLoop* for_loop);
     std::expected<void, std::string> AnalyzeExtendStatement(const ExtendStatement* extend_statement);
-
 
 
     std::expected<const Type*, std::string> AnalyzeBinaryExpression(BinaryExpression* binary_expression);

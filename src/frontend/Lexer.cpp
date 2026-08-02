@@ -22,7 +22,7 @@ void Lexer::SkipWhitespace()
 
 std::expected<Token, LexerError>  Lexer::LexIdentifier()
 {
-    const SourceLocation startSource = {line, column};
+    const SourceLocation startSource = {filename, line, column};
     std::string lexeme = "";
     while(!IsAtEnd())
     {
@@ -53,7 +53,7 @@ std::expected<Token, LexerError>  Lexer::LexNumber()
 {
     std::string number_string = "";
     TokenType token_type{TokenType::IntLiteral};
-    const SourceLocation start_source = {line, column};
+    const SourceLocation start_source = {filename, line, column};
     bool seen_dot = false;
     while (!IsAtEnd())
     {
@@ -93,7 +93,7 @@ std::expected<Token, LexerError>  Lexer::LexNumber()
 std::expected<Token, LexerError>  Lexer::LexString()
 {
     std::string lexeme;
-    const SourceLocation start_source = {line, column};
+    const SourceLocation start_source = {filename, line, column};
     char c = Peek();
 
     // Consume the starting quote to not be included
@@ -148,7 +148,7 @@ std::expected<Token, LexerError>  Lexer::LexString()
 std::expected<Token, LexerError> Lexer::LexChar()
 {
     std::string lexeme;
-    const SourceLocation start_source = {line, column};
+    const SourceLocation start_source = {filename, line, column};
     Consume(); // consume the starting quote
 
     if(IsAtEnd()) return std::unexpected<LexerError>{{"File ended while parsing char", start_source}};
@@ -158,7 +158,7 @@ std::expected<Token, LexerError> Lexer::LexChar()
         Consume();
         if(IsAtEnd()) return std::unexpected<LexerError>{{"File ended while parsing char escape", start_source}};
         
-        std::optional<char> escaped = GetEscapeCharacter(Peek());
+        const std::optional<char> escaped = GetEscapeCharacter(Peek());
         if(!escaped.has_value())
         {
             return std::unexpected<LexerError>{{"Invalid escape sequence in char", start_source}};
@@ -280,7 +280,7 @@ std::expected<Token, LexerError>  Lexer::LexSymbol()
         }
         default:
             const char c = Peek();
-            const SourceLocation source_location{line, column};
+            const SourceLocation source_location{filename, line, column};
             Consume();
             return std::unexpected<LexerError>
             {
@@ -334,12 +334,13 @@ bool Lexer::Match(const char c)
     return false;
 }
 
-std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view source)
+std::expected<std::vector<Token>, LexerError> Lexer::Lex(std::string_view source, std::string filename)
 {
     this->index = 0;
     this->line = 1;
     this->column = 1;
     this->source = source;
+    this->filename = filename;
     std::vector<Token> tokens;
     while (!IsAtEnd())
     {
@@ -366,7 +367,7 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
         {
             if(!PeekNext() || std::isspace(PeekNext().value()) || PeekNext().value() == '{' || PeekNext().value() == '-')
             {
-                SourceLocation loc{line, column};
+                SourceLocation loc{filename, line, column};
                 tokens.emplace_back(TokenType::Underscore, "_", loc);
 
                 Consume();
@@ -422,13 +423,13 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(const std::string_view 
         }
     }
 
-    tokens.push_back(Token(TokenType::EndOfFile, "", {line, column}));
+    tokens.push_back(Token(TokenType::EndOfFile, "", {filename, line, column}));
     return tokens;
 }
 
 Token Lexer::ReturnSingleCharSymbol(const TokenType token_type)
 {
-    const SourceLocation startSource = {line, column};
+    const SourceLocation startSource = {filename, line, column};
     const char c = Peek();
 
     const auto s = std::string(1, c);
@@ -442,7 +443,7 @@ Token Lexer::CheckSymbolForNext(
     const TokenType on_success,
     const TokenType on_fail)
 {
-    const SourceLocation startSource = {line, column};
+    const SourceLocation startSource = {filename, line, column};
     Consume();
     if(!IsAtEnd() && Peek() == target_next)
     {
@@ -479,7 +480,7 @@ bool Lexer::TrySkipComments()
     return true;
 }
 
-std::optional<char> Lexer::GetEscapeCharacter(char c) const
+std::optional<char> Lexer::GetEscapeCharacter(const char c)
 {
     switch(c)
     {

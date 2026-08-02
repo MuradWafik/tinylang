@@ -54,7 +54,7 @@ Expected<Token> Parser::Expect(const TokenType expected, std::string_view contex
 {
     if(IsAtEnd() || Peek().type != expected)
     {
-        SourceLocation loc = IsAtEnd() ? SourceLocation{0, 0} : Peek().source_location;
+        SourceLocation loc = IsAtEnd() ? SourceLocation{"", 0, 0} : Peek().source_location;
         std::string got = IsAtEnd() ? "EOF" : Peek().lexeme;
         return std::unexpected(
             std::format("{} (Expected '{}', got '{}' at {})",
@@ -1183,23 +1183,12 @@ ExpectedPtr<ImportStatement> Parser::ParseImportStatement()
     constexpr auto error = "Parsing import statement";
 
     std::vector<Token> module_name; // module like std.io would be 2 identifiers (skipping the period)
-    // while(!IsAtEnd() && Peek().type != TokenType::Semicolon)
-    // {
-    //     auto identifier = Expect(TokenType::Identifier, error);
-    //     if(!identifier) return std::unexpected(identifier.error());
-    //
-    //     Match(TokenType::Dot); // dont care about it just remove if it exists for the next iteration
-    //     module_name.emplace_back(std::move(identifier.value()));
-    //
-    //
-    //
-    // }
+
     do
     {
         auto identifier = Expect(TokenType::Identifier, error);
         if(!identifier) return std::unexpected(identifier.error());
         module_name.emplace_back(std::move(identifier.value()));
-
     } while(!IsAtEnd() && Match(TokenType::Dot));
 
     if(auto closed = Expect(TokenType::Semicolon, error); !closed)

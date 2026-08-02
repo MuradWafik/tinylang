@@ -41,7 +41,7 @@ struct VariableDeclaration final : ExportableStatement
         Token name,
         std::optional<Token> type,
         std::unique_ptr<Expression> initializer,
-        const SourceLocation loc
+        const SourceLocation& loc
         ) :
     name(std::move(name)),
     type(std::move(type)),
@@ -59,7 +59,7 @@ struct ReturnStatement final : Statement
 
     [[nodiscard]] bool IsVoidReturn() const { return value == nullptr; }
 
-    explicit ReturnStatement(std::unique_ptr<Expression> value, const SourceLocation loc) : value{std::move(value)}
+    explicit ReturnStatement(std::unique_ptr<Expression> value, const SourceLocation& loc) : value{std::move(value)}
     { this->source_location = loc; }
 };
 
@@ -83,7 +83,7 @@ struct BodyStatement final : Statement
         return std::format("BodyStatement([{}])", inner);
     }
 
-    explicit BodyStatement(const SourceLocation loc) { this->source_location = loc; }
+    explicit BodyStatement(const SourceLocation& loc) { this->source_location = loc; }
 };
 
 struct WhileStatement final : Statement
@@ -95,7 +95,7 @@ struct WhileStatement final : Statement
         return std::format("WhileStatement(condition: {}, body: {})", condition.get(), body.get());
     }
 
-    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body, const SourceLocation loc) :
+    WhileStatement(std::unique_ptr<Expression> condition, std::unique_ptr<BodyStatement> body, const SourceLocation& loc) :
         condition{std::move(condition)}, body{std::move(body)}
     { this->source_location = loc; }
 };
@@ -120,7 +120,7 @@ struct IfStatement final : Statement
         std::unique_ptr<Expression> condition,
         std::unique_ptr<BodyStatement> body,
         std::unique_ptr<Statement> else_branch,
-        const SourceLocation loc)
+        const SourceLocation& loc)
     : condition{std::move(condition)}, body{std::move(body)}, else_branch{std::move(else_branch)}
     { this->source_location = loc; }
 };
@@ -149,7 +149,7 @@ struct FunctionDeclaration final : ExportableStatement
 
     FunctionDeclaration(
         MethodSignature method_signature, std::unique_ptr<BodyStatement> body_node,
-        std::optional<Parameter> receiver, const SourceLocation loc)
+        std::optional<Parameter> receiver, const SourceLocation& loc)
         : method_signature{std::move(method_signature)},
           receiver(std::move(receiver)),
           body(std::move(body_node))
@@ -172,7 +172,7 @@ struct FunctionDeclaration final : ExportableStatement
 struct ExpressionStatement final : Statement
 {
     std::unique_ptr<Expression> expression;
-    ExpressionStatement(std::unique_ptr<Expression> expr, const SourceLocation loc)
+    ExpressionStatement(std::unique_ptr<Expression> expr, const SourceLocation& loc)
         : expression(std::move(expr)) { this->source_location = loc; }
 
     [[nodiscard]] std::string GetTypeString() const override {
@@ -187,7 +187,7 @@ struct BreakStatement final : Statement
         return "BreakStatement";
     }
 
-    explicit BreakStatement(const SourceLocation loc) { this->source_location = loc; }
+    explicit BreakStatement(const SourceLocation& loc) { this->source_location = loc; }
 };
 
 struct ContinueStatement final : Statement
@@ -197,7 +197,7 @@ struct ContinueStatement final : Statement
         return "ContinueStatement";
     }
 
-    explicit ContinueStatement(const SourceLocation loc) { this->source_location = loc; }
+    explicit ContinueStatement(const SourceLocation& loc) { this->source_location = loc; }
 };
 
 
@@ -208,7 +208,7 @@ struct NativeImportStatement final : Statement
         return std::format("NativeImportStatement({})", name.lexeme);
     }
 
-    explicit NativeImportStatement(Token name, const SourceLocation loc) : name(std::move(name))
+    explicit NativeImportStatement(Token name, const SourceLocation& loc) : name(std::move(name))
     {
         this->source_location = loc;
     }
@@ -224,7 +224,7 @@ struct NativeFunctionDeclaration final : Statement
         return "NativeFunctionDeclaration";
     }
 
-    NativeFunctionDeclaration(MethodSignature method_signature, const SourceLocation loc) :
+    NativeFunctionDeclaration(MethodSignature method_signature, const SourceLocation& loc) :
     method_signature{std::move(method_signature)}, original_name{this->method_signature.name.lexeme}
     {
         this->source_location = loc;
@@ -241,7 +241,7 @@ struct StructDeclaration final : ExportableStatement
         return "StructDeclaration";
     }
 
-    StructDeclaration(Token name, std::vector<std::pair<Token, Token>> fields, const SourceLocation loc) :
+    StructDeclaration(Token name, std::vector<std::pair<Token, Token>> fields, const SourceLocation& loc) :
     name(std::move(name)), fields(std::move(fields))
     {
         this->source_location = loc;
@@ -265,7 +265,7 @@ struct EnumDeclaration final : ExportableStatement
         return "EnumDeclaration";
     }
 
-    EnumDeclaration(Token name, std::vector<EnumVariant> variant_names, const SourceLocation loc) :
+    EnumDeclaration(Token name, std::vector<EnumVariant> variant_names, const SourceLocation& loc) :
     name(std::move(name)), variant_names(std::move(variant_names))
     {
         this->source_location = loc;
@@ -282,7 +282,7 @@ struct InterfaceDeclaration final : ExportableStatement
         return "InterfaceDeclaration";
     }
 
-    InterfaceDeclaration(Token name, std::vector<MethodSignature> methods, const SourceLocation loc) :
+    InterfaceDeclaration(Token name, std::vector<MethodSignature> methods, const SourceLocation& loc) :
     name(std::move(name)), methods(std::move(methods))
     {
         this->source_location = loc;
@@ -308,7 +308,7 @@ struct ForLoop final : Statement
         Token iterator_name,
         std::unique_ptr<Expression> iterable,
         std::unique_ptr<BodyStatement> body,
-        const SourceLocation loc
+        const SourceLocation& loc
     ) :
         iterator_name(std::move(iterator_name)),
         iterable{std::move(iterable)},
@@ -349,7 +349,7 @@ struct ImportStatement final : Statement
         return std::format("Import({})", module_name);
     }
 
-    ImportStatement(std::string module_name, const SourceLocation loc)
+    ImportStatement(std::string module_name, const SourceLocation& loc)
     : module_name{std::move(module_name)}
     {
         this->source_location = loc;
@@ -365,7 +365,7 @@ struct ModuleDeclaration final : Statement
         return std::format("Module({})", name);
     }
 
-    ModuleDeclaration(std::string name, const SourceLocation loc)
+    ModuleDeclaration(std::string name, const SourceLocation& loc)
     : name{std::move(name)}
     {
         this->source_location = loc;

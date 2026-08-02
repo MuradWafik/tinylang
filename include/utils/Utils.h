@@ -92,7 +92,7 @@ T ReadBytes(const std::vector<uint8_t>& stack, const size_t offset_from_top = 0)
 
 // Fast native-endian read from an absolute byte index in the VM Stack
 template <typename T>
-T ReadBytesAbsolute(const std::vector<uint8_t>& stack, size_t absolute_index)
+T ReadBytesAbsolute(const std::vector<uint8_t>& stack, const size_t absolute_index)
 {
     T result;
     std::memcpy(&result, stack.data() + absolute_index, sizeof(T));
@@ -159,4 +159,35 @@ inline bool IsHidden(const std::filesystem::directory_entry& entry)
 #endif
 
     return false;
+}
+
+
+template <typename T>
+void WriteValue(std::vector<uint8_t>& buffer, const T& value)
+{
+    const auto ptr = reinterpret_cast<const uint8_t*>(&value);
+    buffer.insert(buffer.end(), ptr, ptr + sizeof(T));
+}
+
+template <typename T>
+T ReadValue(const std::vector<uint8_t>& buffer, size_t& offset)
+{
+    T value;
+    std::memcpy(&value, buffer.data() + offset, sizeof(T));
+    offset += sizeof(T);
+    return value;
+}
+
+inline void WriteString(std::vector<uint8_t>& buffer, const std::string& str)
+{
+    WriteValue(buffer, str.size());
+    buffer.insert(buffer.end(), str.begin(), str.end());
+}
+
+inline std::string ReadString(const std::vector<uint8_t>& buffer, size_t& offset)
+{
+    const auto size = ReadValue<size_t>(buffer, offset);
+    std::string str(buffer.begin() + offset, buffer.begin() + offset + size);
+    offset += size;
+    return str;
 }

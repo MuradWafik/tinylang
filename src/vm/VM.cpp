@@ -9,25 +9,20 @@
 
 #include "utils/Utils.h"
 
-InterpretResult VM::StartProgram(const std::unordered_map<std::string, std::unique_ptr<Chunk>>& chunks, const std::string& entry_module)
+InterpretResult VM::StartProgram(const std::unordered_map<std::string, std::unique_ptr<Chunk>>& chunks, const std::vector<std::string>& ordered_modules)
 {
-    for(const auto& [name, chunk] : chunks)
+    for(const auto& name : ordered_modules)
     {
-        if(name != entry_module)
+        if(const auto it = chunks.find(name); it != chunks.end())
         {
-            if(const auto res = Interpret(chunk.get()); res != InterpretResult::INTERPRET_OK)
+            if(const auto res = Interpret(it->second.get()); res != InterpretResult::INTERPRET_OK)
             {
                 return res;
             }
         }
     }
 
-    if(const auto it = chunks.find(entry_module); it != chunks.end())
-    {
-        return Interpret(it->second.get());
-    }
-
-    return InterpretResult::INTERPRET_COMPILE_ERROR;
+    return InterpretResult::INTERPRET_OK;
 }
 
 InterpretResult VM::Interpret(Chunk* chunk)
@@ -156,8 +151,8 @@ InterpretResult VM::Run()
             }
             case OpCode::OP_MOD_INT:
             {
-                auto right = Pop<int32_t>();
-                auto left = Pop<int32_t>();
+                const auto right = Pop<int32_t>();
+                const auto left = Pop<int32_t>();
                 Push(left % right);
                 break;
             }
@@ -614,7 +609,7 @@ void VM::AllocateStruct()
 {
     // OP_ALLOCATE_STRUCT, [2 bytes: total_size] [1 byte: from_stack]
     const auto heap_size = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
-    if(const auto from_stack = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip))
+    if(ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip))
     {
         const uint8_t* struct_fields_ptr = stack.data() + stack.size() - heap_size;
         auto* obj = AllocateObject<Struct>(struct_fields_ptr, heap_size);
@@ -643,7 +638,7 @@ void VM::GetLength()
         throw std::runtime_error("Attempted to get length of object that is not an array or string");
     }
 }
-
+pro
 void VM::GetProperty()
 {
     // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size] | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset

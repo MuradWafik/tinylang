@@ -40,7 +40,7 @@ public:
         (WriteOperand(operands, line), ...);
     }
 
-    unsigned long AddConstant(ConstantValue value);
+    uint8_t AddConstant(ConstantValue value);
 
      void Disassemble(std::string_view name) const;
     int DisassembleInstruction(int offset) const;

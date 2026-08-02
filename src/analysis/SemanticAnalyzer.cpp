@@ -203,7 +203,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
         type = ResolveType(variable_declaration->type->lexeme);
         if(!type)
         {
-            return std::unexpected(std::format("Unknown type name {}", variable_declaration->type->lexeme));
+            return std::unexpected(std::format("Unknown type name {} at {}", variable_declaration->type->lexeme, variable_declaration->type->source_location));
         }
         if(dynamic_cast<const InterfaceType*>(type))
         {
@@ -299,9 +299,9 @@ const Type* SemanticAnalyzer::ResolveType(const std::string_view type_name)
         return found;
     }
 
-    if (!current_namespace.empty())
+    if(!current_namespace.empty())
     {
-        std::string mangled = std::format("{}::{}", current_namespace, type_name);
+        const std::string mangled = std::format("{}::{}", current_namespace, type_name);
         if(auto* found = symbol_table.LookupType(mangled))
         {
             return found;
@@ -515,7 +515,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     return {};
 }
 
-std::expected<void, std::string> SemanticAnalyzer::AnalyzeBreakStatement(const BreakStatement* break_statement) const
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeBreakStatement(const BreakStatement*) const
 {
     if(loop_depth <= 0)
     {
@@ -815,10 +815,10 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpre
     IdentifierExpression* identifier_expression)
 {
     // Try looking up in the current namespace first if we are inside one
-    if (!current_namespace.empty() && current_namespace != "main")
+    if(!current_namespace.empty() && current_namespace != "main")
     {
-        std::string mangled = std::format("{}::{}", current_namespace, identifier_expression->name);
-        if (const auto& identifier = symbol_table.LookupVariable(mangled))
+        const std::string mangled = std::format("{}::{}", current_namespace, identifier_expression->name);
+        if(const auto& identifier = symbol_table.LookupVariable(mangled))
         {
             identifier_expression->name = mangled;
             identifier_expression->type_info = identifier->type;
@@ -1188,7 +1188,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
 
     if(auto* mod_type = dynamic_cast<const ModuleType*>(lhs.value()))
     {
-        std::string mangled = std::format("{}::{}", mod_type->GetName(), property_access->property_name);
+        const std::string mangled = std::format("{}::{}", mod_type->GetName(), property_access->property_name);
         if(const auto& identifier = symbol_table.LookupVariable(mangled))
         {
             property_access->type_info = identifier->type;

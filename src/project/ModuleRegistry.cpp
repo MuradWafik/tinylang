@@ -11,6 +11,10 @@ void ModuleRegistry::RegisterModule(const std::string& module_name, std::vector<
     // Move all ASTs from file into the namespaces
     for (auto& ast : asts)
     {
+        if (const auto* import_stmt = dynamic_cast<const ImportStatement*>(ast.get()))
+        {
+            namespaces[module_name]->dependencies.push_back(import_stmt->module_name);
+        }
         namespaces[module_name]->asts.push_back(std::move(ast));
     }
 }
