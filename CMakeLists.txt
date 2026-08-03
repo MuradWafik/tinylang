@@ -63,6 +63,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+target_link_libraries(std_plugin PRIVATE nlohmann_json::nlohmann_json)
+
 FetchContent_Declare(
         cli11
         GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git

@@ -105,6 +105,8 @@ void Compiler::CompileExpression(const Expression* expression)
     if(const auto index_access = dynamic_cast<const IndexAccess*>(expression)) return CompileIndexAccess(index_access);
     if(const auto property_access = dynamic_cast<const PropertyAccess*>(expression)) return CompilePropertyAccess(property_access);
     if(const auto switch_expr = dynamic_cast<const SwitchExpression*>(expression)) return CompileSwitchExpression(switch_expr);
+    if(const auto cast_expr = dynamic_cast<const CastExpression*>(expression)) return CompileCastExpression(cast_expr);
+    if(const auto is_expr = dynamic_cast<const IsExpression*>(expression)) return CompileIsExpression(is_expr);
 }
 
 void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) const
@@ -869,13 +871,16 @@ void Compiler::ForLoopIterableStruct(const ForLoop* for_loop, const uint32_t lin
     current_chunk->WriteInstruction(line, OpCode::OP_GET_LOCAL, static_cast<uint16_t>(iter_idx), static_cast<uint8_t>(8));
     current_chunk->WriteInstruction(line, OpCode::OP_CALL, arg_bytes);
 
-    // iterator also has to be a value for within the loop
-    locals.push_back({for_loop->iterator_name.lexeme, PrimitiveType::Int.get()});
+    const auto* next_method = struct_type->GetMethod(std::string(constants::NEXT_METHOD));
+    const Type* return_type = next_method ? next_method->GetReturnType() : PrimitiveType::Int.get();
+    const uint8_t return_size = return_type->GetSize();
+
+    locals.push_back({for_loop->iterator_name.lexeme, return_type});
 
     CompileStatement(for_loop->body.get());
 
-    locals.pop_back(); // the iterator gets cleared for next iteration/end
-    current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(4));
+    locals.pop_back();
+    current_chunk->WriteInstruction(line, OpCode::OP_POP, return_size);
 
     // Loop jump (offset + 3 to recheck condition)
     const uint16_t backward_jump = (current_chunk->code.size() + 3) - loop_start;
@@ -1151,8 +1156,6 @@ void Compiler::CompileSwitchExpression(const SwitchExpression* switch_expression
             // --- MATCHED BODY ---
             // Pop the original target from the stack since we matched
             current_chunk->WriteInstruction(line, OpCode::OP_POP, target_size);
-
-            // Compile the result expression
             CompileExpression(result.get());
 
             // Jump to the end of the switch
@@ -1168,8 +1171,6 @@ void Compiler::CompileSwitchExpression(const SwitchExpression* switch_expression
         {
             // Pop the original target
             current_chunk->WriteInstruction(line, OpCode::OP_POP, target_size);
-
-            // Compile the result
             CompileExpression(result.get());
             
             // Jump to end
@@ -1185,4 +1186,35 @@ void Compiler::CompileSwitchExpression(const SwitchExpression* switch_expression
         current_chunk->code[idx] = (jump_to_end >> 8) & 0xff;
         current_chunk->code[idx + 1] = jump_to_end & 0xff;
     }
+}
+
+void Compiler::CompileCastExpression(const CastExpression* cast_expression)
+{
+    CompileExpression(cast_expression->left.get());
+
+    const auto line = cast_expression->source_location.line_number;
+
+    // Upcasting to any (boxing)
+    if(dynamic_cast<const AnyType*>(cast_expression->type_info))
+    {
+        const uint32_t src_id = cast_expression->left->type_info->GetTypeId();
+        const uint8_t src_size = cast_expression->left->type_info->GetSize();
+        current_chunk->WriteInstruction(line, OpCode::OP_BOX_ANY, src_id, src_size);
+    }
+
+    // Down casting from any (checking & unboxing)
+    else if(dynamic_cast<const AnyType*>(cast_expression->left->type_info))
+    {
+        const uint32_t target_id = cast_expression->type_info->GetTypeId();
+        const uint8_t target_size = cast_expression->type_info->GetSize();
+        current_chunk->WriteInstruction(line, OpCode::OP_CAST_CHECK, target_id, target_size);
+    }
+}
+
+void Compiler::CompileIsExpression(const IsExpression* is_expression)
+{
+    CompileExpression(is_expression->left.get());
+    const auto line = is_expression->source_location.line_number;
+    const uint32_t target_id = is_expression->target_type->GetTypeId();
+    current_chunk->WriteInstruction(line, OpCode::OP_IS_CHECK, target_id);
 }

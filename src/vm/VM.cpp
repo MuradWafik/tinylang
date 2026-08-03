@@ -105,6 +105,7 @@ InterpretResult VM::Run()
             case OpCode::OP_ADD_STRING:
             {
                 AddString();
+                break;
             }
 
             case OpCode::OP_SUBTRACT_INT:
@@ -417,6 +418,21 @@ InterpretResult VM::Run()
                 GetStringChar();
                 break;
             }
+            case OpCode::OP_BOX_ANY:
+            {
+                BoxAny();
+                break;
+            }
+            case OpCode::OP_CAST_CHECK:
+            {
+                CastCheck();
+                break;
+            }
+            case OpCode::OP_IS_CHECK:
+            {
+                IsCheck();
+                break;
+            }
             default: return InterpretResult::INTERPRET_COMPILE_ERROR;
         }
     }
@@ -513,7 +529,17 @@ void VM::LoadNativeFunction()
     const auto offset = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     const auto num_args = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
     const auto return_bytes = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
-    auto result = plugin_loader.LoadSymbol(lib_path, symbol_name);
+
+    std::string path_to_load = lib_path;
+    if(!std::filesystem::exists(path_to_load) && !project_root.empty())
+    {
+        if(const auto candidate = project_root / lib_path; std::filesystem::exists(candidate))
+        {
+            path_to_load = candidate.string();
+        }
+    }
+
+    auto result = plugin_loader.LoadSymbol(path_to_load, symbol_name);
     if(!result)
     {
         throw std::runtime_error(result.error());
@@ -638,7 +664,6 @@ void VM::GetLength()
         throw std::runtime_error("Attempted to get length of object that is not an array or string");
     }
 }
-pro
 void VM::GetProperty()
 {
     // OP_GET_PROPERTY [2 bytes: byte_offset] [1 byte: size] | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
@@ -770,4 +795,69 @@ void VM::Duplicate()
         uint8_t val = stack[start_idx + i];
         stack.push_back(val);
     }
+}
+
+
+void VM::BoxAny()
+{
+    const auto source_type_id = ReadAndAdvanceBytes<uint32_t>(call_frames.back().ip);
+    const auto value_size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    std::vector<uint8_t> value_bytes(stack.end() - value_size, stack.end());
+
+    stack.resize(stack.size() - value_size);
+
+    // Bytes 0-3  : source_type_id (4 bytes)
+    // Bytes 4-7  : padding (4 bytes of zeroes)
+    // Bytes 8-15 : payload (8 bytes: value_bytes + zero padding if < 8 bytes)
+    WriteBytes(stack, source_type_id);
+    WriteBytes(stack, static_cast<uint32_t>(0)); // padding
+
+    stack.insert(stack.end(), value_bytes.begin(), value_bytes.end());
+    if(value_bytes.size() < 8)
+    {
+        stack.insert(stack.end(), 8 - value_bytes.size(), 0); // pad payload to 8 bytes
+    }
+}
+
+
+void VM::CastCheck()
+{
+    const auto target_type_id = ReadAndAdvanceBytes<uint32_t>(call_frames.back().ip);
+    const auto target_size = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+
+    // The top 16 bytes of stack is the any
+    const size_t any_offset = stack.size() - 16;
+
+    uint32_t actual_type_id;
+    std::memcpy(&actual_type_id, stack.data() + any_offset, sizeof(uint32_t));
+
+    // Ensure runtime typeid matches target
+    if(actual_type_id != target_type_id)
+    {
+        throw std::runtime_error(std::format(
+            "Runtime Cast Error: Invalid cast from type ID {} to type ID {}", actual_type_id, target_type_id)
+        );
+    }
+
+    std::vector<uint8_t> payload_bytes(
+        stack.data() + any_offset + 8,
+        stack.data() + any_offset + 8 + target_size
+    );
+
+    stack.resize(stack.size() - 16);
+    stack.insert(stack.end(), payload_bytes.begin(), payload_bytes.end());
+}
+
+void VM::IsCheck()
+{
+    const auto target_type_id = ReadAndAdvanceBytes<uint32_t>(call_frames.back().ip);
+    const size_t any_offset = stack.size() - 16;
+
+    uint32_t actual_type_id;
+    std::memcpy(&actual_type_id, stack.data() + any_offset, sizeof(uint32_t));
+
+    const bool is_match = (actual_type_id == target_type_id);
+    stack.resize(stack.size() - 16);
+    Push(is_match);
 }

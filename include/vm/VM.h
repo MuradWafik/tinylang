@@ -37,9 +37,11 @@ public:
 
 private:
     std::vector<uint8_t> stack{};
-    public:
+public:
     const std::vector<uint8_t>& GetGlobals() const { return globals; }
+    void SetProjectRoot(std::filesystem::path root) { project_root = std::move(root); }
 private:
+    std::filesystem::path project_root{};
     std::vector<uint8_t> globals{};
     PluginLoader plugin_loader{};
     std::vector<std::unique_ptr<FunctionObject>> allocated_native_functions;
@@ -248,6 +250,9 @@ private:
     void DefineGlobal();
     void Pop();
     void Duplicate();
+    void BoxAny();
+    void CastCheck();
+    void IsCheck();
 
     template<typename T0, typename T1, typename Target>
     static constexpr bool AreBoth()

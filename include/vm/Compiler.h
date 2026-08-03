@@ -53,6 +53,8 @@ private:
     void CompileIndexAccess(const IndexAccess* index_access);
     void CompilePropertyAccess(const PropertyAccess* property_access);
     void CompileSwitchExpression(const SwitchExpression* switch_expression);
+    void CompileCastExpression(const CastExpression* cast_expression);
+    void CompileIsExpression(const IsExpression* is_expression);
 
 
     void ForLoopIterableStruct(const ForLoop* for_loop, uint32_t line, const StructType* struct_type);

@@ -58,6 +58,7 @@ private:
     ExpectedExpressionPtr ParseEquality();
     ExpectedExpressionPtr ParseComparison();
     ExpectedExpressionPtr ParseAddition();
+    ExpectedExpressionPtr ParseCast();
     ExpectedExpressionPtr ParseMultiplication();
     ExpectedExpressionPtr ParseUnary();
     ExpectedExpressionPtr ParseSuffixes();

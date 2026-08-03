@@ -12,6 +12,7 @@
 #include "frontend/Token.h"
 #include "project/ModuleRegistry.h"
 #include "project/ProjectConfig.h"
+#include "utils/Mangling.h"
 #include "utils/Utils.h"
 
 struct OperatorSignature
@@ -185,6 +186,8 @@ private:
     std::expected<const Type*, std::string> AnalyzeArrayLiteral(ArrayLiteral* array_node);
     std::expected<const Type*, std::string> AnalyzePropertyAccess(PropertyAccess* property_access);
     std::expected<const Type*, std::string> AnalyzeSwitchExpression(SwitchExpression* switch_expression);
+    std::expected<const Type*, std::string> AnalyzeCastExpression(CastExpression* cast_expression);
+    std::expected<const Type*, std::string> AnalyzeIsExpression(IsExpression* is_expression);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);

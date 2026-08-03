@@ -135,6 +135,11 @@ std::expected<void, std::string> Project::CompileAndRun()
     if(auto res = visit("main"); !res) return std::unexpected(res.error());
 
     VM vm;
+    if(project_config)
+    {
+        vm.SetProjectRoot(project_config->project_root);
+    }
+
     if(auto res = vm.StartProgram(chunks, ordered_modules); res != InterpretResult::INTERPRET_OK)
     {
         return std::unexpected(std::format("VM exited with error code: {}", static_cast<int>(res)));
@@ -185,18 +190,14 @@ std::expected<void, std::string> Project::CompileOnly(const std::string& output_
     std::unordered_set<std::string> visited;
     std::unordered_set<std::string> in_path;
 
-    // handles imports among modules
-    std::function<std::expected<void, std::string>(const std::string&)> visit =
-        [&](const std::string& module_name) -> std::expected<void, std::string>
+    std::function<std::expected<void, std::string>(const std::string&)> visit = [&](const std::string& module_name) -> std::expected<void, std::string>
     {
         if(in_path.contains(module_name))
         {
             return std::unexpected(std::format("Circular dependency detected involving module '{}'", module_name));
         }
-        if(visited.contains(module_name))
-        {
-            return {};
-        }
+
+        if(visited.contains(module_name)) return {};
 
         in_path.insert(module_name);
         if(const auto* ns = module_registry->GetNamespace(module_name))
@@ -227,6 +228,7 @@ std::expected<void, std::string> Project::RunSerialized(const std::string& input
 
     auto [chunks, ordered_modules] = std::move(deserialize_result.value());
     VM vm;
+    vm.SetProjectRoot(std::filesystem::path(input_path).parent_path());
     if(auto res = vm.StartProgram(chunks, ordered_modules); res != InterpretResult::INTERPRET_OK)
     {
         return std::unexpected(std::format("VM exited with error code: {}", static_cast<int>(res)));

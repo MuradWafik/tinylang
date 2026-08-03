@@ -332,15 +332,28 @@ ExpectedExpressionPtr Parser::ParseComparison()
     if(!left) return left;
 
     while(Match(TokenType::LessEqual) || Match(TokenType::GreaterEqual)
-        || Match(TokenType::Less) || Match(TokenType::Greater))
+        || Match(TokenType::Less) || Match(TokenType::Greater)
+        || Match(TokenType::Is))
     {
         const Token& op = tokens[index - 1];
-        ExpectedExpressionPtr right = ParseAddition();
-        if(!right)
+        if(op.type == TokenType::Is)
         {
-            return std::unexpected(right.error());
+            auto type_tok = Expect(TokenType::Identifier, "Expected type name after 'is'");
+            if(!type_tok)
+            {
+                return std::unexpected(type_tok.error());
+            }
+            left = std::make_unique<IsExpression>(std::move(left.value()), type_tok.value(), op.source_location);
         }
-        left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
+        else
+        {
+            ExpectedExpressionPtr right = ParseAddition();
+            if(!right)
+            {
+                return std::unexpected(right.error());
+            }
+            left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
+        }
     }
     return left;
 }
@@ -365,13 +378,13 @@ ExpectedExpressionPtr Parser::ParseAddition()
 
 ExpectedExpressionPtr Parser::ParseMultiplication()
 {
-    ExpectedExpressionPtr left = ParseUnary();
+    ExpectedExpressionPtr left = ParseCast();
     if(!left) return left;
 
     while(Match(TokenType::Star) || Match(TokenType::Slash) || Match(TokenType::Modulo))
     {
         const Token& op = tokens[index - 1];
-        ExpectedExpressionPtr right = ParseUnary();
+        ExpectedExpressionPtr right = ParseCast();
         if(!right)
         {
             return std::unexpected(right.error());
@@ -379,6 +392,28 @@ ExpectedExpressionPtr Parser::ParseMultiplication()
         left = std::make_unique<BinaryExpression>(op, std::move(left.value()), std::move(right.value()), op.source_location);
     }
     return left;
+}
+
+ExpectedExpressionPtr Parser::ParseCast()
+{
+    ExpectedExpressionPtr expr = ParseUnary();
+    if(!expr) return expr;
+
+    while(Match(TokenType::As))
+    {
+        const Token& op = tokens[index - 1];
+
+        // Parse the target type on the right-hand side (e.g. 'int', 'Point', 'any')
+        auto target_type_result = ParseTypeName();
+        if(!target_type_result) return std::unexpected(target_type_result.error());
+
+        expr = std::make_unique<CastExpression>(
+            std::move(expr.value()),
+            target_type_result.value(),
+            op.source_location
+        );
+    }
+    return expr;
 }
 
 ExpectedExpressionPtr Parser::ParseUnary()

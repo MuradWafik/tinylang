@@ -85,7 +85,7 @@ std::expected<std::unique_ptr<ProjectConfig>, std::string> ProjectConfig::FindAn
                 }
 
                 std::unordered_map<std::string, DepType> deps;
-                if (auto it = j.find("dependencies"); it != j.end() && it->is_object())
+                if(auto it = j.find("dependencies"); it != j.end() && it->is_object())
                 {
                     auto deps_result = ParseDeps(it, current);
                     if(!deps_result) return std::unexpected(deps_result.error());
@@ -143,6 +143,16 @@ std::filesystem::path ProjectConfig::ResolvePluginPath(const std::string_view mo
     if(const auto it = plugin_mappings.find(module_name); it != plugin_mappings.end())
     {
         return project_root / FormatOSPluginFilename(it->second);
+    }
+
+    // implicitly add it as a dep (user still has to import in file, but not in the tinylang.json)
+    if(module_name == "std")
+    {
+        if(const auto std_path = project_root / FormatOSPluginFilename("plugins/std_plugin");
+            std::filesystem::exists(std_path))
+        {
+            return std_path;
+        }
     }
     return project_root / FormatOSPluginFilename(module_name);
 }

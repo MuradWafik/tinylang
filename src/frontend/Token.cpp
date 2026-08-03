@@ -36,6 +36,8 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Switch:          return "switch";
         case TokenType::Import:          return "import";
         case TokenType::Export:          return "export";
+        case TokenType::As:              return "as";
+        case TokenType::Is:              return "is";
 
         // Built-in Types
         case TokenType::IntType:         return "int";
@@ -44,6 +46,7 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::StringType:      return "String";
         case TokenType::CharType:        return "char";
         case TokenType::Void:            return "void";
+        case TokenType::AnyType:         return "any";
 
         // Operators
         case TokenType::Plus:            return "+";
@@ -95,6 +98,7 @@ bool Token::IsPrimitiveTypeName() const
         case TokenType::StringType:
         case TokenType::CharType:
         case TokenType::Void:
+        case TokenType::AnyType:
             return true;
         default: return false;
     }

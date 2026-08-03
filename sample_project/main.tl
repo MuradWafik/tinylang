@@ -1,31 +1,44 @@
 module main;
-native import std;
+import std;
 import math;
 import geometry;
-import array_utils;
-import string_utils;
-
-native fn print_int(val: int) -> void;
-native fn print_char(val: char) -> void;
 
 fn main() -> void {
-    string_utils.println("Testing geometry module...");
+    std.Println("Testing std generic Println...");
+    std.Println(42);
+    std.Println(3.14);
+    std.Println(true);
+    std.PrintErrorLine("Testing std PrintErrorLine...");
 
-    // Create a point at (10, 20)
-    var p1: geometry.Point = geometry.create_point(10, 20);
-    
-    p1.move_point(5, -5);
+    var p1: geometry.Point = geometry.CreatePoint(10, 20);
+    p1.MovePoint(5, -5);
 
-    print_int(p1.x);
-    print_int(p1.y);
+    std.Println("Testing direct implicit struct constructor Range...");
+    var r1 = Range(1, 4, 1);
+    for val in r1 {
+        std.PrintInt(val);
+    }
+    std.PrintChar('\n');
 
-    string_utils.println("Testing array_utils module...");
-    
+    std.Println("Testing module-prefixed struct constructor std.Range...");
+    var r2 = std.Range(4, 7, 1);
+    for val in r2 {
+        std.PrintInt(val);
+    }
+    std.PrintChar('\n');
+
+    std.Println("Testing array utilities...");
     var arr = [1, 2, 3, 4, 5, -10, 20];
-    var total_sum = array_utils.sum(arr);
-    
-    print_int(total_sum);
+    var total_sum = std.Sum(arr);
+    std.Println(total_sum);
 
-    var pos_count = array_utils.count_positive(arr);
-    print_int(pos_count);
+    var x = 42;
+
+    var y = switch(x){
+        12 -> "12",
+        _ -> "unknown"
+    };
+
+    std.Println("y is " + y);
+    std.Flush();
 }

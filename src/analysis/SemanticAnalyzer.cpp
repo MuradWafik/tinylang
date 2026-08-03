@@ -22,7 +22,7 @@ std::string GetNameFromExportable(const ExportableStatement* stmt)
 std::string SemanticAnalyzer::MangleName(const std::string& name) const
 {
     if(current_namespace == "main" || current_namespace.empty()) return name;
-    return std::format("{}::{}", current_namespace, name);
+    return Mangling::ModuleSymbol(current_namespace, name);
 }
 
 std::expected<void, std::string> SemanticAnalyzer::RunAnalysis()
@@ -160,6 +160,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
     if(auto* index_access = dynamic_cast<IndexAccess*>(expr)) return AnalyzeIndexAccess(index_access);
     if(auto* property_access = dynamic_cast<PropertyAccess*>(expr)) return AnalyzePropertyAccess(property_access);
     if(auto* switch_expr = dynamic_cast<SwitchExpression*>(expr)) return AnalyzeSwitchExpression(switch_expr);
+    if(auto* cast_expr = dynamic_cast<CastExpression*>(expr)) return AnalyzeCastExpression(cast_expr);
+    if(auto* is_expr = dynamic_cast<IsExpression*>(expr)) return AnalyzeIsExpression(is_expr);
 
     if(auto* bool_node = dynamic_cast<BoolLiteral*>(expr))
     {
@@ -266,6 +268,24 @@ std::optional<Symbol> SymbolTable::LookupVariable(const std::string_view name)
         {
             return found->second;
         }
+
+        if(!name.contains("::") && !name.contains("$"))
+        {
+            std::optional<Symbol> candidate = std::nullopt;
+            size_t match_count = 0;
+            for(const auto& [v_name, v_symbol] : variables)
+            {
+                if(v_name.ends_with("::" + std::string(name)))
+                {
+                    candidate = v_symbol;
+                    match_count++;
+                }
+            }
+            if(match_count == 1)
+            {
+                return candidate;
+            }
+        }
     }
     return std::nullopt;
 }
@@ -288,24 +308,42 @@ const Type* SymbolTable::LookupType(const std::string_view name)
         {
             return found->second;
         }
+
+        if(!name.contains("::"))
+        {
+            const Type* candidate = nullptr;
+            size_t match_count = 0;
+            for(const auto& [t_name, t_type] : types)
+            {
+                if(t_name.ends_with("::" + std::string(name)))
+                {
+                    candidate = t_type;
+                    match_count++;
+                }
+            }
+            if(match_count == 1)
+            {
+                return candidate;
+            }
+        }
     }
     return nullptr;
 }
 
 const Type* SemanticAnalyzer::ResolveType(const std::string_view type_name)
 {
-    if(auto* found = symbol_table.LookupType(type_name))
+    if(!current_namespace.empty() && current_namespace != "main" && !type_name.contains("::"))
     {
-        return found;
-    }
-
-    if(!current_namespace.empty())
-    {
-        const std::string mangled = std::format("{}::{}", current_namespace, type_name);
+        const std::string mangled = Mangling::ModuleSymbol(current_namespace, type_name);
         if(auto* found = symbol_table.LookupType(mangled))
         {
             return found;
         }
+    }
+
+    if(auto* found = symbol_table.LookupType(type_name))
+    {
+        return found;
     }
 
     // define arrays based off the type they are a collection of, to then also check if that type exists
@@ -422,9 +460,14 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
         auto* self = ResolveType(function_declaration->receiver->type_name.lexeme);
         if(!self)
         {
-            return Return(std::format("Unknown type '{}' for receiver at {}", function_declaration->receiver->type_name.lexeme, function_declaration->receiver->type_name.source_location));
+            return Return(std::format(
+                "Unknown type '{}' for receiver at {}",
+                function_declaration->receiver->type_name.lexeme, function_declaration->receiver->type_name.source_location));
         }
-        name = self->GetName() + "$" + name;
+        if(!name.contains("$"))
+        {
+            name = Mangling::MethodName(self->GetName(), name);
+        }
     }
 
     // cache what the return type was before in case its nested
@@ -817,7 +860,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpre
     // Try looking up in the current namespace first if we are inside one
     if(!current_namespace.empty() && current_namespace != "main")
     {
-        const std::string mangled = std::format("{}::{}", current_namespace, identifier_expression->name);
+        const std::string mangled = Mangling::ModuleSymbol(current_namespace, identifier_expression->name);
         if(const auto& identifier = symbol_table.LookupVariable(mangled))
         {
             identifier_expression->name = mangled;
@@ -835,13 +878,14 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpre
 
     if(const auto& identifier = symbol_table.LookupVariable(identifier_expression->name))
     {
+        identifier_expression->name = identifier->name;
         identifier_expression->type_info = identifier->type;
         return identifier->type;
     }
     
-    // check if its a type, for struct instantiation
     if(const auto type = symbol_table.LookupType(identifier_expression->name))
     {
+        identifier_expression->name = type->GetName();
         identifier_expression->type_info = type;
         return type;
     }
@@ -860,7 +904,6 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeAssignmentExpre
 
     if(const auto* index_access = dynamic_cast<IndexAccess*>(assignment_expression->target.get()); index_access)
     {
-        // cant assign individual indices for a string access since they are immutable
         if(index_access->array_expr->type_info == PrimitiveType::String.get())
         {
             return Return("Strings are immutable and do not support index assignment");
@@ -892,29 +935,46 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
         auto obj = AnalyzeExpression(method_call->object_expr.get());
         if(!obj) return std::unexpected(obj.error());
         
-        if (!dynamic_cast<const ModuleType*>(obj.value()))
+        if(const auto* mod_type = dynamic_cast<const ModuleType*>(obj.value()))
+        {
+            const std::string mangled = Mangling::ModuleSymbol(mod_type->GetName(), method_call->property_name);
+            if(const auto func_type = symbol_table.LookupVariable(mangled))
+            {
+                call_expression->callee = std::make_unique<IdentifierExpression>(mangled, method_call->source_location);
+                call_expression->callee->type_info = func_type.value().type;
+            }
+            else if(const auto struct_type = symbol_table.LookupType(mangled))
+            {
+                call_expression->callee = std::make_unique<IdentifierExpression>(mangled, method_call->source_location);
+                call_expression->callee->type_info = struct_type;
+            }
+            else
+            {
+                return Return(std::format("Module '{}' does not have member '{}' at {}", mod_type->GetName(), method_call->property_name, method_call->source_location));
+            }
+        }
+        else
         {
             const std::string method_name = MangleMethodName(method_call->property_name, obj.value());
-            const auto func_type = symbol_table.LookupVariable(method_name);
-            if(!func_type)
+            auto func_type = symbol_table.LookupVariable(method_name);
+            const Type* fn_ptr = func_type ? func_type.value().type : obj.value()->GetMethod(method_call->property_name);
+            if(!fn_ptr)
             {
                 return Return(
-                    std::format("Struct '{}' does not have method '{}'", obj.value()->GetName(), method_call->property_name)
+                    std::format("Struct '{}' does not have method '{}' at {}", obj.value()->GetName(), method_call->property_name, method_call->source_location)
                 );
             }
 
-            // make the `self` the first arguement to the function call
             call_expression->arguments.insert(
                 call_expression->arguments.begin(),
                 std::move(method_call->object_expr)
             );
 
-            // Turn the callee into a normal Identifier matching the mangled name
             call_expression->callee = std::make_unique<IdentifierExpression>(
                 method_name,
                 method_call->source_location
             );
-            call_expression->callee->type_info = func_type.value().type;
+            call_expression->callee->type_info = fn_ptr;
         }
     }
 
@@ -938,8 +998,11 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
                 function_name, func_type->GetParameters().size(), call_expression->arguments.size()));
         }
 
-        for(auto [param, arg] : std::views::zip(func_type->GetParameters(), call_expression->arguments))
+        for(size_t i = 0; i < call_expression->arguments.size(); ++i)
         {
+            const auto* param = func_type->GetParameters()[i];
+            auto& arg = call_expression->arguments[i];
+
             auto arg_type = AnalyzeExpression(arg.get());
             if(!arg_type)
             {
@@ -947,11 +1010,48 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
                     "Error parsing function '{}' parameter expression, {}",
                     function_name, arg_type.error()));
             }
+
+            const bool is_param_printable = (param->GetName() == constants::PRINTABLE_INTERFACE || param->GetName() == std::format("std::{}", constants::PRINTABLE_INTERFACE));
+            const bool is_param_string = (param == PrimitiveType::String.get());
+
+            if(is_param_printable || (is_param_string && arg_type.value() != PrimitiveType::String.get()))
+            {
+                const std::string to_string_mangled = MangleMethodName(std::string(constants::TO_STRING_METHOD), arg_type.value());
+                if(!symbol_table.LookupVariable(to_string_mangled))
+                {
+                    return Return(std::format(
+                        "Error calling function '{}': Type '{}' does not implement interface '{}' (missing '{}()' method) at {}",
+                        function_name, arg_type.value()->GetName(), constants::PRINTABLE_INTERFACE, constants::TO_STRING_METHOD, arg->source_location));
+                }
+
+                const auto loc = arg->source_location;
+                auto prop_access = std::make_unique<PropertyAccess>(std::move(arg), std::string(constants::TO_STRING_METHOD), loc);
+                auto to_string_call = std::make_unique<CallExpression>(std::move(prop_access), std::vector<std::unique_ptr<Expression>>{}, loc);
+
+                auto res = AnalyzeCallExpression(to_string_call.get());
+                if(!res)
+                {
+                    return std::unexpected(res.error());
+                }
+
+                arg = std::move(to_string_call);
+                arg_type = res;
+            }
+
             if(!arg_type.value()->IsAssignableTo(param))
             {
                 return Return(
-                    std::format("Error calling function '{}': Type '{}' is not assignable to '{}'",
-                    function_name, arg_type.value()->GetName(), param->GetName()));
+                    std::format("Error calling function '{}': Type '{}' is not assignable to '{}' at {}",
+                    function_name, arg_type.value()->GetName(), param->GetName(), arg->source_location));
+            }
+
+            if(dynamic_cast<const AnyType*>(param) && !dynamic_cast<const AnyType*>(arg_type.value()))
+            {
+                Token any_tok{TokenType::Identifier, "any", arg->source_location};
+                auto loc = arg->source_location;
+                auto implicit_cast = std::make_unique<CastExpression>(std::move(arg), any_tok, loc);
+                implicit_cast->type_info = AnyType::Instance.get();
+                arg = std::move(implicit_cast);
             }
         }
 
@@ -1040,6 +1140,7 @@ void SemanticAnalyzer::InitializeDefaults()
     symbol_table.DefineType(PrimitiveType::String->GetName(), PrimitiveType::String.get());
     symbol_table.DefineType(PrimitiveType::Char->GetName(), PrimitiveType::Char.get());
     symbol_table.DefineType(PrimitiveType::Void->GetName(), PrimitiveType::Void.get());
+    symbol_table.DefineType(AnyType::Instance->GetName(), AnyType::Instance.get());
 
     const Type* int_t = PrimitiveType::Int.get();
     const Type* float_t = PrimitiveType::Float.get();
@@ -1188,7 +1289,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
 
     if(auto* mod_type = dynamic_cast<const ModuleType*>(lhs.value()))
     {
-        const std::string mangled = std::format("{}::{}", mod_type->GetName(), property_access->property_name);
+        const std::string mangled = Mangling::ModuleSymbol(mod_type->GetName(), property_access->property_name);
         if(const auto& identifier = symbol_table.LookupVariable(mangled))
         {
             property_access->type_info = identifier->type;
@@ -1260,7 +1361,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeSwitchExpressio
         {
             return Return(std::format(
                 "In switch expression, can not return type '{}' to type '{}' at {}",
-                result_t.value()->GetName(), return_type->GetName(), pattern->source_location));
+                result_t.value()->GetName(), return_type->GetName(), result->source_location));
         }
     }
 
@@ -1348,33 +1449,30 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeForLoop(const ForLoop*
     auto iterable_type = AnalyzeExpression(for_loop->iterable.get());
     if(!iterable_type) return std::unexpected(iterable_type.error());
 
-    // check if the struct has the iterator interface
-    if(auto* struct_type = dynamic_cast<const StructType*>(iterable_type.value()); struct_type)
-    {
-        if(!struct_type->ImplementsInterface(std::string(constants::ITERABLE_INT_INTERFACE)))
-        {
-            return Return(std::format(
-                "Struct '{}' must implement {} to loop over, {}",
-                struct_type->GetName(), constants::ITERABLE_INT_INTERFACE, for_loop->source_location));
-        }
 
 
-    }
-    else if(!dynamic_cast<const ArrayType*>(iterable_type.value()) && iterable_type.value() != PrimitiveType::String.get())
-    {
-        return Return("Iterable must be a struct type, array, or string");
-    }
 
     auto& iterator = for_loop->iterator_name;
     const Type* iter_var_type = PrimitiveType::Int.get();
 
-    if(auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()))
+    if(auto* struct_type = dynamic_cast<const StructType*>(iterable_type.value()))
+    {
+        if(const auto* next_method = struct_type->GetMethod(std::string(constants::NEXT_METHOD)))
+        {
+            iter_var_type = next_method->GetReturnType();
+        }
+    }
+    else if(auto* array_type = dynamic_cast<const ArrayType*>(iterable_type.value()))
     {
         iter_var_type = array_type->GetElementType();
     }
     else if(iterable_type.value() == PrimitiveType::String.get())
     {
         iter_var_type = PrimitiveType::Char.get();
+    }
+    else
+    {
+        return Return("Iterable must be a struct type (extending Iterable), array, or string");
     }
 
     symbol_table.PushScope();
@@ -1397,12 +1495,20 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeExtendStatement(const 
     auto* type = symbol_table.LookupType(extend_statement->target_struct.lexeme);
     if(!type)
     {
+        type = symbol_table.LookupType(MangleName(extend_statement->target_struct.lexeme));
+    }
+    if(!type)
+    {
         return Return(std::format(
             "Unknown type '{}' in extend statement at {}",
             extend_statement->target_struct.lexeme, extend_statement->source_location));
     }
 
     const auto* interface_type = symbol_table.LookupType(extend_statement->interface_extending.lexeme);
+    if(!interface_type)
+    {
+        interface_type = symbol_table.LookupType(MangleName(extend_statement->interface_extending.lexeme));
+    }
     if(!interface_type)
     {
         return Return(std::format(
@@ -1444,7 +1550,7 @@ std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented()
 
             const auto* expected_func_type = function;
 
-            if(implemented->GetReturnType() != expected_func_type->GetReturnType())
+            if(!implemented->GetReturnType()->IsAssignableTo(expected_func_type->GetReturnType()))
             {
                 return Return(std::format(
                     "Method '{}' on type '{}' has return type '{}' but interface '{}' expects '{}'",
@@ -1483,4 +1589,52 @@ std::expected<void, std::string> SemanticAnalyzer::EnsureInterfacesImplemented()
         }
     }
     return {};
+}
+
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCastExpression(CastExpression* cast_expression)
+{
+    auto left = AnalyzeExpression(cast_expression->left.get());
+    if(!left) return left;
+    const Type* left_type = left.value();
+    const Type* right_type = symbol_table.LookupType(cast_expression->type_name.lexeme);
+    if(!right_type)
+    {
+        return std::unexpected(std::format(
+            "Error in cast expression at {}: unknown typename '{}'",
+            cast_expression->source_location, cast_expression->type_name.lexeme)
+        );
+    }
+    cast_expression->type_info = right_type;
+    const bool is_left_any = dynamic_cast<const AnyType*>(left_type) != nullptr;
+    const bool is_right_any = dynamic_cast<const AnyType*>(right_type) != nullptr;
+
+    // upcasting to any always allowed, downcasting is checked by vm,
+    // third check redudant, but i guess no reason to not have, allowing var x = 4 as int;
+    if(is_left_any || is_right_any || left_type == right_type)
+    {
+        return right_type;
+    }
+    return std::unexpected(std::format(
+        "Invalid cast at {}: Cannot cast '{}' to '{}'",
+        cast_expression->source_location, left_type->GetName(), right_type->GetName())
+    );
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIsExpression(IsExpression* is_expression)
+{
+    auto left = AnalyzeExpression(is_expression->left.get());
+    if(!left) return left;
+
+    const Type* right_type = symbol_table.LookupType(is_expression->type_name.lexeme);
+    if(!right_type)
+    {
+        return std::unexpected(std::format(
+            "Error in 'is' expression at {}: unknown typename '{}'",
+            is_expression->source_location, is_expression->type_name.lexeme)
+        );
+    }
+    is_expression->target_type = right_type;
+    is_expression->type_info = PrimitiveType::Bool.get();
+    return PrimitiveType::Bool.get();
 }

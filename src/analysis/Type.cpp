@@ -1,5 +1,16 @@
 #include "analysis/Type.h"
 
+bool Type::IsAssignableTo(const Type* other) const
+{
+    if(this == other) return true;
+    if(other && other->GetName() == "any") return true;
+    if(const auto* iface = dynamic_cast<const InterfaceType*>(other))
+    {
+        return ImplementsInterface(iface->GetName());
+    }
+    return false;
+}
+
 bool PrimitiveType::IsIntegral() const
 {
     switch(kind)
@@ -9,11 +20,6 @@ bool PrimitiveType::IsIntegral() const
             return true;
         default: return false;
     }
-}
-
-bool FunctionType::IsAssignableTo(const Type* other) const
-{
-    return this == other;
 }
 
 std::string FunctionType::GetName() const
@@ -42,8 +48,7 @@ std::string ArrayType::GetName() const
 
 bool ArrayType::IsAssignableTo(const Type* other) const
 {
-    if(this == other) return true;
-    
+    if(Type::IsAssignableTo(other)) return true;
     if(const auto* other_array = dynamic_cast<const ArrayType*>(other))
     {
         return this->element_type == other_array->element_type;
@@ -64,27 +69,11 @@ const Type* StructType::GetFieldType(const std::string_view name) const
     return nullptr;
 }
 
-bool StructType::IsAssignableTo(const Type* other) const
-{
-    return this == other;
-}
-
-bool EnumType::IsAssignableTo(const Type* other) const
-{
-    return this == other;
-}
-
-bool InterfaceType::IsAssignableTo(const Type* other) const
-{
-    return this == other;
-}
-
 bool Type::ImplementsInterface(const std::string& interface_name) const
 {
     return std::ranges::any_of
     (
         implemented_interfaces,
-        [&interface_name](const InterfaceType* e){ return e->GetName() == interface_name;}
+        [&interface_name](const InterfaceType* e){ return e->GetName() == interface_name; }
     );
 }
-

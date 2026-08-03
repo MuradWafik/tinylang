@@ -8,6 +8,7 @@
 
 #include "frontend/Token.h"
 
+#include "utils/Mangling.h"
 #include "utils/Utils.h"
 
 class InterfaceType;
@@ -21,10 +22,15 @@ public:
     [[nodiscard]] virtual std::string GetName() const = 0;
 
     // Checks if this type can be assigned to another type
-    [[nodiscard]] virtual bool IsAssignableTo(const Type* other) const = 0;
+    [[nodiscard]] virtual bool IsAssignableTo(const Type* other) const;
     
     // Returns the size in bytes of the type
     [[nodiscard]] virtual uint8_t GetSize() const = 0;
+
+    [[nodiscard]] virtual uint32_t GetTypeId() const
+    {
+        return static_cast<uint32_t>(std::hash<std::string>{}(GetName()));
+    }
 
     void AddImplementedInterface(const InterfaceType* interface_type){ implemented_interfaces.push_back(interface_type); }
 
@@ -58,15 +64,11 @@ class PrimitiveType final : public Type
 public:
     [[nodiscard]] std::string GetName() const override { return name; }
     [[nodiscard]] PrimitiveKind GetKind() const { return kind; }
-    bool IsAssignableTo(const Type* other) const override
-    {
-        // A primitive is assignable if the other type is the exact same primitive instance
-        return this == other;
-    }
     [[nodiscard]] bool IsIntegral() const;
     [[nodiscard]] uint8_t GetSize() const override
     {
-        switch (kind) {
+        switch(kind)
+        {
             case PrimitiveKind::Int:
             case PrimitiveKind::Float:
                 return 4;
@@ -75,8 +77,8 @@ public:
                 return 1;
             case PrimitiveKind::String: return 8; // pointer
             case PrimitiveKind::Void: return 0;
+            default: std::unreachable();
         }
-        return 0;
     }
     
     PrimitiveType(const PrimitiveKind k, std::string n) : kind(k), name(std::move(n)) {}
@@ -107,7 +109,6 @@ public:
     [[nodiscard]] std::string GetName() const override;
     [[nodiscard]] const Type* GetReturnType() const { return return_type; }
     [[nodiscard]] std::vector<const Type*> GetParameters() const { return arguments; }
-    bool IsAssignableTo(const Type* other) const override;
     [[nodiscard]] uint8_t GetSize() const override { return 8; } // Function pointer size
 
     FunctionType(std::vector<const Type*> arguments, const Type* return_type) :
@@ -139,7 +140,6 @@ class EnumType final : public Type
 {
 public:
     [[nodiscard]] std::string GetName() const override { return name; }
-    bool IsAssignableTo(const Type* other) const override;
     [[nodiscard]] uint8_t GetSize() const override { return sizeof(int32_t); }
     std::optional<int32_t> Get(const std::string& name) const
     {
@@ -160,7 +160,6 @@ class InterfaceType final : public Type
 public:
     [[nodiscard]] std::string GetName() const override { return name; }
     [[nodiscard]] auto& GetExpectedMethods() const { return expected_methods; }
-    bool IsAssignableTo(const Type* other) const override;
     [[nodiscard]] uint8_t GetSize() const override { return 8; }
 
     InterfaceType(std::string name, std::vector<std::pair<std::string, const FunctionType*>> expected_methods) :
@@ -180,7 +179,6 @@ public:
     [[nodiscard]] size_t GetNumFields() const { return fields.size(); }
     [[nodiscard]] auto& GetFields() { return fields; }
     [[nodiscard]] const auto& GetFields() const  { return fields; }
-    bool IsAssignableTo(const Type* other) const override;
     [[nodiscard]] uint8_t GetSize() const override { return 8; }
     [[nodiscard]] size_t GetHeapSize() const
     {
@@ -210,7 +208,6 @@ class ModuleType final : public Type
 {
 public:
     [[nodiscard]] std::string GetName() const override { return name; }
-    bool IsAssignableTo(const Type* other) const override { return false; }
     [[nodiscard]] uint8_t GetSize() const override { return 0; } // Modules are not values in memory
 
     explicit ModuleType(std::string name) : name{std::move(name)} {}
@@ -221,5 +218,23 @@ private:
 
 inline std::string MangleMethodName(const std::string& method_name, const Type* type)
 {
-    return std::format("{}${}", type->GetName(), method_name);
+    return Mangling::MethodName(type->GetName(), method_name);
 }
+
+
+class AnyType final : public Type
+{
+public:
+    static const std::unique_ptr<AnyType> Instance;
+
+    [[nodiscard]] std::string GetName() const override { return "any"; }
+    bool IsAssignableTo(const Type* other) const override { return true; }
+    [[nodiscard]] uint8_t GetSize() const override { return 16; } // 8bytes for pointer and 8bytes for type info
+
+    AnyType() = default ;
+};
+
+inline const std::unique_ptr<AnyType> AnyType::Instance = std::make_unique<AnyType>();
+
+
+

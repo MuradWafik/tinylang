@@ -84,6 +84,11 @@ enum class OpCode : uint8_t
     OP_LOAD_NATIVE,        // [3 byte operand: path_index, name_index, num_args] | Stack: Loads DLL, extracts function, saves as global
     OP_CALL,               // [1 byte operand: num_args]       | Stack: Peeks function at top - num_args, creates CallFrame
     OP_RETURN,             // [1 byte operand: size]           | Stack: Pops 'size' bytes return_value, erases frame, pushes 'size' bytes return_value
+
+    // --- Dynamic Types & Any ---
+    OP_BOX_ANY,            // [4 bytes: source_type_id] [1 byte: value_size] | Stack: Pops 'value_size' bytes, pushes 16-byte any (4 byte type_id + 4 byte padding + 8 byte payload)
+    OP_CAST_CHECK,         // [4 bytes: target_type_id] [1 byte: target_size] | Stack: Inspects 16-byte any, verifies target_type_id, unboxes 'target_size' payload bytes onto stack or throws runtime error
+    OP_IS_CHECK,           // [4 bytes: target_type_id]                        | Stack: Inspects 16-byte any, pushes 1 byte bool
 };
 
 

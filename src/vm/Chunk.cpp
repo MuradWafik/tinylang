@@ -137,6 +137,20 @@ int Chunk::DisassembleInstruction(int offset) const
             std::println("{:<24} {:4} (size)", opcode_name, size);
             return offset + 2;
         }
+        case OpCode::OP_BOX_ANY:
+        case OpCode::OP_CAST_CHECK:
+        {
+            const uint32_t type_id = (code[offset + 1] << 24) | (code[offset + 2] << 16) | (code[offset + 3] << 8) | code[offset + 4];
+            const uint8_t size = code[offset + 5];
+            std::println("{:<24} type_id: {:10} size: {:2}", opcode_name, type_id, size);
+            return offset + 6;
+        }
+        case OpCode::OP_IS_CHECK:
+        {
+            const uint32_t type_id = (code[offset + 1] << 24) | (code[offset + 2] << 16) | (code[offset + 3] << 8) | code[offset + 4];
+            std::println("{:<24} type_id: {:10}", opcode_name, type_id);
+            return offset + 5;
+        }
         default:
         {
             std::println("{}", opcode_name);

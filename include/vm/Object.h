@@ -2,7 +2,7 @@
 #include <cstring>
 
 
-enum class ObjectType{ Array, String, Struct };
+enum class ObjectType{ Array, String, Struct, Type, Any };
 
 class Object
 {
@@ -99,5 +99,29 @@ public:
     ~Struct() override
     {
         delete[] fields;
+    }
+};
+
+class TypeObject final : public Object
+{
+public:
+    uint16_t type_id;
+    std::string type_name;
+    uint8_t size_in_bytes; // primitives have smaller sizes, just based on Type.GetSize()
+    TypeObject(const uint16_t id, std::string type_name, const uint8_t size)
+        : Object{ObjectType::Type}, type_id(id), type_name(std::move(type_name)), size_in_bytes(size) {}
+};
+
+
+class AnyObject final : public Object
+{
+public:
+
+    const TypeObject* type_descriptor;
+    uint8_t value[8]; // Raw bytes or pointer to another Object*
+    AnyObject(const TypeObject* type, const void* data_ptr)
+        : Object{ObjectType::Any}, type_descriptor(type)
+    {
+        std::memcpy(value, data_ptr, type->size_in_bytes);
     }
 };

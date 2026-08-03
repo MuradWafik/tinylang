@@ -17,35 +17,35 @@ struct Expression : ASTNode
 struct IntegerLiteral final : Expression
 {
     int value;
-    explicit IntegerLiteral(const int val, const SourceLocation& loc) : value(val) { this->source_location = loc; }
+    explicit IntegerLiteral(const int val, SourceLocation loc) : value(val) { this->source_location = std::move(loc); }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("IntegerLiteral({})", value); }
 };
 
 struct FloatLiteral final : Expression
 {
     float value;
-    explicit FloatLiteral(const float val, const SourceLocation& loc) : value(val) { this->source_location = loc; }
+    explicit FloatLiteral(const float val, SourceLocation loc) : value(val) { this->source_location = std::move(loc); }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("FloatLiteral({})", value); }
 };
 
 struct StringLiteral final : Expression
 {
     std::string value;
-    explicit StringLiteral(std::string val, const SourceLocation& loc) : value(std::move(val)) { this->source_location = loc; }
+    explicit StringLiteral(std::string val, SourceLocation loc) : value(std::move(val)) { this->source_location = std::move(loc); }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("StringLiteral(\"{}\")", value); }
 };
 
 struct CharLiteral final : Expression
 {
     char8_t value;
-    explicit CharLiteral(const char8_t val, const SourceLocation& loc) : value(val) { this->source_location = loc; }
+    explicit CharLiteral(const char8_t val, SourceLocation loc) : value(val) { this->source_location = std::move(loc); }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("CharLiteral(\"{}\")", static_cast<char>(value)); }
 };
 
 struct BoolLiteral final : Expression
 {
     bool value;
-    explicit BoolLiteral(const bool val, const SourceLocation& loc) : value(val) { this->source_location = loc; }
+    explicit BoolLiteral(const bool val, SourceLocation loc) : value(val) { this->source_location = std::move(loc); }
     [[nodiscard]] std::string GetTypeString() const override { return std::format("BoolLiteral({})", value); }
 };
 
@@ -55,12 +55,12 @@ struct BinaryExpression final : Expression
     std::unique_ptr<Expression> left;
     std::unique_ptr<Expression> right;
 
-    BinaryExpression(Token token, std::unique_ptr<Expression> left_node, std::unique_ptr<Expression> right_node, const SourceLocation& loc)
+    BinaryExpression(Token token, std::unique_ptr<Expression> left_node, std::unique_ptr<Expression> right_node, SourceLocation loc)
         : operator_token(std::move(token)),
           left(std::move(left_node)),
           right(std::move(right_node))
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -69,16 +69,53 @@ struct BinaryExpression final : Expression
     }
 };
 
+struct CastExpression final : Expression
+{
+    std::unique_ptr<Expression> left;
+    Token type_name;
+
+    CastExpression(std::unique_ptr<Expression> left_node, Token target_type, SourceLocation loc)
+        : left(std::move(left_node)),
+          type_name(std::move(target_type))
+    {
+        this->source_location = std::move(loc);
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("CastExpression(expression: {}, target_type: '{}')", left ? left->GetTypeString() : "nullptr", type_name.lexeme);
+    }
+};
+
+struct IsExpression final : Expression
+{
+    std::unique_ptr<Expression> left;
+    Token type_name;
+    const Type* target_type = nullptr;
+
+    IsExpression(std::unique_ptr<Expression> left_node, Token target_type, SourceLocation loc)
+        : left(std::move(left_node)),
+          type_name(std::move(target_type))
+    {
+        this->source_location = std::move(loc);
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("IsExpression(expression: {}, target_type: '{}')", left ? left->GetTypeString() : "nullptr", type_name.lexeme);
+    }
+};
+
 struct UnaryExpression final : Expression
 {
     Token operator_token;
     std::unique_ptr<Expression> right;
 
-    UnaryExpression(Token token, std::unique_ptr<Expression> right_node, const SourceLocation& loc)
+    UnaryExpression(Token token, std::unique_ptr<Expression> right_node, SourceLocation loc)
         : operator_token(std::move(token)),
           right(std::move(right_node))
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -93,11 +130,11 @@ struct CallExpression final : Expression
     std::vector<std::unique_ptr<Expression>> arguments;
     bool is_constructor_call = false;
 
-    CallExpression(std::unique_ptr<Expression> callee, std::vector<std::unique_ptr<Expression>> args, const SourceLocation& loc)
+    CallExpression(std::unique_ptr<Expression> callee, std::vector<std::unique_ptr<Expression>> args, SourceLocation loc)
         : callee(std::move(callee)),
           arguments(std::move(args))
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -115,7 +152,7 @@ struct CallExpression final : Expression
 struct IdentifierExpression final : Expression
 {
     std::string name;
-    explicit IdentifierExpression(std::string name, const SourceLocation& loc) : name(std::move(name)) { this->source_location = loc; }
+    explicit IdentifierExpression(std::string name, SourceLocation loc) : name(std::move(name)) { this->source_location = std::move(loc); }
 
     [[nodiscard]] std::string GetTypeString() const override
     {
@@ -127,10 +164,10 @@ struct AssignmentExpression final : Expression
 {
     std::unique_ptr<Expression> target;
     std::unique_ptr<Expression> value;
-    AssignmentExpression(std::unique_ptr<Expression> target, std::unique_ptr<Expression> val, const SourceLocation& loc)
+    AssignmentExpression(std::unique_ptr<Expression> target, std::unique_ptr<Expression> val, SourceLocation loc)
         : target(std::move(target)), value(std::move(val))
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -147,10 +184,10 @@ struct ArrayLiteral final : Expression
 {
     std::vector<std::unique_ptr<Expression>> elements;
 
-    ArrayLiteral(std::vector<std::unique_ptr<Expression>> elements, const SourceLocation& loc)
+    ArrayLiteral(std::vector<std::unique_ptr<Expression>> elements, SourceLocation loc)
         : elements(std::move(elements)) 
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -164,10 +201,10 @@ struct IndexAccess final : Expression
     std::unique_ptr<Expression> array_expr;
     std::unique_ptr<Expression> index_expr;
 
-    IndexAccess(std::unique_ptr<Expression> array, std::unique_ptr<Expression> index, const SourceLocation& loc)
+    IndexAccess(std::unique_ptr<Expression> array, std::unique_ptr<Expression> index, SourceLocation loc)
         : array_expr(std::move(array)), index_expr(std::move(index)) 
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -184,10 +221,10 @@ struct PropertyAccess final : Expression
 
     PropertyAccess(
         std::unique_ptr<Expression> obj, std::string prop,
-        const SourceLocation& loc)
+        SourceLocation loc)
         : object_expr(std::move(obj)), property_name(std::move(prop))
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override
@@ -212,10 +249,10 @@ public:
 
     SwitchExpression(
         std::unique_ptr<Expression> target, std::vector<SwitchBranch> branches,
-        const SourceLocation& loc)
+        SourceLocation loc)
     : target(std::move(target)), branches(std::move(branches))
     {
-        this->source_location = loc;
+        this->source_location = std::move(loc);
     }
 
     [[nodiscard]] std::string GetTypeString() const override

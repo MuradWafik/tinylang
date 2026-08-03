@@ -38,6 +38,8 @@ enum class TokenType
     Switch,
     Import,
     Export,
+    As,
+    Is,
 
     // Types
     IntType,
@@ -45,6 +47,7 @@ enum class TokenType
     BoolType,
     StringType,
     CharType,
+    AnyType,
     Void,
 
     // Operators
@@ -123,6 +126,7 @@ struct Token {
         {"break", TokenType::Break},
         {"continue", TokenType::Continue},
         {"int", TokenType::IntType},
+        {"any", TokenType::AnyType},
         {"float", TokenType::FloatType},
         {"bool", TokenType::BoolType},
         {"String", TokenType::StringType},
@@ -141,6 +145,8 @@ struct Token {
         {"switch", TokenType::Switch},
         {"import", TokenType::Import},
         {"export", TokenType::Export},
+        {"as", TokenType::As},
+        {"is", TokenType::Is},
     };
     static std::string TypeToString(TokenType token_type);
 

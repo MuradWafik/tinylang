@@ -1,29 +1,77 @@
-#include <vector>
-#include <print>
-#include <iostream>
+#include <cstdio>
 #include <cstring>
+#include <cstdint>
+#include <string>
 #include "api/PluginAPI.h"
+#include "vm/Object.h"
 
-// Turns out you can use non-c linkage in terms of classes for extern C,
-// it just means other languages wont know how to read it
+extern "C" {
 
-// native fn print_int(int32_t) -> void;
-TINYLANG_EXPORT void print_int(const uint8_t* args, uint8_t* return_slot)
+TINYLANG_EXPORT void Print(const uint8_t* args, uint8_t*)
+{
+    if(const String* str = *reinterpret_cast<String* const*>(args);
+        str
+        && str->chars
+        && str->length > 0)
+    {
+        std::fwrite(str->chars, 1, str->length, stdout);
+    }
+}
+
+TINYLANG_EXPORT void PrintError(const uint8_t* args, uint8_t*)
+{
+    if(const String* str = *reinterpret_cast<String* const*>(args);
+        str
+        && str->chars
+        && str->length > 0)
+    {
+        std::fwrite(str->chars, 1, str->length, stderr);
+    }
+}
+
+TINYLANG_EXPORT void PrintInt(const uint8_t* args, uint8_t*)
 {
     const int32_t value = *reinterpret_cast<const int32_t*>(args);
-    std::cout << value << std::flush;
+    std::fprintf(stdout, "%d", value);
 }
 
-TINYLANG_EXPORT void print_char(const uint8_t* args, uint8_t*)
+TINYLANG_EXPORT void PrintChar(const uint8_t* args, uint8_t*)
 {
-    const char8_t value = *reinterpret_cast<const char8_t*>(args);
-    std::cout << static_cast<char>(value) << std::flush;
+    const char value = *reinterpret_cast<const char*>(args);
+    fputc(value, stdout);
 }
 
+TINYLANG_EXPORT void PrintErrorChar(const uint8_t* args, uint8_t*)
+{
+    const char value = *reinterpret_cast<const char*>(args);
+    fputc(value, stderr);
+}
 
-// native fn tinylang_clock() -> float;
+TINYLANG_EXPORT void FlushStdout(const uint8_t*, uint8_t*)
+{
+    std::fflush(stdout);
+}
+
+TINYLANG_EXPORT void IntToString(const uint8_t* args, uint8_t* return_slot)
+{
+    const int32_t val = *reinterpret_cast<const int32_t*>(args);
+    const std::string s = std::to_string(val);
+    auto* str_obj = new String(s.c_str(), s.length());
+    std::memcpy(return_slot, &str_obj, sizeof(String*));
+}
+
+TINYLANG_EXPORT void FloatToString(const uint8_t* args, uint8_t* return_slot)
+{
+    const float val = *reinterpret_cast<const float*>(args);
+    const std::string s = std::to_string(val);
+    auto* str_obj = new String(s.c_str(), s.length());
+    std::memcpy(return_slot, &str_obj, sizeof(String*));
+}
+
 TINYLANG_EXPORT void tinylang_clock(const uint8_t* args, uint8_t* return_slot)
 {
-    constexpr float time = 42.0f; // Placeholder logic for now
-    std::memcpy(return_slot, &time, sizeof(float));
+    constexpr float time = 42.0f;
+    std::memcpy(return_slot, &time, sizeof(std::float32_t));
+}
+
 }
