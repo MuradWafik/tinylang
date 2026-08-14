@@ -21,7 +21,7 @@ std::string GetNameFromExportable(const ExportableStatement* stmt)
 
 std::string SemanticAnalyzer::MangleName(const std::string& name) const
 {
-    if(current_namespace == "main" || current_namespace.empty()) return name;
+    if(current_namespace == entry_module || current_namespace.empty()) return name;
     return Mangling::ModuleSymbol(current_namespace, name);
 }
 
@@ -34,7 +34,7 @@ std::expected<void, std::string> SemanticAnalyzer::RunAnalysis()
         {
             if(auto result = AnalyzeNode(ast_node.get()); !result)
             {
-                return std::unexpected(result.error());
+                diagnostics.push_back(Diagnostic::FromError(result.error(), current_namespace));
             }
         }
     }
@@ -51,7 +51,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeAll()
     for(const auto& [name, namespace_obj] : module_registry->GetNamespaces())
     {
         // Register module type so it can be accessed
-        if (name != "main") {
+        if (name != entry_module) {
             auto mod_type = std::make_unique<ModuleType>(name);
             symbol_table.DefineType(name, mod_type.get());
             symbol_table.DefineVariable({name, mod_type.get()});
@@ -63,7 +63,10 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeAll()
         
         for(const auto& ast_node : namespace_obj->asts)
         {
-            if(auto result = AnalyzeNode(ast_node.get()); !result) return std::unexpected(result.error());
+            if(auto result = AnalyzeNode(ast_node.get()); !result)
+            {
+                diagnostics.push_back(Diagnostic::FromError(result.error(), current_namespace));
+            }
 
             if(const auto exportable = dynamic_cast<ExportableStatement*>(ast_node.get());
                 exportable && exportable->is_exported)
@@ -74,32 +77,40 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeAll()
         }
     }
     analysis_pass = AnalysisPass::Validation;
-    if(auto second_pass = RunAnalysis(); !second_pass) return second_pass;
+    RunAnalysis();
 
-    const auto main = symbol_table.LookupVariable("main");
-    if(!main)
+    if(strict_mode)
     {
-        return std::unexpected("no main function detected");
-    }
+        const auto main = symbol_table.LookupVariable("main");
+        if(!main)
+        {
+            return std::unexpected("no main function detected");
+        }
 
-    const auto main_fn = dynamic_cast<const FunctionType*>(main->type);
-    if(!main_fn)
-    {
-        return std::unexpected("main() must be a function");
-    }
+        const auto main_fn = dynamic_cast<const FunctionType*>(main->type);
+        if(!main_fn)
+        {
+            return std::unexpected("'main' is not a function");
+        }
 
-    if(main_fn->GetReturnType() != PrimitiveType::Void.get())
-    {
-        return std::unexpected("main function must have a return type of void");
-    }
+        if(main_fn->GetReturnType() != PrimitiveType::Void.get())
+        {
+            return std::unexpected("main function must have a return type of void");
+        }
 
-    if(main_fn->GetParameters().size() != 0)
-    {
-        return std::unexpected("main function must not have any parameters");
+        if(main_fn->GetParameters().size() != 0)
+        {
+            return std::unexpected("main function must not have any parameters");
+        }
     }
 
     if(auto interfaces_implemented = EnsureInterfacesImplemented(); !interfaces_implemented) return interfaces_implemented;
     symbol_table.PopScope();
+
+    if(!diagnostics.empty())
+    {
+        return std::unexpected(diagnostics.front().message);
+    }
 
     return {};
 }
@@ -124,6 +135,17 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeNode(ASTNode* node)
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* stmt)
 {
+    if(analysis_pass == AnalysisPass::Registration)
+    {
+        if(auto* struct_decl = dynamic_cast<StructDeclaration*>(stmt)) return AnalyzeStructDeclaration(struct_decl);
+        if(const auto* enum_decl = dynamic_cast<EnumDeclaration*>(stmt)) return AnalyzeEnumDeclaration(enum_decl);
+        if(auto* interface_decl = dynamic_cast<InterfaceDeclaration*>(stmt)) return AnalyzeInterfaceDeclaration(interface_decl);
+        if(auto* fn_declaration = dynamic_cast<FunctionDeclaration*>(stmt)) return AnalyzeFunctionDeclaration(fn_declaration);
+        if(auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
+        if(const auto* native_mod_stmt = dynamic_cast<NativeImportStatement*>(stmt)) return AnalyzeNativeModuleStatement(native_mod_stmt);
+        return {};
+    }
+
     if(const auto* var_decl = dynamic_cast<VariableDeclaration*>(stmt)) return AnalyzeVariableDeclaration(var_decl);
     if(const auto* if_stmt = dynamic_cast<IfStatement*>(stmt)) return AnalyzeIfStatement(if_stmt);
     if(const auto* while_stmt = dynamic_cast<WhileStatement*>(stmt)) return AnalyzeWhileStatement(while_stmt);
@@ -227,18 +249,19 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
         auto expression_type = AnalyzeExpression(variable_declaration->initializer.get());
         if(!expression_type)
         {
+            symbol_table.DefineVariable({variable_declaration->name.lexeme, type ? type : AnyType::Instance.get()});
             return std::unexpected(expression_type.error());
         }
 
         if(type == nullptr)
         {
-            // Type inference so the variable takes the type of its initializer
             type = expression_type.value();
         }
         else if(!(expression_type.value())->IsAssignableTo(type))
         {
+            symbol_table.DefineVariable({variable_declaration->name.lexeme, type});
             return std::unexpected(
-                std::format("Unable to assign {} to type {}", expression_type.value()->GetName(), type->GetName())
+                std::format("Unable to assign {} to type {} at {}", expression_type.value()->GetName(), type->GetName(), variable_declaration->name.source_location)
             );
         }
     }
@@ -246,6 +269,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
     {
         if(type == nullptr)
         {
+            symbol_table.DefineVariable({variable_declaration->name.lexeme, AnyType::Instance.get()});
             return std::unexpected(std::format("Cannot infer type of uninitialized variable '{}' at {}", variable_declaration->name.lexeme, variable_declaration->name.source_location));
         }
     }
@@ -332,7 +356,7 @@ const Type* SymbolTable::LookupType(const std::string_view name)
 
 const Type* SemanticAnalyzer::ResolveType(const std::string_view type_name)
 {
-    if(!current_namespace.empty() && current_namespace != "main" && !type_name.contains("::"))
+    if(!current_namespace.empty() && current_namespace != entry_module && !type_name.contains("::"))
     {
         const std::string mangled = Mangling::ModuleSymbol(current_namespace, type_name);
         if(auto* found = symbol_table.LookupType(mangled))
@@ -616,8 +640,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeBodyStatement(const Bo
     {
         if(auto result = AnalyzeNode(statement.get()); !result)
         {
-            symbol_table.PopScope();
-            return std::unexpected(result.error());
+            diagnostics.push_back(Diagnostic::FromError(result.error(), current_namespace));
         }
     }
     symbol_table.PopScope();
@@ -858,7 +881,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpre
     IdentifierExpression* identifier_expression)
 {
     // Try looking up in the current namespace first if we are inside one
-    if(!current_namespace.empty() && current_namespace != "main")
+    if(!current_namespace.empty() && current_namespace != entry_module)
     {
         const std::string mangled = Mangling::ModuleSymbol(current_namespace, identifier_expression->name);
         if(const auto& identifier = symbol_table.LookupVariable(mangled))

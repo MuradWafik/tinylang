@@ -1,4 +1,5 @@
 #include "vm/PluginLoader.h"
+#include "utils/Utils.h"
 
 #include <dlfcn.h>
 #include <format>
@@ -26,6 +27,18 @@ std::expected<NativeFn, std::string> PluginLoader::LoadSymbol(const std::string&
     else
     {
         handle = dlopen(lib_path.c_str(), RTLD_LAZY);
+        if(!handle)
+        {
+            const auto exe_dir = GetExecutablePath().parent_path();
+            const auto exe_filename = std::filesystem::path(lib_path).filename();
+            auto exe_rel = exe_dir / exe_filename;
+            handle = dlopen(exe_rel.c_str(), RTLD_LAZY);
+            if(!handle)
+            {
+                exe_rel = exe_dir.parent_path() / exe_filename;
+                handle = dlopen(exe_rel.c_str(), RTLD_LAZY);
+            }
+        }
         if(!handle)
         {
             return std::unexpected(std::format("Failed to load plugin library '{}': {}", lib_path, dlerror()));

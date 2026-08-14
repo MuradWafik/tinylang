@@ -11,6 +11,17 @@ std::expected<void, std::string> Serializer::Serialize(
     const std::vector<std::string>& ordered_modules,
     const std::string& output_path)
 {
+    std::filesystem::path p(output_path);
+    if(p.has_parent_path())
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(p.parent_path(), ec);
+        if(ec)
+        {
+            return std::unexpected(std::format("Failed to create directory {}: {}", p.parent_path().string(), ec.message()));
+        }
+    }
+
     std::vector<uint8_t> buffer;
 
     // Header :)

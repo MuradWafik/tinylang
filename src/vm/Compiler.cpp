@@ -408,11 +408,17 @@ void Compiler::CompileFunctionDeclaration(const FunctionDeclaration* function_de
 
 void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifier_expression) const
 {
+    if(!identifier_expression->type_info || dynamic_cast<const ModuleType*>(identifier_expression->type_info))
+    {
+        return;
+    }
+
     const auto line = identifier_expression->source_location.line_number;
     const Type* type = identifier_expression->type_info;
 
     if(scope_depth == 0)
     {
+        if(!global_offsets.contains(identifier_expression->name)) return;
         const uint16_t offset = global_offsets.at(identifier_expression->name);
         current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL, offset, static_cast<uint8_t>(type->GetSize()));
     }
@@ -424,6 +430,7 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
     }
     else
     {
+        if(!global_offsets.contains(identifier_expression->name)) return;
         const uint16_t offset = global_offsets.at(identifier_expression->name);
         current_chunk->WriteInstruction(line, OpCode::OP_GET_GLOBAL, offset, static_cast<uint8_t>(type->GetSize()));
     }
@@ -595,6 +602,7 @@ void Compiler::CompilePropertyAccess(const PropertyAccess* property_access)
     if (auto* mod_type = dynamic_cast<const ModuleType*>(property_access->object_expr->type_info))
     {
         const std::string mangled = std::format("{}::{}", mod_type->GetName(), property_access->property_name);
+        if(!global_offsets.contains(mangled)) return;
         const uint16_t offset = global_offsets.at(mangled);
         current_chunk->WriteInstruction(property_access->source_location.line_number, OpCode::OP_GET_GLOBAL, offset, static_cast<uint8_t>(8));
         return;

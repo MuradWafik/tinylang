@@ -37,7 +37,7 @@ target_include_directories(tinylang_api INTERFACE include)
 
 # --- Plugins ---
 add_library(std_plugin MODULE src/plugins/std.cpp)
-
+set_target_properties(std_plugin PROPERTIES OUTPUT_NAME "std" PREFIX "lib")
 target_link_libraries(std_plugin PRIVATE tinylang_api)
 
 include(FetchContent)

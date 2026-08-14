@@ -104,6 +104,42 @@ private:
 };
 
 
+struct Diagnostic
+{
+    std::string message;
+    SourceLocation location;
+
+    static Diagnostic FromError(const std::string& error_str, const std::string& fallback_file = "")
+    {
+        Diagnostic diag;
+        diag.message = error_str;
+        diag.location.filename = fallback_file;
+        diag.location.line_number = 1;
+        diag.location.column = 1;
+
+        auto pos = error_str.rfind(" at ");
+        if (pos != std::string::npos)
+        {
+            std::string loc_part = error_str.substr(pos + 4);
+            if (!loc_part.empty() && loc_part.back() == ')') {
+                loc_part.pop_back();
+            }
+            auto line_pos = loc_part.find(" Line: ");
+            auto col_pos = loc_part.find(" Column ");
+            if (line_pos != std::string::npos && col_pos != std::string::npos && col_pos > line_pos)
+            {
+                diag.location.filename = loc_part.substr(0, line_pos);
+                try {
+                    diag.location.line_number = std::stoul(loc_part.substr(line_pos + 7, col_pos - (line_pos + 7)));
+                    diag.location.column = std::stoul(loc_part.substr(col_pos + 8));
+                    diag.message = error_str.substr(0, pos);
+                } catch (...) {}
+            }
+        }
+        return diag;
+    }
+};
+
 // walks AST and ensures the code obeys all the semantic rules of the language
 class SemanticAnalyzer
 {
@@ -111,17 +147,19 @@ public:
     const Type* LookupBinaryOperator(TokenType op, const Type* left, const Type* right) const;
     const Type* LookupUnaryOperator(TokenType op, const Type* operand) const;
 
-    std::expected<void, std::string> RunAnalysis(
-            );
+    std::expected<void, std::string> RunAnalysis();
 
     // Runs Pass 1 (Exports) and Pass 2 (Typechecking) on the entire registry
     std::expected<void, std::string> AnalyzeAll();
-    SemanticAnalyzer(ProjectConfig* project_config, ModuleRegistry* module_registry, const bool strict_mode = true)
-    : strict_mode{strict_mode}, project_config{project_config}, module_registry{module_registry}
+    [[nodiscard]] const std::vector<Diagnostic>& GetDiagnostics() const { return diagnostics; }
+    SemanticAnalyzer(ProjectConfig* project_config, ModuleRegistry* module_registry, const bool strict_mode = true, std::string entry_module = "main")
+    : strict_mode{strict_mode}, project_config{project_config}, module_registry{module_registry}, entry_module{std::move(entry_module)}
     {}
 
 private:
+    std::vector<Diagnostic> diagnostics;
     SymbolTable symbol_table{};
+    std::string entry_module{"main"};
     size_t loop_depth{0};
     bool strict_mode;
     std::unordered_map<OperatorSignature, const Type*, OperatorSignatureHash> binary_operators;

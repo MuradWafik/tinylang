@@ -1,8 +1,36 @@
 #pragma once
+#include "analysis/SemanticAnalyzer.h"
 #include "project/ModuleRegistry.h"
 #include "project/ProjectConfig.h"
 
 using path = std::filesystem::path;
+
+struct DocumentSymbol
+{
+    std::string name;
+    std::string kind; // "function", "method", "struct", "enum", "interface", "variable", "native_function"
+    std::string detail;
+    SourceLocation location;
+    std::string container_name;
+    bool is_exported = false;
+};
+
+struct ProjectInfo
+{
+    std::string name;
+    std::string version;
+    std::string project_root;
+    std::string entry_point;
+    std::vector<std::string> source_files;
+    std::string std_path;
+};
+
+struct DefinitionResult
+{
+    std::string name;
+    std::string kind;
+    SourceLocation location;
+};
 
 class Project
 {
@@ -12,6 +40,11 @@ public:
     
     std::expected<void, std::string> CompileAndRun();
     std::expected<void, std::string> CompileOnly(const std::string& output_path) const;
+    std::expected<std::vector<Diagnostic>, std::string> Check() const;
+    std::expected<std::vector<DocumentSymbol>, std::string> ExtractSymbols() const;
+    static std::vector<DocumentSymbol> ExtractSymbolsFromAST(const std::vector<std::unique_ptr<ASTNode>>& asts);
+    ProjectInfo GetInfo() const;
+    std::expected<DefinitionResult, std::string> FindDefinition(const std::string& file_path, uint32_t line, uint32_t col) const;
     static std::expected<void, std::string> RunSerialized(const std::string& input_path);
 
 private:

@@ -3,6 +3,8 @@
 #include "frontend/Parser.h"
 #include "analysis/SemanticAnalyzer.h"
 
+#include "project/ModuleRegistry.h"
+
 static std::expected<void, std::string> Analyze(const std::string_view source)
 {
     Lexer lexer;
@@ -13,8 +15,11 @@ static std::expected<void, std::string> Analyze(const std::string_view source)
     auto parse_result = parser.ParseProgram();
     if (!parse_result) return std::unexpected(parse_result.error());
 
-    SemanticAnalyzer analyzer{nullptr, false};
-    return analyzer.Analyze(parse_result.value());
+    ModuleRegistry registry;
+    registry.RegisterModule("main", std::move(parse_result.value()));
+
+    SemanticAnalyzer analyzer{nullptr, &registry, false};
+    return analyzer.AnalyzeAll();
 }
 
 TEST_CASE("Semantic: Valid variable declarations")

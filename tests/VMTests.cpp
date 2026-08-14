@@ -5,6 +5,7 @@
 #include "frontend/Lexer.h"
 #include "frontend/Parser.h"
 #include "analysis/SemanticAnalyzer.h"
+#include "project/ModuleRegistry.h"
 #include "vm/Compiler.h"
 #include "vm/VM.h"
 
@@ -19,19 +20,20 @@ static T RunAndGetGlobal(const std::string& source, const std::string& var_name)
     auto parse_result = parser.ParseProgram();
     REQUIRE(parse_result.has_value());
 
-    ProjectConfig project_config{};
-    project_config.project_root = PROJECT_ROOT_DIR;
+    ProjectConfig project_config{PROJECT_ROOT_DIR, "test", "0.1.0", std::nullopt, {}, {}};
+    ModuleRegistry registry;
+    registry.RegisterModule("main", std::move(parse_result.value()));
 
-    SemanticAnalyzer semantic_analyzer{&project_config, false};
-    auto semantic_analysis_result = semantic_analyzer.Analyze(parse_result.value());
+    SemanticAnalyzer semantic_analyzer{&project_config, &registry, false};
+    auto semantic_analysis_result = semantic_analyzer.AnalyzeAll();
     INFO("Semantic Analysis Error: " << (semantic_analysis_result.has_value() ? "" : semantic_analysis_result.error()));
     REQUIRE(semantic_analysis_result.has_value());
 
-    Compiler compiler{&project_config};
-    auto chunk = compiler.Compile(parse_result.value());
+    Compiler compiler{&project_config, &registry};
+    auto chunks = compiler.CompileAll("main");
 
     VM vm;
-    vm.StartProgram(chunk.get());
+    vm.StartProgram(chunks, {"main"});
 
     return vm.GetGlobal<T>(compiler.global_offsets.at(var_name));
 }
@@ -161,7 +163,7 @@ TEST_CASE("VM - Logical Short Circuit", "[VM]") {
 TEST_CASE("VM - Native Functions", "[VM]") {
     SECTION("Loads and executes native C++ plugin function") {
         std::string source = R"(
-            native module "sample_project/plugins/libstd_plugin.so";
+            native import std;
             native fn tinylang_clock() -> float;
             var res: float = tinylang_clock();
         )";

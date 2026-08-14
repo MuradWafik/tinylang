@@ -24,12 +24,12 @@ std::expected<std::unordered_map<std::string, ProjectConfig::DepType>, std::stri
             path p = project_root / value.at("path").get<std::string>();
             if(!std::filesystem::is_directory(p))
             {
-                return std::unexpected(std::format("Invalid file path '{}' for dependency '{}'", p, dep_name));
+                return std::unexpected(std::format("Invalid file path '{}' for dependency '{}'", p.string(), dep_name));
             }
             path config_file = p / "tinylang.json";
             if(!exists(config_file))
             {
-                return std::unexpected(std::format("No valid tinylang.json file in '{}' for dependency '{}'", config_file, dep_name));
+                return std::unexpected(std::format("No valid tinylang.json file in '{}' for dependency '{}'", config_file.string(), dep_name));
             }
 
             deps[dep_name] = LocalDependency{config_file};
