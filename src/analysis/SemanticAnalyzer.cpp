@@ -76,6 +76,23 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeAll()
             }
         }
     }
+
+    // Resolve all struct fields now that all type symbols across all modules are registered
+    for(const auto& [name, namespace_obj] : module_registry->GetNamespaces())
+    {
+        current_namespace = name;
+        for(const auto& ast_node : namespace_obj->asts)
+        {
+            if(auto* struct_decl = dynamic_cast<StructDeclaration*>(ast_node.get()))
+            {
+                if(auto res = AnalyzeStructFields(struct_decl); !res)
+                {
+                    diagnostics.push_back(Diagnostic::FromError(res.error(), current_namespace));
+                }
+            }
+        }
+    }
+
     analysis_pass = AnalysisPass::Validation;
     RunAnalysis();
 
@@ -143,6 +160,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStatement(Statement* s
         if(auto* fn_declaration = dynamic_cast<FunctionDeclaration*>(stmt)) return AnalyzeFunctionDeclaration(fn_declaration);
         if(auto* native_fn_decl = dynamic_cast<NativeFunctionDeclaration*>(stmt)) return AnalyzeNativeFunctionDeclaration(native_fn_decl);
         if(const auto* native_mod_stmt = dynamic_cast<NativeImportStatement*>(stmt)) return AnalyzeNativeModuleStatement(native_mod_stmt);
+        if(const auto* var_decl = dynamic_cast<VariableDeclaration*>(stmt)) return AnalyzeVariableDeclaration(var_decl);
         return {};
     }
 
@@ -184,6 +202,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
     if(auto* switch_expr = dynamic_cast<SwitchExpression*>(expr)) return AnalyzeSwitchExpression(switch_expr);
     if(auto* cast_expr = dynamic_cast<CastExpression*>(expr)) return AnalyzeCastExpression(cast_expr);
     if(auto* is_expr = dynamic_cast<IsExpression*>(expr)) return AnalyzeIsExpression(is_expr);
+    if(auto* interp_expr = dynamic_cast<InterpolatedStringExpression*>(expr)) return AnalyzeInterpolatedString(interp_expr);
+    if(auto* arr_inst = dynamic_cast<ArrayInstantiationExpression*>(expr)) return AnalyzeArrayInstantiationExpression(arr_inst);
 
     if(auto* bool_node = dynamic_cast<BoolLiteral*>(expr))
     {
@@ -216,32 +236,68 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeExpression(Expr
 
 std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(const VariableDeclaration* variable_declaration)
 {
-    if (symbol_table.GetScopeDepth() == 0) {
-        const_cast<VariableDeclaration*>(variable_declaration)->name.lexeme = MangleName(variable_declaration->name.lexeme);
-    }
-    
-    const Type* type = nullptr;
-    // with type inference the type defaults to null
-    if(variable_declaration->type.has_value())
+    if(analysis_pass == AnalysisPass::Registration)
     {
-        type = ResolveType(variable_declaration->type->lexeme);
-        if(!type)
+        if(symbol_table.GetScopeDepth() == 0)
         {
-            return std::unexpected(std::format("Unknown type name {} at {}", variable_declaration->type->lexeme, variable_declaration->type->source_location));
+            const_cast<VariableDeclaration*>(variable_declaration)->name.lexeme = MangleName(variable_declaration->name.lexeme);
+            const auto& var_name = variable_declaration->name.lexeme;
+
+            if(symbol_table.IsDeclaredInCurrentScope(var_name))
+            {
+                return std::unexpected(std::format("Redefinition of variable '{}' at {}", var_name, variable_declaration->name.source_location));
+            }
+
+            const Type* type = nullptr;
+            if(variable_declaration->type.has_value())
+            {
+                type = ResolveType(variable_declaration->type->lexeme);
+                if(!type)
+                {
+                    return std::unexpected(std::format("Unknown type name {} at {}", variable_declaration->type->lexeme, variable_declaration->type->source_location));
+                }
+                if(dynamic_cast<const InterfaceType*>(type))
+                {
+                    return std::unexpected(std::format("Cannot use interface '{}' as a concrete type for variable '{}' at {}", variable_declaration->type->lexeme, var_name, variable_declaration->type->source_location));
+                }
+                if(type == PrimitiveType::Void.get())
+                {
+                    return std::unexpected(std::format("Cannot use 'void' as a type for variable '{}' at {}", var_name, variable_declaration->type->source_location));
+                }
+            }
+
+            symbol_table.DefineVariable({var_name, type ? type : AnyType::Instance.get()});
+            const_cast<VariableDeclaration*>(variable_declaration)->type_info = type;
         }
-        if(dynamic_cast<const InterfaceType*>(type))
-        {
-            return std::unexpected(std::format("Cannot use interface '{}' as a concrete type for variable '{}' at {}", variable_declaration->type->lexeme, variable_declaration->name.lexeme, variable_declaration->type->source_location));
-        }
-        if(type == PrimitiveType::Void.get())
-        {
-            return std::unexpected(std::format("Cannot use 'void' as a type for variable '{}' at {}", variable_declaration->name.lexeme, variable_declaration->type->source_location));
-        }
+        return {};
     }
 
-    if(symbol_table.IsDeclaredInCurrentScope(variable_declaration->name.lexeme))
+    const auto& var_name = variable_declaration->name.lexeme;
+    const Type* type = variable_declaration->type_info;
+
+    if(symbol_table.GetScopeDepth() > 0)
     {
-        return std::unexpected(std::format("Redefinition of variable '{}' at {}", variable_declaration->name.lexeme, variable_declaration->name.source_location));
+        if(variable_declaration->type.has_value())
+        {
+            type = ResolveType(variable_declaration->type->lexeme);
+            if(!type)
+            {
+                return std::unexpected(std::format("Unknown type name {} at {}", variable_declaration->type->lexeme, variable_declaration->type->source_location));
+            }
+            if(dynamic_cast<const InterfaceType*>(type))
+            {
+                return std::unexpected(std::format("Cannot use interface '{}' as a concrete type for variable '{}' at {}", variable_declaration->type->lexeme, var_name, variable_declaration->type->source_location));
+            }
+            if(type == PrimitiveType::Void.get())
+            {
+                return std::unexpected(std::format("Cannot use 'void' as a type for variable '{}' at {}", var_name, variable_declaration->type->source_location));
+            }
+        }
+
+        if(symbol_table.IsDeclaredInCurrentScope(var_name))
+        {
+            return std::unexpected(std::format("Redefinition of variable '{}' at {}", var_name, variable_declaration->name.source_location));
+        }
     }
 
     if(variable_declaration->initializer)
@@ -249,17 +305,15 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
         auto expression_type = AnalyzeExpression(variable_declaration->initializer.get());
         if(!expression_type)
         {
-            symbol_table.DefineVariable({variable_declaration->name.lexeme, type ? type : AnyType::Instance.get()});
             return std::unexpected(expression_type.error());
         }
 
-        if(type == nullptr)
+        if(type == nullptr || type == AnyType::Instance.get())
         {
             type = expression_type.value();
         }
         else if(!(expression_type.value())->IsAssignableTo(type))
         {
-            symbol_table.DefineVariable({variable_declaration->name.lexeme, type});
             return std::unexpected(
                 std::format("Unable to assign {} to type {} at {}", expression_type.value()->GetName(), type->GetName(), variable_declaration->name.source_location)
             );
@@ -267,15 +321,14 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeVariableDeclaration(co
     }
     else
     {
-        if(type == nullptr)
+        if(type == nullptr || type == AnyType::Instance.get())
         {
-            symbol_table.DefineVariable({variable_declaration->name.lexeme, AnyType::Instance.get()});
-            return std::unexpected(std::format("Cannot infer type of uninitialized variable '{}' at {}", variable_declaration->name.lexeme, variable_declaration->name.source_location));
+            return std::unexpected(std::format("Cannot infer type of uninitialized variable '{}' at {}", var_name, variable_declaration->name.source_location));
         }
     }
 
     const_cast<VariableDeclaration*>(variable_declaration)->type_info = type;
-    symbol_table.DefineVariable({variable_declaration->name.lexeme, type});
+    symbol_table.DefineVariable({var_name, type});
     return {};
 }
 
@@ -449,10 +502,12 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
         if(function_declaration->receiver)
         {
             auto& [recv_name, type_name, type_info] = function_declaration->receiver.value();
+            if(!type_info) type_info = ResolveType(type_name.lexeme);
             symbol_table.DefineVariable({recv_name.lexeme, type_info});
         }
-        for(const auto& param: function_declaration->method_signature.parameters)
+        for(auto& param: function_declaration->method_signature.parameters)
         {
+            if(!param.type_info) param.type_info = ResolveType(param.type_name.lexeme);
             symbol_table.DefineVariable({param.name.lexeme, param.type_info});
         }
 
@@ -472,7 +527,8 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeFunctionDeclaration(
     if (analysis_pass == AnalysisPass::Registration)
     {
         // Mangle module-level functions
-        if (!function_declaration->receiver && symbol_table.GetScopeDepth() == 0) {
+        if(!function_declaration->receiver && symbol_table.GetScopeDepth() == 0) 
+        {
             function_declaration->method_signature.name.lexeme = MangleName(function_declaration->method_signature.name.lexeme);
         }
     }
@@ -752,20 +808,25 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(Stru
     if (symbol_table.GetScopeDepth() == 0) {
         struct_declaration->name.lexeme = MangleName(struct_declaration->name.lexeme);
     }    
-        if (symbol_table.LookupType(struct_declaration->name.lexeme))
+    if (symbol_table.LookupType(struct_declaration->name.lexeme))
     {
         return std::unexpected(std::format("Redefinition of struct '{}' at {}", struct_declaration->name.lexeme, struct_declaration->name.source_location));
     }
 
+    auto struct_type = std::make_unique<StructType>(struct_declaration->name.lexeme, std::vector<std::pair<std::string, const Type*>>{});
+    symbol_table.DefineType(struct_declaration->name.lexeme, struct_type.get());
+    allocated_types.push_back(std::move(struct_type));
+    return {};
+}
+
+std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructFields(StructDeclaration* struct_declaration)
+{
+    auto* struct_type_ptr = dynamic_cast<StructType*>(const_cast<Type*>(symbol_table.LookupType(struct_declaration->name.lexeme)));
+    if(!struct_type_ptr) return {};
+
     // to throw an error if 2 variables have the same name in definition
     std::unordered_set<std::string_view> seen_names;
     seen_names.reserve(struct_declaration->fields.size());
-
-    // Define the type first to allow self-referential fields (since structs are heap pointers)
-    auto struct_type = std::make_unique<StructType>(struct_declaration->name.lexeme, std::vector<std::pair<std::string, const Type*>>{});
-    auto* struct_ptr = struct_type.get();
-    allocated_types.push_back(std::move(struct_type));
-    symbol_table.DefineType(struct_declaration->name.lexeme, struct_ptr);
 
     std::vector<std::pair<std::string, const Type*>> result;
     result.reserve(struct_declaration->fields.size());
@@ -799,7 +860,7 @@ std::expected<void, std::string> SemanticAnalyzer::AnalyzeStructDeclaration(Stru
         result.emplace_back(field_name.lexeme, type);
     }
 
-    struct_ptr->SetFields(std::move(result));
+    struct_type_ptr->SetFields(std::move(result));
 
     return {};
 }
@@ -880,6 +941,11 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeUnaryExpression
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIdentifierExpression(
     IdentifierExpression* identifier_expression)
 {
+    if(identifier_expression->type_info)
+    {
+        return identifier_expression->type_info;
+    }
+
     // Try looking up in the current namespace first if we are inside one
     if(!current_namespace.empty() && current_namespace != entry_module)
     {
@@ -1004,7 +1070,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
     const auto callable = AnalyzeExpression(call_expression->callee.get());
     if(!callable)
     {
-        return Return(std::format("Unknown call expression '{}'", call_expression->GetTypeString()));
+        return std::unexpected(callable.error());
     }
 
     if(const auto* func_type = dynamic_cast<const FunctionType*>(callable.value()))
@@ -1017,8 +1083,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
 
         if(func_type->GetParameters().size() != call_expression->arguments.size())
         {
-            return Return(std::format("Argument count mismatch for {}: expected {}, got {}",
-                function_name, func_type->GetParameters().size(), call_expression->arguments.size()));
+            return Return(std::format("Argument count mismatch for '{}' at {}: expected {}, got {}",
+                function_name, call_expression->source_location, func_type->GetParameters().size(), call_expression->arguments.size()));
         }
 
         for(size_t i = 0; i < call_expression->arguments.size(); ++i)
@@ -1030,7 +1096,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
             if(!arg_type)
             {
                 return Return(std::format(
-                    "Error parsing function '{}' parameter expression, {}",
+                    "Error parsing function '{}' parameter expression: {}",
                     function_name, arg_type.error()));
             }
 
@@ -1091,7 +1157,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
 
         if(call_expression->arguments.size() != struct_type->GetNumFields())
         {
-            return Return("Too much arguments passed for struct initialization");
+            return Return(std::format("Argument count mismatch for struct '{}' initialization at {}: expected {}, got {}",
+                struct_type->GetName(), call_expression->source_location, struct_type->GetNumFields(), call_expression->arguments.size()));
         }
         for(
             const auto& [field, expression] :
@@ -1105,8 +1172,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
             if(expression_type.value() != field.second)
             {
                 return Return(
-                    std::format("Type mismatch in struct initialization, expected '{}', got '{}' ",
-                        field.second->GetName(), expression_type.value()->GetName())
+                    std::format("Type mismatch for field '{}' in struct '{}' initialization at {}: expected '{}', got '{}'",
+                        field.first, struct_type->GetName(), expression->source_location, field.second->GetName(), expression_type.value()->GetName())
                 );
             }
 
@@ -1115,7 +1182,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeCallExpression(
         return struct_type;
     }
 
-    return Return("Attempted to call a value that is not a function or struct");
+    return Return(std::format("Type '{}' is not callable (expected function or struct) at {}",
+        callable.value()->GetName(), call_expression->source_location));
 }
 
 void SemanticAnalyzer::RegisterBinaryOperator(const TokenType op, const Type* left, const Type* right, const Type* result)
@@ -1217,6 +1285,31 @@ void SemanticAnalyzer::InitializeDefaults()
 
 std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIndexAccess(IndexAccess* index_access)
 {
+    if(auto* id_expr = dynamic_cast<IdentifierExpression*>(index_access->array_expr.get()))
+    {
+        const Type* found_type = nullptr;
+        if(id_expr->name == "int") found_type = PrimitiveType::Int.get();
+        else if(id_expr->name == "float") found_type = PrimitiveType::Float.get();
+        else if(id_expr->name == "bool") found_type = PrimitiveType::Bool.get();
+        else if(id_expr->name == "char") found_type = PrimitiveType::Char.get();
+        else if(id_expr->name == "String") found_type = PrimitiveType::String.get();
+        else if(!symbol_table.LookupVariable(id_expr->name).has_value()) found_type = symbol_table.LookupType(id_expr->name);
+        
+        if(found_type)
+        {
+            auto size_res = AnalyzeExpression(index_access->index_expr.get());
+            if(!size_res) return std::unexpected(size_res.error());
+            if(size_res.value() != PrimitiveType::Int.get())
+            {
+                return Return(std::format("Array size must be of type 'int', got '{}' at {}", size_res.value()->GetName(), index_access->index_expr->source_location));
+            }
+
+            allocated_types.push_back(std::make_unique<ArrayType>(found_type));
+            index_access->type_info = allocated_types.back().get();
+            return index_access->type_info;
+        }
+    }
+
     auto indexed_type = AnalyzeExpression(index_access->array_expr.get());
     if(!indexed_type)
     {
@@ -1262,7 +1355,7 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayLiteral(Ar
         auto elem_type = AnalyzeExpression(array_node->elements[i].get());
         if(!elem_type) return std::unexpected(elem_type.error());
 
-        if(elem_type.value() != first_type.value())
+        if(!elem_type.value()->IsAssignableTo(first_type.value()) && !first_type.value()->IsAssignableTo(elem_type.value()))
         {
             return Return(std::format(
                 "Array literal elements must all be of the same type, expected type '{}' got type '{}' at {}",
@@ -1300,7 +1393,22 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
     auto lhs = AnalyzeExpression(property_access->object_expr.get());
     if(!lhs) return std::unexpected(lhs.error());
 
-    if(dynamic_cast<const ArrayType*>(lhs.value()) || lhs.value() == PrimitiveType::String.get())
+    if(const auto* arr_type = dynamic_cast<const ArrayType*>(lhs.value()))
+    {
+        if(property_access->property_name == "length")
+        {
+            property_access->type_info = PrimitiveType::Int.get();
+            return property_access->type_info;
+        }
+        if(property_access->property_name == constants::TO_STRING_METHOD)
+        {
+            property_access->type_info = arr_type->GetMethod(std::string(constants::TO_STRING_METHOD));
+            return property_access->type_info;
+        }
+        return Return(std::format("Type '{}' only has a 'length' property", lhs.value()->GetName()));
+    }
+
+    if(lhs.value() == PrimitiveType::String.get())
     {
         if(property_access->property_name == "length")
         {
@@ -1320,6 +1428,8 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzePropertyAccess(
         }
         return Return(std::format("Module '{}' does not export '{}'", mod_type->GetName(), property_access->property_name));
     }
+
+    if(!lhs.value()) return Return(std::format("Trying to do property access on unknown type at {}", property_access->source_location));
 
     const auto struct_obj = dynamic_cast<const StructType*>(lhs.value());
     if(!struct_obj)
@@ -1660,4 +1770,66 @@ std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeIsExpression(Is
     is_expression->target_type = right_type;
     is_expression->type_info = PrimitiveType::Bool.get();
     return PrimitiveType::Bool.get();
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeInterpolatedString(InterpolatedStringExpression* expr)
+{
+    for(auto& part : expr->parts)
+    {
+        auto part_type = AnalyzeExpression(part.get());
+        if(!part_type) return std::unexpected(part_type.error());
+        if(part_type.value() == PrimitiveType::String.get()) continue;
+        
+
+        const std::string to_string_mangled = MangleMethodName(std::string(constants::TO_STRING_METHOD), part_type.value());
+        if(!symbol_table.LookupVariable(to_string_mangled) && !part_type.value()->GetMethod(std::string(constants::TO_STRING_METHOD)))
+        {
+            return Return(std::format(
+                "Type '{}' in string interpolation does not implement '{}()' method at {}",
+                part_type.value()->GetName(), constants::TO_STRING_METHOD, part->source_location));
+        }
+
+        const auto loc = part->source_location;
+        auto prop_access = std::make_unique<PropertyAccess>(std::move(part), std::string(constants::TO_STRING_METHOD), loc);
+        auto to_string_call = std::make_unique<CallExpression>(std::move(prop_access), std::vector<std::unique_ptr<Expression>>{}, loc);
+
+        auto res = AnalyzeCallExpression(to_string_call.get());
+        if(!res) return std::unexpected(res.error());
+        
+        part = std::move(to_string_call);
+    }
+
+    expr->type_info = PrimitiveType::String.get();
+    return PrimitiveType::String.get();
+}
+
+std::expected<const Type*, std::string> SemanticAnalyzer::AnalyzeArrayInstantiationExpression(
+    ArrayInstantiationExpression* expr)
+{
+    const Type* elem_type = nullptr;
+    if(expr->element_type_name == "int") elem_type = PrimitiveType::Int.get();
+    else if(expr->element_type_name == "float") elem_type = PrimitiveType::Float.get();
+    else if(expr->element_type_name == "bool") elem_type = PrimitiveType::Bool.get();
+    else if(expr->element_type_name == "char") elem_type = PrimitiveType::Char.get();
+    else if(expr->element_type_name == "String") elem_type = PrimitiveType::String.get();
+    else if(expr->element_type_name == "any") elem_type = AnyType::Instance.get();
+    else elem_type = symbol_table.LookupType(expr->element_type_name);
+    
+
+    if(!elem_type)
+    {
+        return Return(std::format("Unknown type '{}' in array instantiation at {}", expr->element_type_name, expr->source_location));
+    }
+
+    auto size_res = AnalyzeExpression(expr->size_expr.get());
+    if(!size_res) return std::unexpected(size_res.error());
+
+    if(size_res.value() != PrimitiveType::Int.get())
+    {
+        return Return(std::format("Array size must be of type 'int', got '{}' at {}", size_res.value()->GetName(), expr->size_expr->source_location));
+    }
+
+    allocated_types.push_back(std::make_unique<ArrayType>(elem_type));
+    expr->type_info = allocated_types.back().get();
+    return expr->type_info;
 }

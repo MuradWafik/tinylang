@@ -35,6 +35,28 @@ struct StringLiteral final : Expression
     [[nodiscard]] std::string GetTypeString() const override { return std::format("StringLiteral(\"{}\")", value); }
 };
 
+struct InterpolatedStringExpression final : Expression
+{
+    std::vector<std::unique_ptr<Expression>> parts;
+
+    InterpolatedStringExpression(std::vector<std::unique_ptr<Expression>> parts, SourceLocation loc)
+        : parts(std::move(parts))
+    {
+        this->source_location = std::move(loc);
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        std::string parts_str;
+        for(size_t i = 0; i < parts.size(); ++i)
+        {
+            parts_str += parts[i] ? parts[i]->GetTypeString() : "nullptr";
+            if(i + 1 < parts.size()) parts_str += ", ";
+        }
+        return std::format("InterpolatedStringExpression([{}])", parts_str);
+    }
+};
+
 struct CharLiteral final : Expression
 {
     char8_t value;
@@ -193,6 +215,23 @@ struct ArrayLiteral final : Expression
     [[nodiscard]] std::string GetTypeString() const override
     {
         return std::format("ArrayLiteral({} elements)", elements.size());
+    }
+};
+
+struct ArrayInstantiationExpression final : Expression
+{
+    std::string element_type_name;
+    std::unique_ptr<Expression> size_expr;
+
+    ArrayInstantiationExpression(std::string element_type_name, std::unique_ptr<Expression> size_expr, SourceLocation loc)
+        : element_type_name(std::move(element_type_name)), size_expr(std::move(size_expr))
+    {
+        this->source_location = std::move(loc);
+    }
+
+    [[nodiscard]] std::string GetTypeString() const override
+    {
+        return std::format("ArrayInstantiationExpression(type: {}, size: {})", element_type_name, size_expr ? size_expr->GetTypeString() : "null");
     }
 };
 

@@ -37,7 +37,7 @@ void VMHeap::TraverseWorklist()
         worklist.pop_back();
         if(const auto* arr = dynamic_cast<Array*>(obj))
         {
-            ScanMemory(arr->elements, arr->size);
+            ScanMemory(arr->elements, arr->size * arr->bytes_per_element);
         }
         else if(const auto* struct_obj = dynamic_cast<Struct*>(obj))
         {
@@ -49,7 +49,7 @@ void VMHeap::TraverseWorklist()
 void VMHeap::ScanMemory(const uint8_t* memory, const size_t size)
 {
     if(!memory || size < sizeof(Object*)) return;
-    for(size_t i = 0; i + sizeof(Object*) <= size; i += 8)
+    for(size_t i = 0; i + sizeof(Object*) <= size; ++i)
     {
         Object* potential_object = nullptr;
         std::memcpy(&potential_object, &memory[i], sizeof(Object*));

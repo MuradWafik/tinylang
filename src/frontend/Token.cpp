@@ -9,8 +9,9 @@ std::string Token::TypeToString(const TokenType token_type)
         case TokenType::Identifier:      return "identifier";
         case TokenType::IntLiteral:      return "integer literal";
         case TokenType::FloatLiteral:    return "float literal";
-        case TokenType::StringLiteral:   return "string literal";
-        case TokenType::CharLiteral:     return "char literal";
+        case TokenType::StringLiteral:             return "string literal";
+        case TokenType::InterpolatedStringLiteral: return "interpolated string literal";
+        case TokenType::CharLiteral:               return "char literal";
 
         // Keywords
         case TokenType::Fn:              return "fn";

@@ -51,7 +51,7 @@ bool ArrayType::IsAssignableTo(const Type* other) const
     if(Type::IsAssignableTo(other)) return true;
     if(const auto* other_array = dynamic_cast<const ArrayType*>(other))
     {
-        return this->element_type == other_array->element_type;
+        return this->element_type == other_array->element_type || (this->element_type && this->element_type->IsAssignableTo(other_array->element_type));
     }
     return false;
 }

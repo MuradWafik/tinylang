@@ -74,6 +74,14 @@ FetchContent_MakeAvailable(cli11)
 
 target_link_libraries(tinylang_lib PUBLIC magic_enum::magic_enum nlohmann_json::nlohmann_json CLI11::CLI11)
 
+add_custom_target(install_local
+        COMMAND ${CMAKE_COMMAND} -E make_directory $ENV{HOME}/.local/bin
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tinylang> $ENV{HOME}/.local/bin/tinylang
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:std_plugin> $ENV{HOME}/.local/bin/libstd.so
+        DEPENDS tinylang std_plugin
+        COMMENT "Installing tinylang and libstd.so to ~/.local/bin"
+)
+
 enable_testing()
 
 add_subdirectory(tests)

@@ -63,6 +63,7 @@ private:
     ExpectedExpressionPtr ParseUnary();
     ExpectedExpressionPtr ParseSuffixes();
     ExpectedExpressionPtr ParsePrimary(); // literals/identifiers
+    ExpectedExpressionPtr ParseInterpolatedString(const Token& token);
     //TODO: Most have the same logic refactor, (potentially a dictionary with the tokens to match and next level)
 
 

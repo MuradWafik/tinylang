@@ -31,12 +31,25 @@ std::expected<NativeFn, std::string> PluginLoader::LoadSymbol(const std::string&
         {
             const auto exe_dir = GetExecutablePath().parent_path();
             const auto exe_filename = std::filesystem::path(lib_path).filename();
-            auto exe_rel = exe_dir / exe_filename;
-            handle = dlopen(exe_rel.c_str(), RTLD_LAZY);
-            if(!handle)
+
+            std::vector<std::filesystem::path> candidate_paths = {
+                exe_dir / exe_filename,
+                exe_dir / "plugins" / exe_filename,
+                exe_dir.parent_path() / exe_filename,
+                exe_dir.parent_path() / "lib" / exe_filename,
+                exe_dir.parent_path() / "lib" / "tinylang" / exe_filename,
+            };
+
+            if(const char* home = std::getenv("HOME"))
             {
-                exe_rel = exe_dir.parent_path() / exe_filename;
-                handle = dlopen(exe_rel.c_str(), RTLD_LAZY);
+                candidate_paths.push_back(std::filesystem::path(home) / ".tinylang" / "std" / exe_filename);
+                candidate_paths.push_back(std::filesystem::path(home) / ".tinylang" / "plugins" / exe_filename);
+            }
+
+            for(const auto& cand : candidate_paths)
+            {
+                handle = dlopen(cand.c_str(), RTLD_LAZY);
+                if(handle) break;
             }
         }
         if(!handle)

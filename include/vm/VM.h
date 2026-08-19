@@ -239,6 +239,9 @@ private:
     void AllocateString();
     void LoadNativeFunction();
     void AllocateArray();
+    void AllocateArrayDefault();
+    void ArrayToString();
+    std::string FormatArray(const Array* array);
     void GetArrayIndex();
     void SetArrayIndex();
     void GetStringChar();

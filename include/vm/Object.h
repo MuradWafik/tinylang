@@ -55,17 +55,23 @@ public:
     size_t size; // Number of elements
     size_t bytes_per_element;
     uint8_t* elements;
+    uint8_t element_kind;
 
-    Array(const uint8_t* elements_buffer, const size_t size, const size_t bytes_per_element) :
+    Array(const uint8_t* elements_buffer, const size_t size, const size_t bytes_per_element, const uint8_t element_kind = 0) :
         Object{ObjectType::Array},
         size{size},
-        bytes_per_element{bytes_per_element}
+        bytes_per_element{bytes_per_element},
+        element_kind{element_kind}
     {
         const size_t total_bytes = size * bytes_per_element;
         this->elements = new uint8_t[total_bytes];
         if(elements_buffer && total_bytes > 0)
         {
             std::memcpy(this->elements, elements_buffer, total_bytes);
+        }
+        else if(total_bytes > 0)
+        {
+            std::memset(this->elements, 0, total_bytes);
         }
     }
 

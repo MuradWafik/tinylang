@@ -12,6 +12,7 @@ enum class TokenType
     IntLiteral,
     FloatLiteral,
     StringLiteral,
+    InterpolatedStringLiteral,
     CharLiteral,
 
     // Keywords

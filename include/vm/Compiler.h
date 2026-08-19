@@ -55,6 +55,8 @@ private:
     void CompileSwitchExpression(const SwitchExpression* switch_expression);
     void CompileCastExpression(const CastExpression* cast_expression);
     void CompileIsExpression(const IsExpression* is_expression);
+    void CompileInterpolatedString(const InterpolatedStringExpression* expr);
+    void CompileArrayInstantiationExpression(const ArrayInstantiationExpression* expr);
 
 
     void ForLoopIterableStruct(const ForLoop* for_loop, uint32_t line, const StructType* struct_type);

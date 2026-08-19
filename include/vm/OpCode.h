@@ -3,6 +3,17 @@
 
 #include <magic_enum.hpp>
 
+enum class ArrayElementKind : uint8_t
+{
+    Int = 0,
+    Float = 1,
+    Bool = 2,
+    Char = 3,
+    String = 4,
+    Array = 5,
+    Custom = 6
+};
+
 enum class OpCode : uint8_t
 {
     // --- Data & Variables ---
@@ -15,7 +26,9 @@ enum class OpCode : uint8_t
     // --- Heap Objects ---
     OP_ALLOCATE_STRING,   // [1 byte operand: constant_index] | Stack: Reads string from constants[index], allocates StringObject on heap, pushes 8 byte Object*
     OP_ADD_STRING,        // [No operands]                    | Stack: Pops two 8 byte Object* strings, allocates new concatenated StringObject, pushes 8 byte Object*
-    OP_ALLOCATE_ARRAY,    // [2 bytes: element_count] [1 byte: stride] | Stack: Pops (count*stride) bytes, allocates ArrayObject, pushes 8 byte Object*
+    OP_ALLOCATE_ARRAY,    // [2 bytes: element_count] [1 byte: stride] [1 byte: element_kind] | Stack: Pops (count*stride) bytes, allocates ArrayObject, pushes 8 byte Object*
+    OP_ALLOCATE_ARRAY_DEFAULT, // [1 byte: stride] [1 byte: element_kind] | Stack: Pops 4 byte int size, allocates default-initialized ArrayObject, pushes 8 byte Object*
+    OP_ARRAY_TO_STRING,   // [No operands]                    | Stack: Pops 8 byte ArrayObject*, pushes 8 byte StringObject*
     OP_ALLOCATE_STRUCT,   // [2 bytes: total_size] [1 byte: from_stack] | Stack: Pops 'total_size' bytes (if from_stack is true), allocates StructObject on heap, pushes 8 byte Object*
     OP_GET_PROPERTY,      // [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 8 byte StructObject*, pushes 'size' bytes from offset
     OP_SET_PROPERTY,      // [2 bytes: byte_offset] [1 byte: size]     | Stack: Pops 'size' bytes, pops 8 byte StructObject*, writes bytes, pushes bytes back

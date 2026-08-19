@@ -209,6 +209,7 @@ private:
     std::expected<void, std::string> AnalyzeNativeModuleStatement(const NativeImportStatement* native_module_statement);
     std::expected<void, std::string> AnalyzeNativeFunctionDeclaration(NativeFunctionDeclaration* native_function_declaration);
     std::expected<void, std::string> AnalyzeStructDeclaration(StructDeclaration* struct_declaration);
+    std::expected<void, std::string> AnalyzeStructFields(StructDeclaration* struct_declaration);
     std::expected<void, std::string> AnalyzeEnumDeclaration(const EnumDeclaration* enum_declaration);
     std::expected<void, std::string> AnalyzeInterfaceDeclaration(InterfaceDeclaration* interface_declaration);
     std::expected<void, std::string> AnalyzeForLoop(const ForLoop* for_loop);
@@ -226,6 +227,8 @@ private:
     std::expected<const Type*, std::string> AnalyzeSwitchExpression(SwitchExpression* switch_expression);
     std::expected<const Type*, std::string> AnalyzeCastExpression(CastExpression* cast_expression);
     std::expected<const Type*, std::string> AnalyzeIsExpression(IsExpression* is_expression);
+    std::expected<const Type*, std::string> AnalyzeInterpolatedString(InterpolatedStringExpression* expr);
+    std::expected<const Type*, std::string> AnalyzeArrayInstantiationExpression(ArrayInstantiationExpression* expr);
 
     void RegisterBinaryOperator(TokenType op, const Type* left, const Type* right, const Type* result);
     void RegisterUnaryOperator(TokenType op, const Type* operand, const Type* result);

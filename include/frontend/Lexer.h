@@ -30,6 +30,7 @@ private:
     std::expected<Token, LexerError> LexIdentifier();
     std::expected<Token, LexerError> LexNumber();
     std::expected<Token, LexerError> LexString();
+    std::expected<Token, LexerError> LexInterpolatedString();
     std::expected<Token, LexerError> LexChar();
     std::expected<Token, LexerError> LexSymbol();
 

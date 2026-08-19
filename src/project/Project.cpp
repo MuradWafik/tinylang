@@ -69,6 +69,85 @@ std::expected<std::unique_ptr<Project>, std::string> Project::Init(const std::fi
     return std::unique_ptr<Project>(new Project(std::move(tl_files), std::move(project_config.value())));
 }
 
+static std::expected<void, std::string> ValidateModulePlacement(
+    const std::filesystem::path& file_path,
+    const std::string& module_name,
+    const ProjectConfig* project_config)
+{
+    if(!project_config) return {};
+
+    std::error_code ec;
+
+    // Check if the file is part of bundled std
+    const auto std_path = GetBundledStdPath();
+    if(std::filesystem::exists(std_path))
+    {
+        auto std_rel = std::filesystem::relative(file_path, std_path, ec);
+        if(!ec && !std_rel.empty() && !std_rel.string().starts_with(".."))
+        {
+            return {};
+        }
+    }
+
+    // Check if the file belongs to any local dependency
+    for(const auto& dep_variant : project_config->dependencies | std::views::values)
+    {
+        if(std::holds_alternative<ProjectConfig::LocalDependency>(dep_variant))
+        {
+            const auto& [dep_path] = std::get<ProjectConfig::LocalDependency>(dep_variant);
+            auto dep_root = dep_path.parent_path();
+            auto dep_rel = std::filesystem::relative(file_path, dep_root, ec);
+            if(!ec && !dep_rel.empty() && !dep_rel.string().starts_with(".."))
+            {
+                return {};
+            }
+        }
+    }
+
+    // Direct child of project root
+    if(std::filesystem::equivalent(file_path.parent_path(), project_config->project_root, ec))
+    {
+        if(module_name != project_config->name)
+        {
+            return std::unexpected(std::format(
+                "Module declaration 'module {};' in file '{}' does not match project name '{}' defined in tinylang.json",
+                module_name, file_path.filename().string(), project_config->name
+            ));
+        }
+        return {};
+    }
+
+    // Child of 'src' in project root
+    if(file_path.parent_path().filename() == "src" &&
+       std::filesystem::equivalent(file_path.parent_path().parent_path(), project_config->project_root, ec))
+    {
+        if(module_name != project_config->name)
+        {
+            return std::unexpected(std::format(
+                "Module declaration 'module {};' in file '{}' does not match project name '{}' defined in tinylang.json",
+                module_name, file_path.filename().string(), project_config->name
+            ));
+        }
+        return {};
+    }
+
+    // Inside a subdirectory within project root
+    auto rel_path = std::filesystem::relative(file_path, project_config->project_root, ec);
+    if(!ec && !rel_path.empty() && !rel_path.string().starts_with(".."))
+    {
+        const std::string expected_dir_module = file_path.parent_path().filename().string();
+        if(module_name != expected_dir_module)
+        {
+            return std::unexpected(std::format(
+                "Module declaration 'module {};' in file '{}' does not match directory module '{}'",
+                module_name, file_path.filename().string(), expected_dir_module
+            ));
+        }
+    }
+
+    return {};
+}
+
 std::expected<void, std::string> Project::CompileAndRun()
 {
     std::string entry_module_name;
@@ -95,6 +174,11 @@ std::expected<void, std::string> Project::CompileAndRun()
 
         std::string module_name = parser.module_name;
         if(module_name.empty()) return std::unexpected("No module name found");
+
+        if(auto valid = ValidateModulePlacement(file_path, module_name, project_config.get()); !valid)
+        {
+            return std::unexpected(valid.error());
+        }
 
         if(project_config)
         {
@@ -160,6 +244,10 @@ std::expected<void, std::string> Project::CompileAndRun()
 
     if(auto res = vm.StartProgram(chunks, ordered_modules); res != InterpretResult::INTERPRET_OK)
     {
+        if(res == InterpretResult::INTERPRET_RUNTIME_ERROR)
+        {
+            return std::unexpected("Runtime Error");
+        }
         return std::unexpected(std::format("VM exited with error code: {}", static_cast<int>(res)));
     }
 
@@ -192,6 +280,11 @@ std::expected<void, std::string> Project::CompileOnly(const std::string& output_
 
         std::string module_name = parser.module_name;
         if(module_name.empty()) return std::unexpected("No module name found");
+
+        if(auto valid = ValidateModulePlacement(file_path, module_name, project_config.get()); !valid)
+        {
+            return std::unexpected(valid.error());
+        }
 
         if(project_config)
         {
@@ -335,6 +428,12 @@ std::expected<std::vector<Diagnostic>, std::string> Project::Check() const
             continue;
         }
 
+        if(auto valid = ValidateModulePlacement(file_path, module_name, project_config.get()); !valid)
+        {
+            diagnostics.push_back(Diagnostic{valid.error(), SourceLocation{file_path.string(), 1, 1}});
+            continue;
+        }
+
         if(project_config)
         {
             std::error_code ec;
@@ -368,6 +467,51 @@ std::expected<std::vector<Diagnostic>, std::string> Project::Check() const
     return diagnostics;
 }
 
+static void CollectSymbolsFromNode(const ASTNode* node, const std::string& container, std::vector<DocumentSymbol>& symbols)
+{
+    if(!node) return;
+    if(const auto* var = dynamic_cast<const VariableDeclaration*>(node))
+    {
+        std::string type_str = var->type ? var->type->lexeme : "inferred";
+        symbols.push_back({
+            var->name.lexeme,
+            "variable",
+            type_str,
+            var->name.source_location,
+            container,
+            var->is_exported
+        });
+    }
+    else if(const auto* body = dynamic_cast<const BodyStatement*>(node))
+    {
+        for(const auto& s : body->statements)
+        {
+            CollectSymbolsFromNode(s.get(), container, symbols);
+        }
+    }
+    else if(const auto* if_stmt = dynamic_cast<const IfStatement*>(node))
+    {
+        CollectSymbolsFromNode(if_stmt->body.get(), container, symbols);
+        CollectSymbolsFromNode(if_stmt->else_branch.get(), container, symbols);
+    }
+    else if(const auto* while_stmt = dynamic_cast<const WhileStatement*>(node))
+    {
+        CollectSymbolsFromNode(while_stmt->body.get(), container, symbols);
+    }
+    else if(const auto* for_loop = dynamic_cast<const ForLoop*>(node))
+    {
+        symbols.push_back({
+            for_loop->iterator_name.lexeme,
+            "variable",
+            "iterator",
+            for_loop->iterator_name.source_location,
+            container,
+            false
+        });
+        CollectSymbolsFromNode(for_loop->body.get(), container, symbols);
+    }
+}
+
 std::vector<DocumentSymbol> Project::ExtractSymbolsFromAST(const std::vector<std::unique_ptr<ASTNode>>& asts)
 {
     std::vector<DocumentSymbol> symbols;
@@ -381,6 +525,16 @@ std::vector<DocumentSymbol> Project::ExtractSymbolsFromAST(const std::vector<std
             {
                 params += fn->method_signature.parameters[i].name.lexeme + ": " + fn->method_signature.parameters[i].type_name.lexeme;
                 if(i + 1 < fn->method_signature.parameters.size()) params += ", ";
+
+                // Add parameter symbol
+                symbols.push_back({
+                    fn->method_signature.parameters[i].name.lexeme,
+                    "parameter",
+                    fn->method_signature.parameters[i].type_name.lexeme,
+                    fn->method_signature.parameters[i].name.source_location,
+                    fn->method_signature.name.lexeme,
+                    false
+                });
             }
             std::string ret = fn->method_signature.return_type ? fn->method_signature.return_type->lexeme : "void";
             std::string detail = "(" + params + ") -> " + ret;
@@ -395,6 +549,11 @@ std::vector<DocumentSymbol> Project::ExtractSymbolsFromAST(const std::vector<std
                 container,
                 fn->is_exported
             });
+
+            if(fn->body)
+            {
+                CollectSymbolsFromNode(fn->body.get(), fn->method_signature.name.lexeme, symbols);
+            }
         }
         else if(const auto* st = dynamic_cast<const StructDeclaration*>(node.get()))
         {
@@ -403,6 +562,15 @@ std::vector<DocumentSymbol> Project::ExtractSymbolsFromAST(const std::vector<std
             {
                 fields += st->fields[i].first.lexeme + ": " + st->fields[i].second.lexeme;
                 if(i + 1 < st->fields.size()) fields += ", ";
+
+                symbols.push_back({
+                    st->fields[i].first.lexeme,
+                    "field",
+                    st->fields[i].second.lexeme,
+                    st->fields[i].first.source_location,
+                    st->name.lexeme,
+                    st->is_exported
+                });
             }
             symbols.push_back({
                 st->name.lexeme,
@@ -511,13 +679,90 @@ ProjectInfo Project::GetInfo() const
     return info;
 }
 
+static std::optional<std::string> ExtractIdentifierFromInterpolatedString(const std::string& lexeme, const int64_t offset)
+{
+    if(offset < 0 || static_cast<size_t>(offset) > lexeme.length()) return std::nullopt;
+
+    int brace_depth = 0;
+    size_t brace_start = 0;
+    for(size_t i = 0; i < lexeme.length(); ++i)
+    {
+        if(lexeme[i] == '{' && (i == 0 || lexeme[i - 1] != '\\'))
+        {
+            ++brace_depth;
+            brace_start = i + 1;
+            continue;
+        }
+
+        if(lexeme[i] != '}' || brace_depth <= 0 || (i > 0 && lexeme[i - 1] == '\\')) continue;
+
+        const size_t open_pos = brace_start > 0 ? brace_start - 1 : 0;
+        const size_t off = static_cast<size_t>(offset);
+
+        if(off >= open_pos && off <= i)
+        {
+            size_t cur = off;
+            if(cur == open_pos) cur = brace_start;
+            else if(cur >= i && cur > brace_start) cur = i - 1;
+
+            if(cur < i && (isalnum(static_cast<unsigned char>(lexeme[cur])) || lexeme[cur] == '_'))
+            {
+                size_t id_start = cur;
+                while(id_start > brace_start && (isalnum(static_cast<unsigned char>(lexeme[id_start - 1])) || lexeme[id_start - 1] == '_'))
+                {
+                    --id_start;
+                }
+
+                size_t id_end = cur + 1;
+                while(id_end < i && (isalnum(static_cast<unsigned char>(lexeme[id_end])) || lexeme[id_end] == '_'))
+                {
+                    ++id_end;
+                }
+
+                return lexeme.substr(id_start, id_end - id_start);
+            }
+            return std::nullopt;
+        }
+
+        --brace_depth;
+    }
+
+    return std::nullopt;
+}
+
+static std::optional<std::string> FindIdentifierAt(const std::vector<Token>& tokens, const uint32_t line, const uint32_t col)
+{
+    for(const auto& tok : tokens)
+    {
+        if(tok.source_location.line_number != line) continue;
+
+        const uint32_t start_col = tok.source_location.column;
+        const uint32_t len = static_cast<uint32_t>(tok.lexeme.length());
+        const uint32_t end_col = start_col + len + (tok.type == TokenType::InterpolatedStringLiteral ? 3 : 0);
+
+        if(col < start_col || col > end_col) continue;
+        if(tok.type == TokenType::Identifier || tok.IsPrimitiveTypeName())
+        {
+            return tok.lexeme;
+        }
+
+        if(tok.type == TokenType::InterpolatedStringLiteral)
+        {
+            const int64_t offset = static_cast<int64_t>(col) - static_cast<int64_t>(start_col + 2);
+            if(auto id = ExtractIdentifierFromInterpolatedString(tok.lexeme, offset))
+            {
+                return id;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
 std::expected<DefinitionResult, std::string> Project::FindDefinition(const std::string& file_path, uint32_t line, uint32_t col) const
 {
     auto file_open_result = FileReader::Read(file_path);
-    if(!file_open_result)
-    {
-        return std::unexpected(file_open_result.error());
-    }
+    if(!file_open_result) return std::unexpected(file_open_result.error());
 
     Lexer lexer{};
     auto lex_result = lexer.Lex(file_open_result.value(), file_path);
@@ -526,25 +771,8 @@ std::expected<DefinitionResult, std::string> Project::FindDefinition(const std::
         return std::unexpected("Failed to tokenize source file");
     }
 
-    std::string target_identifier;
-    for(const auto& tok : lex_result.value())
-    {
-        if(tok.source_location.line_number == line)
-        {
-            uint32_t start_col = tok.source_location.column;
-            uint32_t end_col = start_col + static_cast<uint32_t>(tok.lexeme.length());
-            if(col >= start_col && col <= end_col)
-            {
-                if(tok.type == TokenType::Identifier || tok.IsPrimitiveTypeName())
-                {
-                    target_identifier = tok.lexeme;
-                    break;
-                }
-            }
-        }
-    }
-
-    if(target_identifier.empty())
+    const auto target_identifier = FindIdentifierAt(lex_result.value(), line, col);
+    if(!target_identifier)
     {
         return std::unexpected("No identifier found at given position");
     }
@@ -557,23 +785,20 @@ std::expected<DefinitionResult, std::string> Project::FindDefinition(const std::
 
     const auto& symbols = all_symbols_res.value();
     
-    // First, search for exact match in current file
+    // start search in current file
     for(const auto& sym : symbols)
     {
-        if(sym.name == target_identifier && sym.location.filename == file_path)
+        if(sym.name == *target_identifier && sym.location.filename == file_path)
         {
             return DefinitionResult{sym.name, sym.kind, sym.location};
         }
     }
 
-    // Next, search in any project file
+    // then, search in any project file
     for(const auto& sym : symbols)
     {
-        if(sym.name == target_identifier)
-        {
-            return DefinitionResult{sym.name, sym.kind, sym.location};
-        }
+        if(sym.name == *target_identifier) return DefinitionResult{sym.name, sym.kind, sym.location};
     }
 
-    return std::unexpected(std::format("Definition for '{}' not found", target_identifier));
+    return std::unexpected(std::format("Definition for '{}' not found", *target_identifier));
 }

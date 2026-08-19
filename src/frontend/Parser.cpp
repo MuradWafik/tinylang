@@ -4,6 +4,7 @@
 #include <format>
 
 #include "frontend/Expression.h"
+#include "frontend/Lexer.h"
 
 const Token& Parser::Consume()
 {
@@ -129,14 +130,44 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
     }
 
     std::optional<Token> type_name = std::nullopt;
+    std::unique_ptr<Expression> default_size_expr = nullptr;
+    std::string base_element_type;
+
     if(Match(TokenType::Colon))
     {
-        auto type_name_expected = ParseTypeName();
-        if(!type_name_expected)
+        auto type_name_token = Consume();
+        if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
         {
-            return std::unexpected(type_name_expected.error());
+            return std::unexpected(
+                std::format("Expected typename, got '{}' at {}", type_name_token.type, type_name_token.source_location));
         }
-        type_name = type_name_expected.value();
+
+        while(Match(TokenType::Dot))
+        {
+            auto prop = Expect(TokenType::Identifier, "Expected identifier after '.' in type name");
+            if(!prop) return std::unexpected(prop.error());
+            type_name_token.lexeme += "::" + prop->lexeme;
+        }
+
+        base_element_type = type_name_token.lexeme;
+
+        while(Match(TokenType::LeftSquareBracket))
+        {
+            if(Peek().type != TokenType::RightSquareBracket)
+            {
+                auto size_result = ParseExpression();
+                if(!size_result) return std::unexpected(size_result.error());
+                default_size_expr = std::move(size_result.value());
+            }
+
+            if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type");
+                !right_bracket)
+            {
+                return std::unexpected(right_bracket.error());
+            }
+            type_name_token.lexeme += "[]";
+        }
+        type_name = type_name_token;
     }
 
     std::unique_ptr<Expression> initializer = nullptr;
@@ -149,6 +180,11 @@ ExpectedPtr<VariableDeclaration> Parser::ParseVariableDeclaration()
             return std::unexpected(initializer_result.error()); // Bubble up parsing errors
         }
         initializer = std::move(initializer_result.value());
+    }
+    else if(default_size_expr != nullptr)
+    {
+        initializer = std::make_unique<ArrayInstantiationExpression>(
+            base_element_type, std::move(default_size_expr), var->source_location);
     }
 
     if(
@@ -173,10 +209,13 @@ ExpectedNodePtr Parser::ParseExpressionStatement()
     auto e = ParseExpression();
     if(!e) return std::unexpected(e.error());
 
-    if(auto semicolon = Expect(TokenType::Semicolon, "In expression"); !semicolon) return std::unexpected(semicolon.error());
+    const auto expr_loc = e.value()->source_location;
+    if(auto semicolon = Expect(TokenType::Semicolon, "In expression statement"); !semicolon)
+    {
+        return std::unexpected(std::format("Syntax Error: Expected ';' after expression at {} (got '{}')", expr_loc, IsAtEnd() ? "EOF" : Peek().lexeme));
+    }
 
-    SourceLocation loc = e.value()->source_location;
-    return std::make_unique<ExpressionStatement>(std::move(e.value()), loc);
+    return std::make_unique<ExpressionStatement>(std::move(e.value()), expr_loc);
 }
 
 ExpectedExpressionPtr Parser::ParseExpression()
@@ -512,8 +551,13 @@ ExpectedExpressionPtr Parser::ParsePrimary()
         }
         case TokenType::StringLiteral:
         {
-            Token strToken = Consume();
-            return std::make_unique<StringLiteral>(std::move(strToken.lexeme), source_location);
+            Token str_token = Consume();
+            return std::make_unique<StringLiteral>(std::move(str_token.lexeme), source_location);
+        }
+        case TokenType::InterpolatedStringLiteral:
+        {
+            Token str_token = Consume();
+            return ParseInterpolatedString(str_token);
         }
         case TokenType::CharLiteral:
         {
@@ -537,6 +581,29 @@ ExpectedExpressionPtr Parser::ParsePrimary()
         {
             Token idToken = Consume();
             return std::make_unique<IdentifierExpression>(std::move(idToken.lexeme), source_location);
+        }
+
+        case TokenType::IntType:
+        case TokenType::FloatType:
+        case TokenType::BoolType:
+        case TokenType::StringType:
+        case TokenType::CharType:
+        case TokenType::AnyType:
+        {
+            Token type_token = Consume();
+            if(Match(TokenType::LeftSquareBracket))
+            {
+                auto size_expr = ParseExpression();
+                if(!size_expr) return size_expr;
+
+                if(auto closed = Expect(TokenType::RightSquareBracket, "Expected ']' after array size"); !closed)
+                {
+                    return std::unexpected(closed.error());
+                }
+
+                return std::make_unique<ArrayInstantiationExpression>(type_token.lexeme, std::move(size_expr.value()), source_location);
+            }
+            return std::unexpected(std::format("Unexpected type keyword '{}' in expression at {}", type_token.lexeme, source_location));
         }
 
         // Grouped Expressions
@@ -605,14 +672,10 @@ ExpectedPtr<FunctionDeclaration> Parser::ParseFunctionDeclaration()
             return std::unexpected(colon.error());
         }
 
-        const auto& type = Peek();
-        if(!type.IsPrimitiveTypeName() && type.type != TokenType::Identifier)
-        {
-            return std::unexpected(std::format("Expected a valid type for receiver, got type '{}'", type.lexeme));
-        }
-        Consume();
+        auto type = ParseTypeName();
+        if(!type) return std::unexpected(type.error());
 
-        receiver = Parameter(*receiver_name, type);
+        receiver = Parameter(*receiver_name, type.value());
 
         if(const auto closed = Expect(TokenType::RightParen, "Parsing receiver in function declaration");
             !closed)
@@ -959,10 +1022,7 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
     {
         do
         {
-            if(const auto var = Expect(TokenType::Var, error_msg); !var)
-            {
-                return std::unexpected(var.error());
-            }
+            Match(TokenType::Var); // var keyword is optional for struct fields
 
             const auto var_name = Expect(TokenType::Identifier, error_msg);
             if(!var_name)
@@ -975,25 +1035,12 @@ ExpectedPtr<StructDeclaration> Parser::ParseStructDeclaration()
                 return std::unexpected(colon.error());
             }
 
-            auto type_name_token = Consume();
-            if(!type_name_token.IsPrimitiveTypeName() && type_name_token.type != TokenType::Identifier)
+            auto type_name_result = ParseTypeName();
+            if(!type_name_result)
             {
-                return std::unexpected(std::format(
-                    "{}, expected typename got {}",
-                    error_msg, Token::TypeToString(type_name_token.type))
-                );
+                return std::unexpected(type_name_result.error());
             }
-
-            // array types
-            while(Match(TokenType::LeftSquareBracket))
-            {
-                if(auto right_bracket = Expect(TokenType::RightSquareBracket, "Expected ']' after '[' in array type"); !right_bracket)
-                {
-                    return std::unexpected(right_bracket.error());
-                }
-                type_name_token.lexeme += "[]";
-            }
-            struct_members.emplace_back(*var_name, type_name_token);
+            struct_members.emplace_back(*var_name, type_name_result.value());
 
             if(const auto semi_colon = Expect(TokenType::Semicolon, error_msg); !semi_colon)
             {
@@ -1350,4 +1397,93 @@ Expected<Token> Parser::ParseTypeName()
     }
 
     return type_name_token;
+}
+
+ExpectedExpressionPtr Parser::ParseInterpolatedString(const Token& token)
+{
+    const std::string& raw = token.lexeme;
+    const SourceLocation& loc = token.source_location;
+    std::vector<std::unique_ptr<Expression>> parts;
+
+    std::string current_literal;
+    size_t i = 0;
+
+    while(i < raw.size())
+    {
+        if(raw[i] == '{')
+        {
+            if(i + 1 < raw.size() && raw[i + 1] == '{')
+            {
+                current_literal += '{';
+                i += 2;
+                continue;
+            }
+
+            if(!current_literal.empty())
+            {
+                parts.push_back(std::make_unique<StringLiteral>(current_literal, loc));
+                current_literal.clear();
+            }
+
+            ++i;
+            size_t expr_start = i;
+            int depth = 1;
+            bool in_str = false;
+
+            while(i < raw.size() && depth > 0)
+            {
+                if(raw[i] == '"' && (i == 0 || raw[i - 1] != '\\'))
+                {
+                    in_str = !in_str;
+                }
+                else if(!in_str)
+                {
+                    if(raw[i] == '{') ++depth;
+                    else if(raw[i] == '}') --depth;
+                    
+                }
+                if(depth > 0) ++i;   
+            }
+
+            if(depth != 0) return std::unexpected(std::format("Unclosed expression inside string interpolation at {}", loc));
+
+            std::string expr_text = raw.substr(expr_start, i - expr_start);
+            ++i;
+
+            Lexer sub_lexer;
+            auto sub_tokens = sub_lexer.Lex(expr_text, loc.filename);
+            if(!sub_tokens)
+            {
+                return std::unexpected(std::format("Error lexing expression in string interpolation: {} at {}", sub_tokens.error().message, loc));
+            }
+
+            Parser sub_parser(sub_tokens.value());
+            auto parsed_expr = sub_parser.ParseExpression();
+            if(!parsed_expr)
+            {
+                return std::unexpected(std::format("Error parsing expression in string interpolation: {} at {}", parsed_expr.error(), loc));
+            }
+
+            parts.push_back(std::move(parsed_expr.value()));
+            continue;
+        }
+        else if(raw[i] == '}')
+        {
+            if(i + 1 < raw.size() && raw[i + 1] == '}')
+            {
+                current_literal += '}';
+                i += 2;
+                continue;
+            }
+            return std::unexpected(std::format("Unmatched '}}' in string interpolation at {}", loc));
+        }
+
+        current_literal += raw[i];
+        ++i;
+    }
+
+    if(!current_literal.empty()) parts.push_back(std::make_unique<StringLiteral>(current_literal, loc));
+    if(parts.empty()) parts.push_back(std::make_unique<StringLiteral>("", loc));
+    
+    return std::make_unique<InterpolatedStringExpression>(std::move(parts), loc);
 }

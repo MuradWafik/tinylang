@@ -8,6 +8,7 @@
 
 #include "frontend/Token.h"
 
+#include "utils/Constants.h"
 #include "utils/Mangling.h"
 #include "utils/Utils.h"
 
@@ -38,7 +39,7 @@ public:
 
     void RegisterMethod(const std::string& method_name, const FunctionType* func_type){ methods[method_name] = func_type; }
 
-    const FunctionType* GetMethod(const std::string& method_name) const
+    [[nodiscard]] virtual const FunctionType* GetMethod(const std::string& method_name) const
     {
         if(methods.contains(method_name)) return methods.at(method_name);
         return nullptr;
@@ -128,11 +129,28 @@ public:
     bool IsAssignableTo(const Type* other) const override;
     [[nodiscard]] uint8_t GetSize() const override { return 8; }
 
+    const FunctionType* GetMethod(const std::string& method_name) const override
+    {
+        if(method_name == constants::TO_STRING_METHOD)
+        {
+            if(!to_string_method)
+            {
+                to_string_method = std::make_unique<FunctionType>(
+                    std::vector<const Type*>{this},
+                    PrimitiveType::String.get()
+                );
+            }
+            return to_string_method.get();
+        }
+        return Type::GetMethod(method_name);
+    }
+
     explicit ArrayType(const Type* element_type) :
         element_type{element_type}
     { }
 private:
     const Type* element_type{nullptr};
+    mutable std::unique_ptr<FunctionType> to_string_method;
 };
 
 

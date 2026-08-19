@@ -30,7 +30,33 @@ InterpretResult VM::Interpret(Chunk* chunk)
     // when in function local scope adds the offset but this needs to be done before main runs
     Push<Object*>(nullptr);
     call_frames.emplace_back(chunk, chunk->code.data(), 0);
-    return Run();
+    try
+    {
+        return Run();
+    }
+    catch(const std::exception& e)
+    {
+        size_t line = 0;
+        if(!call_frames.empty())
+        {
+            const auto& cur_frame = call_frames.back();
+            const auto offset = static_cast<size_t>(cur_frame.ip - cur_frame.chunk->code.data());
+            if(offset < cur_frame.chunk->lines.size())
+            {
+                line = cur_frame.chunk->lines[offset];
+            }
+        }
+
+        if(line > 0)
+        {
+            std::println(std::cerr, "Runtime Error: {} at line {}", e.what(), line);
+        }
+        else
+        {
+            std::println(std::cerr, "Runtime Error: {}", e.what());
+        }
+        return InterpretResult::INTERPRET_RUNTIME_ERROR;
+    }
 }
 
 // #define DEBUG_TRACE_EXECUTION
@@ -383,6 +409,16 @@ InterpretResult VM::Run()
                 AllocateArray();
                 break;
             }
+            case OpCode::OP_ALLOCATE_ARRAY_DEFAULT:
+            {
+                AllocateArrayDefault();
+                break;
+            }
+            case OpCode::OP_ARRAY_TO_STRING:
+            {
+                ArrayToString();
+                break;
+            }
             case OpCode::OP_GET_INDEX:
             {
                 GetArrayIndex();
@@ -558,18 +594,127 @@ void VM::LoadNativeFunction()
 
 void VM::AllocateArray()
 {
-    //OP_ALLOCATE_ARRAY [2 bytes: element_count] [1 byte: stride]
+    //OP_ALLOCATE_ARRAY [2 bytes: element_count] [1 byte: stride] [1 byte: element_kind]
     const auto element_count = ReadAndAdvanceBytes<uint16_t>(call_frames.back().ip);
     const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto element_kind = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
 
     const size_t total_bytes = element_count * bytes_per_element;
     const uint8_t* elements_ptr = stack.data() + stack.size() - total_bytes;
-    auto* arr = AllocateObject<Array>(elements_ptr, element_count, bytes_per_element);
+    auto* arr = AllocateObject<Array>(elements_ptr, element_count, bytes_per_element, element_kind);
 
     stack.resize(stack.size() - total_bytes);
 
     Push<Object*>(arr);
-   /// Stack: Pops (count*stride) bytes, allocates ArrayObject, pushes 8 byte Object*
+}
+
+void VM::AllocateArrayDefault()
+{
+    // OP_ALLOCATE_ARRAY_DEFAULT [1 byte: stride] [1 byte: element_kind]
+    const auto bytes_per_element = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto element_kind = ReadAndAdvanceBytes<uint8_t>(call_frames.back().ip);
+    const auto count = Pop<int32_t>();
+
+    if(count < 0)
+    {
+        throw std::runtime_error(std::format("Array size cannot be negative: {}", count));
+    }
+
+    auto* arr = AllocateObject<Array>(nullptr, static_cast<size_t>(count), bytes_per_element, element_kind);
+
+    if(static_cast<ArrayElementKind>(element_kind) == ArrayElementKind::String && count > 0)
+    {
+        for(size_t i = 0; i < static_cast<size_t>(count); ++i)
+        {
+            auto* empty_str = AllocateObject<String>("", 0);
+            std::memcpy(arr->elements + i * sizeof(String*), &empty_str, sizeof(String*));
+        }
+    }
+
+    Push<Object*>(arr);
+}
+
+std::string VM::FormatArray(const Array* array)
+{
+    std::string result = "[";
+    if(array && array->elements && array->size > 0)
+    {
+        for(size_t i = 0; i < array->size; ++i)
+        {
+            if(i > 0)
+            {
+                result += ", ";
+            }
+
+            const size_t offset = i * array->bytes_per_element;
+            switch(static_cast<ArrayElementKind>(array->element_kind))
+            {
+                case ArrayElementKind::Int:
+                {
+                    int32_t val = 0;
+                    std::memcpy(&val, &array->elements[offset], sizeof(int32_t));
+                    result += std::to_string(val);
+                    break;
+                }
+                case ArrayElementKind::Float:
+                {
+                    std::float32_t val = 0.0f;
+                    std::memcpy(&val, &array->elements[offset], sizeof(std::float32_t));
+                    result += std::format("{}", val);
+                    break;
+                }
+                case ArrayElementKind::Bool:
+                {
+                    bool val = false;
+                    std::memcpy(&val, &array->elements[offset], sizeof(bool));
+                    result += (val ? "true" : "false");
+                    break;
+                }
+                case ArrayElementKind::Char:
+                {
+                    char8_t val = 0;
+                    std::memcpy(&val, &array->elements[offset], sizeof(char8_t));
+                    result += '\'';
+                    result += static_cast<char>(val);
+                    result += '\'';
+                    break;
+                }
+                case ArrayElementKind::String:
+                {
+                    String* val = nullptr;
+                    std::memcpy(&val, &array->elements[offset], sizeof(String*));
+                    result += '"';
+                    if(val && val->chars)
+                    {
+                        result.append(val->chars, val->length);
+                    }
+                    result += '"';
+                    break;
+                }
+                case ArrayElementKind::Array:
+                {
+                    Array* val = nullptr;
+                    std::memcpy(&val, &array->elements[offset], sizeof(Array*));
+                    result += FormatArray(val);
+                    break;
+                }
+                default:
+                {
+                    break;
+                }
+            }
+        }
+    }
+    result += "]";
+    return result;
+}
+
+void VM::ArrayToString()
+{
+    const auto* array = static_cast<Array*>(Pop<Object*>());
+    const std::string result = FormatArray(array);
+    auto* str_obj = AllocateObject<String>(result.c_str(), result.length());
+    Push<Object*>(str_obj);
 }
 
 void VM::GetArrayIndex()
@@ -706,10 +851,11 @@ void VM::AllocateString()
 
 void VM::AddString()
 {
-    const auto r = static_cast<String*>(Pop<Object*>());
-    const auto l = static_cast<String*>(Pop<Object*>());
+    const auto r = static_cast<String*>(ReadBytesAbsolute<Object*>(stack, stack.size() - sizeof(Object*)));
+    const auto l = static_cast<String*>(ReadBytesAbsolute<Object*>(stack, stack.size() - 2 * sizeof(Object*)));
 
     auto* obj = AllocateObject<String>(l, r);
+    stack.resize(stack.size() - 2 * sizeof(Object*));
     Push<Object*>(obj);
 }
 

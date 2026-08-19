@@ -107,6 +107,8 @@ void Compiler::CompileExpression(const Expression* expression)
     if(const auto switch_expr = dynamic_cast<const SwitchExpression*>(expression)) return CompileSwitchExpression(switch_expr);
     if(const auto cast_expr = dynamic_cast<const CastExpression*>(expression)) return CompileCastExpression(cast_expr);
     if(const auto is_expr = dynamic_cast<const IsExpression*>(expression)) return CompileIsExpression(is_expr);
+    if(const auto interp_expr = dynamic_cast<const InterpolatedStringExpression*>(expression)) return CompileInterpolatedString(interp_expr);
+    if(const auto arr_inst = dynamic_cast<const ArrayInstantiationExpression*>(expression)) return CompileArrayInstantiationExpression(arr_inst);
 }
 
 void Compiler::CompileLiteral(const ConstantValue& value, const uint32_t line) const
@@ -436,6 +438,17 @@ void Compiler::CompileIdentifierExpression(const IdentifierExpression* identifie
     }
 }
 
+static ArrayElementKind GetArrayElementKind(const Type* element_type)
+{
+    if(element_type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(element_type)) return ArrayElementKind::Int;
+    if(element_type == PrimitiveType::Float.get()) return ArrayElementKind::Float;
+    if(element_type == PrimitiveType::Bool.get()) return ArrayElementKind::Bool;
+    if(element_type == PrimitiveType::Char.get()) return ArrayElementKind::Char;
+    if(element_type == PrimitiveType::String.get()) return ArrayElementKind::String;
+    if(dynamic_cast<const ArrayType*>(element_type)) return ArrayElementKind::Array;
+    return ArrayElementKind::Custom;
+}
+
 void Compiler::CompileCallExpression(const CallExpression* call_expression)
 {
     const auto line = call_expression->source_location.line_number;
@@ -453,6 +466,19 @@ void Compiler::CompileCallExpression(const CallExpression* call_expression)
             static_cast<uint16_t>(struct_type->GetHeapSize()), from_stack
         );
         return;
+    }
+
+    if(const auto* ident = dynamic_cast<const IdentifierExpression*>(call_expression->callee.get()))
+    {
+        if(!call_expression->arguments.empty() && dynamic_cast<const ArrayType*>(call_expression->arguments[0]->type_info))
+        {
+            if(ident->name.ends_with(std::string("$") + std::string(constants::TO_STRING_METHOD)) && !global_offsets.contains(ident->name))
+            {
+                CompileExpression(call_expression->arguments[0].get());
+                current_chunk->WriteInstruction(line, OpCode::OP_ARRAY_TO_STRING);
+                return;
+            }
+        }
     }
 
     // If it's an Identifier, CompileIdentifierExpression will automatically
@@ -549,10 +575,11 @@ void Compiler::CompileAssignmentExpression(const AssignmentExpression* assignmen
 
 void Compiler::CompileArrayLiteral(const ArrayLiteral* array_literal)
 {
-    // OP_ALLOCATE_ARRAY [2 bytes: element_count] [1 byte: stride]
+    // OP_ALLOCATE_ARRAY [2 bytes: element_count] [1 byte: stride] [1 byte: element_kind]
     const auto* array_type = dynamic_cast<const ArrayType*>(array_literal->type_info);
     const Type* element_type = array_type->GetElementType();
     const uint8_t bytes_per_element = element_type->GetSize();
+    const auto element_kind = static_cast<uint8_t>(GetArrayElementKind(element_type));
 
     const auto num_elements = static_cast<uint16_t>(array_literal->elements.size());
     for(auto& element: array_literal->elements)
@@ -560,11 +587,39 @@ void Compiler::CompileArrayLiteral(const ArrayLiteral* array_literal)
         CompileExpression(element.get());
     }
 
-    current_chunk->WriteInstruction(array_literal->source_location.line_number, OpCode::OP_ALLOCATE_ARRAY, num_elements, bytes_per_element);
+    current_chunk->WriteInstruction(
+        array_literal->source_location.line_number,
+        OpCode::OP_ALLOCATE_ARRAY,
+        num_elements,
+        bytes_per_element,
+        element_kind
+    );
 }
 
 void Compiler::CompileIndexAccess(const IndexAccess* index_access)
 {
+    if(const auto* id_expr = dynamic_cast<const IdentifierExpression*>(index_access->array_expr.get()))
+    {
+        if(const auto* array_type = dynamic_cast<const ArrayType*>(index_access->type_info))
+        {
+            if(!global_offsets.contains(id_expr->name) && GetLocalVariableIndex(id_expr->name) == -1)
+            {
+                const Type* element_type = array_type->GetElementType();
+                const uint8_t bytes_per_element = element_type->GetSize();
+                const auto element_kind = static_cast<uint8_t>(GetArrayElementKind(element_type));
+
+                CompileExpression(index_access->index_expr.get());
+                current_chunk->WriteInstruction(
+                    index_access->source_location.line_number,
+                    OpCode::OP_ALLOCATE_ARRAY_DEFAULT,
+                    bytes_per_element,
+                    element_kind
+                );
+                return;
+            }
+        }
+    }
+
     // the array they are trying to access
     CompileExpression(index_access->array_expr.get());
     CompileExpression(index_access->index_expr.get()); // allows arr[someFunc()];
@@ -765,9 +820,10 @@ void Compiler::CompileExpressionStatement(const ExpressionStatement* expression_
     const auto line = expression_statement->source_location.line_number;
 
     // We only need to pop if it's not a void expression
-    if((type == PrimitiveType::Int.get() || dynamic_cast<const EnumType*>(type))) current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(4));
-    else if(type == PrimitiveType::Float.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(4));
-    else if(type == PrimitiveType::Bool.get()) current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(1));
+    if(type && type != PrimitiveType::Void.get() && type->GetSize() > 0)
+    {
+        current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(type->GetSize()));
+    }
 }
 
 void Compiler::CompileContinueStatement(const ContinueStatement* continue_statement) const
@@ -963,20 +1019,7 @@ void Compiler::ForLoopArray(const ForLoop* for_loop, const uint32_t line, const 
     CompileStatement(for_loop->body.get());
 
     locals.pop_back();
-    if(const Type* elem_type = array->GetElementType(); elem_type == PrimitiveType::Int.get()
-        || dynamic_cast<const EnumType*>(elem_type)
-        || elem_type == PrimitiveType::Float.get())
-    {
-        current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(4));
-    }
-    else if(elem_type == PrimitiveType::Bool.get() || elem_type == PrimitiveType::Char.get())
-    {
-        current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(1));
-    }
-    else if(dynamic_cast<const StructType*>(elem_type) || dynamic_cast<const ArrayType*>(elem_type))
-    {
-        current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(8));
-    }
+    current_chunk->WriteInstruction(line, OpCode::OP_POP, static_cast<uint8_t>(array->GetElementType()->GetSize()));
 
     const uint16_t backward_jump = (current_chunk->code.size() + 3) - loop_start;
     current_chunk->WriteInstruction(line, OpCode::OP_LOOP, backward_jump);
@@ -1225,4 +1268,39 @@ void Compiler::CompileIsExpression(const IsExpression* is_expression)
     const auto line = is_expression->source_location.line_number;
     const uint32_t target_id = is_expression->target_type->GetTypeId();
     current_chunk->WriteInstruction(line, OpCode::OP_IS_CHECK, target_id);
+}
+
+void Compiler::CompileInterpolatedString(const InterpolatedStringExpression* expr)
+{
+    const auto line = expr->source_location.line_number;
+    if(expr->parts.empty())
+    {
+        CompileLiteral(std::string(""), line);
+        return;
+    }
+
+    CompileExpression(expr->parts[0].get());
+
+    for(size_t i = 1; i < expr->parts.size(); ++i)
+    {
+        CompileExpression(expr->parts[i].get());
+        current_chunk->WriteInstruction(line, OpCode::OP_ADD_STRING);
+    }
+}
+
+void Compiler::CompileArrayInstantiationExpression(const ArrayInstantiationExpression* expr)
+{
+    const auto* array_type = dynamic_cast<const ArrayType*>(expr->type_info);
+    const Type* element_type = array_type->GetElementType();
+    const uint8_t bytes_per_element = element_type->GetSize();
+    const auto element_kind = static_cast<uint8_t>(GetArrayElementKind(element_type));
+
+    CompileExpression(expr->size_expr.get());
+
+    current_chunk->WriteInstruction(
+        expr->source_location.line_number,
+        OpCode::OP_ALLOCATE_ARRAY_DEFAULT,
+        bytes_per_element,
+        element_kind
+    );
 }

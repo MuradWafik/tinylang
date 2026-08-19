@@ -71,7 +71,7 @@ std::expected<void, std::string> GenerateProject(const std::filesystem::path& ta
     return {};
 }
 
-void NewProject(const std::string& project_name)
+bool NewProject(const std::string& project_name)
 {
     namespace fs = std::filesystem;
     fs::path target_dir;
@@ -92,7 +92,7 @@ void NewProject(const std::string& project_name)
         !res)
     {
         std::println(std::cerr, "Error: {}", res.error());
-        return;
+        return false;
     }
 
     std::println("Created new Tinylang project '{}' in {}", name, target_dir.string());
@@ -104,9 +104,10 @@ void NewProject(const std::string& project_name)
     {
         std::println("Run 'cd {} && tinylang run .' to start", name);
     }
+    return true;
 }
 
-void LintProject(const std::string& check_path, const bool output_json)
+bool LintProject(const std::string& check_path, const bool output_json)
 {
     auto project_result = Project::Init(check_path);
     if(!project_result)
@@ -130,7 +131,7 @@ void LintProject(const std::string& check_path, const bool output_json)
         {
             std::println(std::cerr, "{}", project_result.error());
         }
-        return;
+        return false;
     }
 
     const std::unique_ptr<Project> project = std::move(project_result.value());
@@ -156,7 +157,7 @@ void LintProject(const std::string& check_path, const bool output_json)
         {
             std::println(std::cerr, "Check Failed: {}", check_result.error());
         }
-        return;
+        return false;
     }
 
     const auto& diagnostics = check_result.value();
@@ -195,6 +196,7 @@ void LintProject(const std::string& check_path, const bool output_json)
                 }
             }
         }
+        return false;
     }
     else
     {
@@ -206,10 +208,11 @@ void LintProject(const std::string& check_path, const bool output_json)
         {
             std::println("No issues found.");
         }
+        return true;
     }
 }
 
-void RunProject(const std::string& run_path)
+bool RunProject(const std::string& run_path)
 {
     constexpr auto error = "Execution Failed";
     if(run_path.ends_with(".tlc"))
@@ -217,23 +220,29 @@ void RunProject(const std::string& run_path)
         if(auto run_result = Project::RunSerialized(run_path); !run_result)
         {
             std::println(std::cerr, "{}: {}", error, run_result.error());
+            return false;
         }
-        return;
+        return true;
     }
 
     auto project_result = Project::Init(run_path);
     if(!project_result)
     {
         std::println(std::cerr, "{}", project_result.error());
-        return;
+        return false;
     }
 
     const std::unique_ptr<Project> project = std::move(project_result.value());
     if(auto run_result = project->CompileAndRun();
         !run_result)
     {
-        std::println(std::cerr, "{}: {}", error, run_result.error());
+        if(run_result.error() != "Runtime Error")
+        {
+            std::println(std::cerr, "Compilation Failed: {}", run_result.error());
+        }
+        return false;
     }
+    return true;
 }
 
 bool BuildProject(const std::string& build_path, const std::string& output_path)
@@ -485,18 +494,15 @@ int Run(const int argc, char** argv)
 
     if(run_cmd->parsed())
     {
-        RunProject(run_path);
+        if(!RunProject(run_path)) return 1;
     }
     else if(build_cmd->parsed())
     {
-        if(!BuildProject(build_path, output_path))
-        {
-            return 1;
-        }
+        if(!BuildProject(build_path, output_path)) return 1;
     }
     else if(check_cmd->parsed())
     {
-        LintProject(check_path, output_json);
+        if(!LintProject(check_path, output_json)) return 1;
     }
     else if(symbols_cmd->parsed())
     {
@@ -512,7 +518,7 @@ int Run(const int argc, char** argv)
     }
     else if(new_cmd->parsed())
     {
-        NewProject(project_name);
+        if(!NewProject(project_name)) return 1;
     }
 
     return 0;

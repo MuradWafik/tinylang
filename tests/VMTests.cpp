@@ -18,6 +18,7 @@ static T RunAndGetGlobal(const std::string& source, const std::string& var_name)
 
     Parser parser{lex_result.value()};
     auto parse_result = parser.ParseProgram();
+    INFO("Parser Error: " << (parse_result.has_value() ? "" : parse_result.error()));
     REQUIRE(parse_result.has_value());
 
     ProjectConfig project_config{PROJECT_ROOT_DIR, "test", "0.1.0", std::nullopt, {}, {}};
@@ -35,7 +36,12 @@ static T RunAndGetGlobal(const std::string& source, const std::string& var_name)
     VM vm;
     vm.StartProgram(chunks, {"main"});
 
-    return vm.GetGlobal<T>(compiler.global_offsets.at(var_name));
+    if constexpr (std::is_same_v<T, std::string>) {
+        auto* str_obj = vm.GetGlobal<String*>(compiler.global_offsets.at(var_name));
+        return std::string(str_obj->chars, str_obj->length);
+    } else {
+        return vm.GetGlobal<T>(compiler.global_offsets.at(var_name));
+    }
 }
 
 TEST_CASE("VM - Basic Arithmetic and Variables", "[VM]") {
@@ -343,5 +349,135 @@ TEST_CASE("VM - String Iteration", "[VM]") {
         )";
         auto val = RunAndGetGlobal<int32_t>(source, "counter");
         REQUIRE(val == 5);
+    }
+}
+
+TEST_CASE("VM - String Interpolation", "[VM]") {
+    SECTION("Interpolate string variables") {
+        std::string source = R"(
+            var name = "World";
+            var msg = $"Hello {name}!";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "Hello World!");
+    }
+
+    SECTION("Interpolate multiple expressions and literals") {
+        std::string source = R"(
+            fn (self: int) ToString() -> String {
+                if(self == 10) { return "10"; }
+                if(self == 20) { return "20"; }
+                if(self == 30) { return "30"; }
+                return "0";
+            }
+            var a = 10;
+            var b = 20;
+            var res = $"{a} + {b} = {a + b}";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "res");
+        REQUIRE(val == "10 + 20 = 30");
+    }
+
+    SECTION("Interpolate with escaped braces") {
+        std::string source = R"(
+            fn (self: int) ToString() -> String {
+                return "42";
+            }
+            var x = 42;
+            var res = $"{{{x}}}";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "res");
+        REQUIRE(val == "{42}");
+    }
+
+    SECTION("Native interpolate array of ints") {
+        std::string source = R"(
+            var list = [1, 2, 3];
+            var msg = $"Numbers: {list}";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "Numbers: [1, 2, 3]");
+    }
+
+    SECTION("Native interpolate array of strings with quotes") {
+        std::string source = R"(
+            var list = ["apple", "banana"];
+            var msg = $"Fruits: {list}";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "Fruits: [\"apple\", \"banana\"]");
+    }
+
+    SECTION("Native array ToString directly") {
+        std::string source = R"(
+            var list = [true, false, true];
+            var msg = list.ToString();
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "[true, false, true]");
+    }
+
+    SECTION("Native nested array ToString") {
+        std::string source = R"(
+            var nested = [[1, 2], [3, 4]];
+            var msg = $"Matrix: {nested}";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "Matrix: [[1, 2], [3, 4]]");
+    }
+
+    SECTION("Default constructed int array expression") {
+        std::string source = R"(
+            var arr = int[5];
+            var msg = arr.ToString();
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "[0, 0, 0, 0, 0]");
+    }
+
+    SECTION("Default constructed sized type declaration") {
+        std::string source = R"(
+            var arr: int[4];
+            var msg = arr.ToString();
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "[0, 0, 0, 0]");
+    }
+
+    SECTION("Default constructed String array with quotes") {
+        std::string source = R"(
+            var names = String[3];
+            var msg = names.ToString();
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "[\"\", \"\", \"\"]");
+    }
+
+    SECTION("Default constructed bool and float arrays") {
+        std::string source = R"(
+            var flags = bool[3];
+            var msg_flags = flags.ToString();
+            var nums = float[2];
+            var msg_nums = nums.ToString();
+        )";
+        auto flags_val = RunAndGetGlobal<std::string>(source, "msg_flags");
+        auto nums_val = RunAndGetGlobal<std::string>(source, "msg_nums");
+        REQUIRE(flags_val == "[false, false, false]");
+        REQUIRE(nums_val == "[0, 0]");
+    }
+
+    SECTION("Populate sized array in loop") {
+        std::string source = R"(
+            var n = 5;
+            var arr = int[n];
+            var i = 0;
+            while(i < arr.length) {
+                arr[i] = (i + 1) * 10;
+                i = i + 1;
+            }
+            var msg = $"Results: {arr}";
+        )";
+        auto val = RunAndGetGlobal<std::string>(source, "msg");
+        REQUIRE(val == "Results: [10, 20, 30, 40, 50]");
     }
 }

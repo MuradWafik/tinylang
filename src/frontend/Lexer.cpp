@@ -145,6 +145,72 @@ std::expected<Token, LexerError>  Lexer::LexString()
     return std::unexpected<LexerError>{{"Missing closing quote to string", start_source}};
 }
 
+std::expected<Token, LexerError> Lexer::LexInterpolatedString()
+{
+    std::string lexeme;
+    const SourceLocation start_source = {filename, line, column};
+
+    Consume();
+    Consume();
+    int brace_depth = 0;
+    while(!IsAtEnd())
+    {
+        char c = Peek();
+        if(c == '"' && brace_depth == 0)
+        {
+            Consume();
+            return Token{TokenType::InterpolatedStringLiteral, lexeme, start_source};
+        }
+
+        if(c == '\n') return std::unexpected<LexerError>{{"Found newline, expecting closing quote to interpolated string", start_source}};
+    
+        if(c == '\\')
+        {
+            Consume();
+            if(IsAtEnd()) return std::unexpected<LexerError>{{"File end met parsing interpolated string", start_source}};
+            
+            char next_char = Peek();
+            std::optional<char> escaped = GetEscapeCharacter(next_char);
+            if(escaped.has_value()) lexeme += escaped.value();
+            else
+            {
+                lexeme += '\\';
+                lexeme += next_char;
+            }
+            Consume();
+            continue;
+        }
+
+        if(c == '{')
+        {
+            if(PeekNext() == '{' && brace_depth == 0)
+            {
+                lexeme += "{{";
+                Consume();
+                Consume();
+                continue;
+            }
+            ++brace_depth;
+        }
+        else if(c == '}')
+        {
+            if(PeekNext() == '}' && brace_depth == 0)
+            {
+                lexeme += "}}";
+                Consume();
+                Consume();
+                continue;
+            }
+            if(brace_depth > 0) --brace_depth;      
+        }
+
+        lexeme += c;
+        Consume();
+    }
+
+    return std::unexpected<LexerError>{{"Missing closing quote to interpolated string", start_source}};
+}
+
 std::expected<Token, LexerError> Lexer::LexChar()
 {
     std::string lexeme;
@@ -392,6 +458,13 @@ std::expected<std::vector<Token>, LexerError> Lexer::Lex(std::string_view source
             {
                 return std::unexpected(result.error());
             }
+
+            tokens.push_back(result.value());
+        }
+        else if(cur == '$' && PeekNext() == '"')
+        {
+            auto result = LexInterpolatedString();
+            if(!result) return std::unexpected(result.error());
 
             tokens.push_back(result.value());
         }
